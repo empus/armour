@@ -1,5 +1,5 @@
 ----------------------------------------------------------------------------------------------------------------
- armour.tcl v3.4.2 - 2020.01.08
+ armour.tcl v3.4.3 - 2020.01.16
 ----------------------------------------------------------------------------------------------------------------
 
  ![Armour](./armour.png)
@@ -10,6 +10,18 @@
 ----------------------------------------------------------------------------------------------------------------
  BRIEF
 ----------------------------------------------------------------------------------------------------------------
+
+The Rolling Stones said it well.  This bot script is the "Beast of Burden".  It does lots of stuff well, although
+not everything perfectly.  For what it does well, we thank #phat of Undernet.  Dickheads hit that channel for 
+years and from that, we thank them this.  For what doesn't work well?  Let's ignore that.
+
+Credits:
+
+	- everyone in #phat of Undernet
+	- [k] for literally encouraging me to trial anything I wanted to :>
+	- the morons who thought they were annoying us, when really they gave us great pleasure!
+	
+........ and here we go:
 
 At the heart of this script is a powerful whitelist and blacklist system supporting various methods.
 
