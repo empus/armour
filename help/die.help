@@ -1,0 +1,2 @@
+%B%command:%B% die -- %B%level:%B% %LEVEL% -- %B%usage:%B% die [reason]
+kills the bot. will however, reappear with configured cronjob.

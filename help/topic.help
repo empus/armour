@@ -1,0 +1,2 @@
+%B%command:%B% topic -- %B%level:%B% %LEVEL% -- %B%usage:%B% topic ?chan? <topic>
+sets a new channel topic. channel name is optional.

@@ -1,0 +1,2 @@
+%B%command:%B% load -- %B%level:%B% %LEVEL% -- %B%usage:%B% load
+loads userlist, whitelist & blacklist entries to memory.

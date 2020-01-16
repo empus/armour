@@ -1,0 +1,2 @@
+%B%command:%B% status -- %B%level:%B% %LEVEL% -- %B%usage:%B% status
+displays current bot status including uptimes, traffic usage, db states

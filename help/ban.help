@@ -1,0 +1,2 @@
+%B%command:%B% ban -- %B%level:%B% %LEVEL% -- %B%usage:%B% ban ?chan? <nick1,mask1,nick2,mask2,mask3...> [duration] [reason]
+kickbans a client, msg or list of these from a channel. duration and channel name are optional. multiple clients or masks separated by comma.

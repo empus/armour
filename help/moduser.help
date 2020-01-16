@@ -1,0 +1,2 @@
+%B%command:%B% moduser -- %B%level:%B% %LEVEL% -- %B%usage:%B% moduser <user> <level|user|xuser|automode|lang|email|pass> <value>
+modifies userlist entry for the purpose of changing level, username, stored csc username, automode, languages, email, or resetting password. cannot edit a user with equal level or above your own.

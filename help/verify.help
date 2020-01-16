@@ -1,0 +1,2 @@
+%B%command:%B% verify -- %B%level:%B% %LEVEL% -- %B%usage:%B% verify <nick>
+confirms whether or not <nick> is authenticated, and at what level.

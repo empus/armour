@@ -1,0 +1,2 @@
+%B%command:%B% chanscan -- %B%level:%B% %LEVEL% -- %B%usage:%B% chanscan [chan]
+does full channel scan on nominated channel.  will report results as per normal client onjoin. chanscan will exempt opped and common channel users.

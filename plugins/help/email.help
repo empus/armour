@@ -1,0 +1,2 @@
+%B%command:%B% email %B%level:%B% %LEVEL% %B%usage:%B% email <to> <message>
+sends an email to the given user.  email address directory can be configured via ACL to determine what level is required to send an email to given recipient (or via chan op or voice status)

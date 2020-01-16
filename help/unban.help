@@ -1,0 +1,2 @@
+%B%command:%B% unban -- %B%level:%B% %LEVEL% -- %B%usage:%B% unban ?chan? <nick1,mask1,nick2,mask2,mask3...> 
+unbans a client, mask or list of these from a channel. multiple clients or masks separated by comma.

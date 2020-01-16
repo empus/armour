@@ -1,0 +1,2 @@
+%B%command:%B% whois -- %B%level:%B% %LEVEL% -- %B%usage:%B% whois <user>
+does a userlist lookup of specified username.

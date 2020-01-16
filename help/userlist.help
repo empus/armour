@@ -1,0 +1,2 @@
+%B%command:%B% userlist -- %B%level:%B% %LEVEL% -- %B%usage:%B% userlist
+obtains full bot user listing. shows username, stored xuser, and level.  authenticated users will display in bold.

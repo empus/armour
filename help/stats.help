@@ -1,0 +1,2 @@
+%B%command:%B% stats -- %B%level:%B% %LEVEL% -- %B%usage:%B% stats
+displays current statistics of whitelist & blacklist entries (including master hit counts)

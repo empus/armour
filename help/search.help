@@ -1,0 +1,2 @@
+%B%command:%B% search -- %B%level:%B% %LEVEL% -- %B%usage:%B% search <white|black|*> <search>
+searches list(s) for a match against search value. wildcards supported (? is match any char once, * is match any char zero or more).

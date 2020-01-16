@@ -1,0 +1,2 @@
+%B%command:%B% exempt -- %B%level:%B% %LEVEL% -- %B%usage:%B% exempt <nick> [mins]
+adds a temporary exemption for given nick, to allow them to join the channel without being scanned. mins is optional, with a default of $arm(cfg.exempt.time) mins"

@@ -1,0 +1,5 @@
+%B%command:%B% add -- %B%level:%B% %LEVEL% -- %B%usage:%B% add <white|black> <user|host|rname|regex|country|asn|chan> <value> <accept|voice|op|ban> ?joins:secs:hold? [reason]
+adds a whitelist or blacklist entry of the designated type and resulting action.  reason is optional, using preconfigured default.
+types can be: user (csc username), host (hostname, mask, ip address, cidr notation), rname (irc realname), regex (nick!user@host/realname), country (ip geo lookup), asn (atonomous system number), chan (on #channel)
+whitelist actions: accept (exempt from further scans), voice (voice user), op (op user).  blacklist action: ban (kickban user).  all type values support wildcard masks (? is any one value, * is any value zero times or more)
+?joins:secs:hold? is optional and only applies to host or regex blacklist entries.  This value applies cumulative floodnet join triggers on N joins in X seconds, holding trigger window open for a further Y seconds.

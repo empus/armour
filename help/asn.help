@@ -1,0 +1,2 @@
+%B%command:%B% asn -- %B%level:%B% %LEVEL% -- %B%usage:%B% asn <host|ip>
+executes an ASN lookup of the specified hostname or IP. can then be used for blacklist or whitelist entry with 'add' command.

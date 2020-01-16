@@ -1,0 +1,4 @@
+%B%command:%B% tell %B%level:%B% %LEVEL% %B%usage:%B% tell <who> ?<when>? (that|to|about) <something>
+creates a reminder either on a timer, or triggered when the person joins or speaks in the channel.
+%B%examples:%B% tell me in 5s why I even bother %B%--%B% tell Bob in 2 hours 30 mins to make a phone call
+tell me at 1:30 to hang the washing out %B%--%B% tell Mary at 12/08/2010 14:30:00 that she must accept things for what they are.

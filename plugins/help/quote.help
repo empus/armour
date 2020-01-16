@@ -1,0 +1,3 @@
+%B%command:%B% quote -- %B%level:%B% %LEVEL% -- %B%usage:%B% quote <add|del|rand|search|view> <quote|id|pattern> [-more]
+used to manage the quote database.  'add <quote>' adds a new quote. 'del <id>' deletes an existing quote.  'view <id> [-more]' views an existing quote (with additional detail if '-more' is added.
+'search <pattern>' searches the quote database for existing quotes (wildcards accepted).
