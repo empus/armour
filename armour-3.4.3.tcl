@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v3.4.3 autobuild completed on: Thu Jan 16 07:56:33 PST 2020
+# armour.tcl v3.4.3 autobuild completed on: Sat Jan 18 06:06:04 PST 2020
 # ------------------------------------------------------------------------------------------------
 #
 #    _                         ___ ___ 
@@ -4666,6 +4666,7 @@ proc arm:cmd:help {0 1 2 3 {4 ""}  {5 ""}} {
 	
 	set command [string tolower $command]
 	# -- find the help topic
+	set notopic 0
 	if {[file exists $arm(cfg.dir.prefix)/help/$command.help]} { 
 		# -- standard armour command
 		set file "$arm(cfg.dir.prefix)/help/$command.help"
@@ -4679,8 +4680,11 @@ proc arm:cmd:help {0 1 2 3 {4 ""}  {5 ""}} {
 			set prefix $armbind(cmd,$command,msg)
 			if {[file exists $arm(cfg.dir.prefix)/plugins/$prefix/help/$command.help]} { 
 				set file "$arm(cfg.dir.prefix)/plugins/$prefix/help/$command.help"
-			}
+			} else { set notopic  1 }
 		} else {
+			set notopic 1
+		}
+		if {$notopic} {
 			# -- help topic doesn't exist
 			arm:reply $type $target "error: no such help topic exists. try: help cmds"
 			return;

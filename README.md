@@ -13,12 +13,13 @@
 
 The Rolling Stones said it well.  This bot script is the "Beast of Burden".  It does lots of stuff well, although
 not everything perfectly.  For what it does well, we thank #phat of Undernet.  Dickheads hit that channel for 
-years and from that, we thank them this.  For what doesn't work well?  Let's ignore that.
+years and from that, we thank them for this.  For what doesn't work well?  Let's ignore that.
 
 Credits:
 
 	- everyone in #phat of Undernet
 	- [k] for literally encouraging me to trial anything I wanted to :>
+	- thommey: for giving me insight once a year or so, that changed my world
 	- the morons who thought they were annoying us, when really they gave us great pleasure!
 	
 ........ and here we go:
