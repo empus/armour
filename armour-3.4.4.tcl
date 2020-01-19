@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v3.4.4 autobuild completed on: Sun Jan 19 06:04:36 PST 2020
+# armour.tcl v3.4.4 autobuild completed on: Sun Jan 19 06:23:53 PST 2020
 # ------------------------------------------------------------------------------------------------
 #
 #    _                         ___ ___ 
@@ -2105,7 +2105,7 @@ proc userdb:join {nick uhost hand chan} {
 			}
 			
 			# -- tell them to use newpass if there is no password set
-			set dbpass userdb:uline:get pass user $user
+			set dbpass [userdb:uline:get pass user $user]
 			if {$dbpass == "" && [info exists arm(cfg.alert.nopass)]} {
 				if {$userdb(cfg.alert.nopass)} {
 					userdb:reply notc $nick "password not set. use 'newpass' to set a password, before manual logins can work."
