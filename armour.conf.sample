@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v3.4.0 - 2019.01.22
+# armour.tcl v3.4.4 - 2020.01.19
 # ------------------------------------------------------------------------------------------------
 #
 #    _                         ___ ___ 
@@ -62,7 +62,7 @@
 # ------------------------------------------------------------------------------------------------
 #
 # Code by		: 	Empus @ Undernet - empus@undernet.org
-# Last modified	:	2019.01.22
+# Last modified	:	2020.01.19
 #
 # Please contact me should you need any assistence, but I hope most config options are explanatory.
 #
@@ -150,6 +150,9 @@ set arm(cfg.cmd.short) 1
 
 # -- default mode on load? (on|off|secure) - [on]
 set arm(mode) "on"
+
+# -- send help and syntax responses from public commands via /notice? (0|1) - [0]
+set arm(cfg.help.notc) 0
 
 # -- stack voice modes when in secure mode? - [0|1]
 # -- this will slow down voicing of new users, by the time set in arm(cfg.stack.secs)
@@ -561,7 +564,7 @@ set addcmd(die)			{	userdb		500		pub msg dcc	}
 set files {
 
 	# -- Armour
-	./armour/armour-3.4.0.tcl
+	./armour/armour-3.4.4.tcl
 
 	# -- plugins
 	./armour/plugins/sk/armdb.tcl				# sqlite3 functions
