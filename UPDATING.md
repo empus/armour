@@ -20,6 +20,7 @@
 
 	+ New release Armour v3.4.4
 	
+	+ Fix bug:		dnslookup not working properly with scanrbl command
 	+ Enhancement:	allow help and syntax responses from public commands, to be sent via /notice
 	
 		- Config var:	arm(cfg.help.notc): enabled or disabled

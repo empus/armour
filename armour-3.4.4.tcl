@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v3.4.4 autobuild completed on: Sat Jan 18 16:23:15 PST 2020
+# armour.tcl v3.4.4 autobuild completed on: Sun Jan 19 06:04:36 PST 2020
 # ------------------------------------------------------------------------------------------------
 #
 #    _                         ___ ___ 
@@ -627,6 +627,7 @@ proc userdb:cmd:do {0 1 2 3 {4 ""}  {5 ""}} {
 	if {$type == "pub"} {
 		set nick $1; set uh $2; set hand $3; set chan $4; set args $5; set target $chan; set source "$nick!$uh"
 		if {![userdb:isValidchan $chan]} { return; }
+		if {$arm(cfg.help.notc)} { set starget $nick; set stype "notc" } else { set stype "pub"; set starget $chan }
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
@@ -645,7 +646,7 @@ proc userdb:cmd:do {0 1 2 3 {4 ""}  {5 ""}} {
 
 	set tcl [join $args]
 
-	if {$tcl == ""} { userdb:reply $type $target "uhh.. do what?"; return; }
+	if {$tcl == ""} { userdb:reply $stype $starget "uhh.. do what?"; return; }
 
         set start [clock clicks]
         set errnum [catch {eval $tcl} error]
@@ -675,6 +676,7 @@ proc userdb:cmd:whois {0 1 2 3 {4 ""}  {5 ""}} {
 	if {$type == "pub"} {
 		set nick $1; set uh $2; set hand $3; set chan $4; set args $5; set target $chan; set source "$nick!$uh"
 		if {![userdb:isValidchan $chan]} { return; }
+		if {$arm(cfg.help.notc)} { set starget $nick; set stype "notc" } else { set stype "pub"; set starget $chan }
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
@@ -691,7 +693,7 @@ proc userdb:cmd:whois {0 1 2 3 {4 ""}  {5 ""}} {
 	# -- command: whois
 
 	set targetuser [lindex $args 0]
-	if {$targetuser == ""} { userdb:reply $type $target "\002usage:\002 whois <user>"; return; }
+	if {$targetuser == ""} { userdb:reply $stype $starget "\002usage:\002 whois <user>"; return; }
 	
 	# -- check if = used
 	if {[regexp -- {^=(.+)$} $targetuser -> targetnick]} {
@@ -752,6 +754,7 @@ proc userdb:cmd:userlist {0 1 2 3 {4 ""}  {5 ""}} {
 	if {$type == "pub"} {
 		set nick $1; set uh $2; set hand $3; set chan $4; set args $5; set target $chan; set source "$nick!$uh"
 		if {![userdb:isValidchan $chan]} { return; }
+		if {$arm(cfg.help.notc)} { set starget $nick; set stype "notc" } else { set stype "pub"; set starget $chan }
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
@@ -817,6 +820,7 @@ proc userdb:cmd:adduser {0 1 2 3 {4 ""}  {5 ""}} {
 	if {$type == "pub"} {
 		set nick $1; set uh $2; set hand $3; set chan $4; set args $5; set target $chan; set source "$nick!$uh"
 		if {![userdb:isValidchan $chan]} { return; }
+		if {$arm(cfg.help.notc)} { set starget $nick; set stype "notc" } else { set stype "pub"; set starget $chan }
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
@@ -836,7 +840,7 @@ proc userdb:cmd:adduser {0 1 2 3 {4 ""}  {5 ""}} {
 	set trglevel [lindex $args 1]
 	set trgxuser [lindex $args 2]
 	set trgamode [lindex $args 3]
-	if {$trguser == "" || $trglevel == "" || $trgxuser == ""} { userdb:reply $type $target "\002usage:\002 adduser <user> <level> <xuser> \[automode\]"; return; }
+	if {$trguser == "" || $trglevel == "" || $trgxuser == ""} { userdb:reply $stype $starget "\002usage:\002 adduser <user> <level> <xuser> \[automode\]"; return; }
 	if {$trgamode == ""} { set trgamode "none" }
 	
 	set user [userdb:uline:get user nick $nick]
@@ -874,7 +878,7 @@ proc userdb:cmd:adduser {0 1 2 3 {4 ""}  {5 ""}} {
 		voice	{ set automode "1"; set automodew "voice"; }
 		2		{ set automode "2"; set automodew "op"; }
 		op		{ set automode "2"; set automodew "op"; }
-		default { arm:reply $type $target "\002(\002error\002)\002 automode should be: none|voice|op"; return; }
+		default { arm:reply $stype $starget "\002(\002error\002)\002 automode should be: none|voice|op"; return; }
 	}
 		
 	# -- get next available userid
@@ -905,6 +909,7 @@ proc userdb:cmd:remuser {0 1 2 3 {4 ""}  {5 ""}} {
 	if {$type == "pub"} {
 		set nick $1; set uh $2; set hand $3; set chan $4; set args $5; set target $chan; set source "$nick!$uh"
 		if {![userdb:isValidchan $chan]} { return; }
+		if {$arm(cfg.help.notc)} { set starget $nick; set stype "notc" } else { set stype "pub"; set starget $chan }
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
@@ -922,7 +927,7 @@ proc userdb:cmd:remuser {0 1 2 3 {4 ""}  {5 ""}} {
 
 	set trguser [lindex $args 0]
 
-	if {$trguser == ""} { userdb:reply $type $target "\002usage:\002 remuser <user>"; return; }
+	if {$trguser == ""} { userdb:reply $stype $starget "\002usage:\002 remuser <user>"; return; }
 	
 	set user [userdb:uline:get user nick $nick]
 
@@ -952,6 +957,7 @@ proc userdb:cmd:verify {0 1 2 3 {4 ""}  {5 ""}} {
 	if {$type == "pub"} {
 		set nick $1; set uh $2; set hand $3; set chan $4; set args $5; set target $chan; set source "$nick!$uh"
 		if {![userdb:isValidchan $chan]} { return; }
+		if {$arm(cfg.help.notc)} { set starget $nick; set stype "notc" } else { set stype "pub"; set starget $chan }
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
@@ -969,7 +975,7 @@ proc userdb:cmd:verify {0 1 2 3 {4 ""}  {5 ""}} {
 
 	set trgnick [lindex $args 0]
 
-	if {$trgnick == ""} { userdb:reply $type $target "\002usage:\002 verify <nick>"; return; }
+	if {$trgnick == ""} { userdb:reply $stype $starget "\002usage:\002 verify <nick>"; return; }
 		
 	set user [userdb:uline:get user nick $trgnick]
 
@@ -1068,6 +1074,7 @@ proc userdb:cmd:moduser {0 1 2 3 {4 ""}  {5 ""}} {
 	if {$type == "pub"} {
 		set nick $1; set uh $2; set hand $3; set chan $4; set args $5; set target $chan; set source "$nick!$uh"
 		if {![userdb:isValidchan $chan]} { return; }
+		if {$arm(cfg.help.notc)} { set starget $nick; set stype "notc" } else { set stype "pub"; set starget $chan }
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
@@ -1086,7 +1093,7 @@ proc userdb:cmd:moduser {0 1 2 3 {4 ""}  {5 ""}} {
 	lassign $args tuser ttype
 	set tvalue [lrange $args 2 end]
 
-	if {$tuser == "" || $ttype == "" || $tvalue == ""} { userdb:reply $type $target "\002usage:\002 moduser <user> <user|level|xuser|automode|lang|email|pass> <value>"; return; }
+	if {$tuser == "" || $ttype == "" || $tvalue == ""} { userdb:reply $stype $starget "\002usage:\002 moduser <user> <user|level|xuser|automode|lang|email|pass> <value>"; return; }
 	
 	set user [userdb:uline:get user nick $nick]
 
@@ -1106,7 +1113,7 @@ proc userdb:cmd:moduser {0 1 2 3 {4 ""}  {5 ""}} {
 	elseif {[string match "a*" $ttype] || [string match "m*" $ttype]} { set ttype "automode" } \
 	elseif {[string match "p*" $ttype]} { set ttype "pass" } \
 	else {
-		userdb:reply $type $target "\002usage:\002 moduser <user> <user|level|xuser|automode|lang|email|pass> <value>"
+		userdb:reply $stype $starget "\002usage:\002 moduser <user> <user|level|xuser|automode|lang|email|pass> <value>"
 		return;
 	}
 	
@@ -1174,7 +1181,7 @@ proc userdb:cmd:moduser {0 1 2 3 {4 ""}  {5 ""}} {
 			voice	{ set automode "1"; }
 			2	{ set automode "2"; }
 			op	{ set automode "2"; }
-			default { userdb:reply $type $target "\002(\002error\002)\002 automode should be: none|voice|op"; return; }
+			default { userdb:reply $stype $starget "\002(\002error\002)\002 automode should be: none|voice|op"; return; }
 		}
 		if {$automode == $tmode} { userdb:reply $type $target "\002(\002error\002)\002 what's the point?"; return; }
 		# -- make the change
@@ -1252,6 +1259,7 @@ proc userdb:cmd:set {0 1 2 3 {4 ""}  {5 ""}} {
 	if {$type == "pub"} {
 		set nick $1; set uh $2; set hand $3; set chan $4; set args $5; set target $chan; set source "$nick!$uh"
 		if {![userdb:isValidchan $chan]} { return; }
+		if {$arm(cfg.help.notc)} { set starget $nick; set stype "notc" } else { set stype "pub"; set starget $chan }
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
@@ -1270,7 +1278,7 @@ proc userdb:cmd:set {0 1 2 3 {4 ""}  {5 ""}} {
 	set ttype [lindex $args 0]
 	set tvalue [lrange $args 1 end]
 
-	if {$ttype == "" || $tvalue == ""} { userdb:reply $type $target "\002usage:\002 set <automode|lang|email|pass> <value>"; return; }
+	if {$ttype == "" || $tvalue == ""} { userdb:reply $stype $starget "\002usage:\002 set <automode|lang|email|pass> <value>"; return; }
 	
 	set user [userdb:uline:get user nick $nick]
 
@@ -1280,7 +1288,7 @@ proc userdb:cmd:set {0 1 2 3 {4 ""}  {5 ""}} {
 	elseif {[string match "a*" $ttype] || [string match "m*" $ttype]} { set ttype "automode" } \
 	elseif {[string match "p*" $ttype]} { set ttype "pass" } \
 	else {
-		userdb:reply $type $target "\002usage:\002 set <automode|lang|email|pass> <value>"
+		userdb:reply $stype $starget "\002usage:\002 set <automode|lang|email|pass> <value>"
 		return;
 	}
 		
@@ -5656,10 +5664,13 @@ proc arm:cmd:scanrbl {0 1 2 3 {4 ""}  {5 ""}} {
 
 	set dnsbl [lindex $response 2]
 	set desc [lindex $response 3]
-	set info [lindex $response 4]
+	set info [join [lindex $response 4]]
 
-	arm:reply $type $target "\002(\002dnsbl\002)\002 $dnsbl \002desc:\002 $desc \002(ip:\002 $dst -- \002score:\002 $score -- \002info:\002 [join $info]\002)\002"
-
+	if {$info != ""} {
+		arm:reply $type $target "\002(\002dnsbl\002)\002 $dnsbl \002desc:\002 $desc \002(ip:\002 $dst -- \002score:\002 $score -- \002info:\002 $info\002)\002"
+	} else {
+		arm:reply $type $target "\002(\002dnsbl\002)\002 $dnsbl \002desc:\002 $desc \002(ip:\002 $dst -- \002score:\002 $score\002)\002"
+	}
 	# -- create log entry for command use
 	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] "$nick!$uh" "" "" ""
 		
@@ -10996,7 +11007,7 @@ proc arm:rbl:score {ip} {
 	set desc ""; set point ""; set info ""; set therbl "";
 	foreach rbl [array names rbls] {
 		set lookup "$rip.$rbl"
-		set response [arm:dns:lookup $lookup *]
+		set response [arm:dns:lookup $lookup A]
 		if {$response == "error"} { continue; }
 		# name 210.204.211.58.dnsbl.dronebl.org type TXT class IN ttl 300 rdlength 51 rdata {Automatically determined botnet IPs (experimental)} name 210.204.211.58.dnsbl.dronebl.org type A class IN ttl 300 rdlength 4 rdata 127.0.0.17
 		#set info ""; set resp "";
