@@ -1,11 +1,11 @@
 #!/usr/bin/env tclsh
 package require http
-package provide dronebl 1.2
-
+package require tls
+package provide dronebl 1.3
 
 ###############################################################################
 #                                                                             #
-# DroneBL TCL library by rojo -- version 1.2                                  #
+# DroneBL TCL library by rojo -- version 1.3                                  #
 #                                                                             #
 # Stick your RPC key into the set rpckey line at the top of dronebl.tcl.      #
 # Then "source path/to/dronebl.tcl" in your eggdrop conf, TCL script or       #
@@ -213,8 +213,11 @@ proc host2ip {ip {host 0} {status 0} {attempt 0}} {
 # performs a connection to the DroneBL RPC2 service and returns the response
 proc talk { query } {
 	[namespace current]::setHTTPheaders
-	set http [::http::geturl "http://dronebl.org/RPC2" -type "text/xml" -query $query]
-	return [::http::data $http]
+	::http::register https 443 tls::socket
+	set http [::http::geturl "https://dronebl.org/rpc2" -type "text/xml" -query $query]
+	set data [::http::data $http]
+	::http::unregister https
+	return $data
 }
 
 # keeps track of the last error
@@ -486,7 +489,10 @@ proc records {{txt ""}} {
 # returns a nested list of {Class Description} {1 {Testing class.}} {2 {Sample data...}} etc.
 proc classes {{txt ""}} {
 	[namespace current]::setHTTPheaders
-	set http [::http::geturl "http://dronebl.org/classes?format=txt"]
+	::http::register https 443 tls::socket
+	set http [::http::geturl "https://dronebl.org/classes?format=txt"]
+	set data [::http::data $http]
+	::http::unregister https
 	set res [regexp -linestop -inline -all {.+} [::http::data $http]]
 
 	set classlist {{Class Description}}

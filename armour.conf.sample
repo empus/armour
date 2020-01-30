@@ -573,7 +573,7 @@ set files {
 	#./armour/plugins/trakka-EDITME.tcl			# trakka plugin
 	./armour/plugins/tell.tcl					# tell plugin
 	#./armour/plugins/push.tcl					# pushbullet plugin
-	#./armour/plugins/dronebl.tcl				# dronebl plugin
+	#./armour/plugins/ext/libdronebl.tcl				# dronebl plugin
 	#./armour/plugins/email.tcl					# email plugin
 	
 	#./armour/plugins/apprelay.tcl				# cservice application relay
