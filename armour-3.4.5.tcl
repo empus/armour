@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v3.4.5 autobuild completed on: Sat Feb  1 04:51:58 PST 2020
+# armour.tcl v3.4.5 autobuild completed on: Sat Feb  1 05:35:08 PST 2020
 # ------------------------------------------------------------------------------------------------
 #
 #    _                         ___ ___ 
@@ -617,9 +617,9 @@ bind kick - * { arm:coroexec userdb:kick }
 bind evnt - connect-server userdb:init:logout
 #bind evnt - init-server userdb:init:logout
 
-bind raw - 330 userdb:raw:account
-bind raw - 352 userdb:raw:genwho
-bind raw - 354 userdb:raw:who
+bind raw - 330 { arm:coroexec userdb:raw:account }
+bind raw - 352 { arm:coroexec userdb:raw:genwho }
+bind raw - 354 { arm:coroexec userdb:raw:who }
 
 
 proc userdb:cmd:do {0 1 2 3 {4 ""}  {5 ""}} {
@@ -2269,8 +2269,11 @@ proc userdb:raw:genwho {server cmd arg} {
 		lassign $arg mynick type ident host server nick hopcount sid
 		set rname [lrange $arg 8 end]
 		# -- NOTE: the above raw example doesn't appear to provide an actual IP; do a DNS lookup (doh! this slows us down)
-		set ip [arm:dns:lookup $host A]
-		if {$ip == "error" || $ip == ""} { set ip 0 }	# -- fallback to disable IP scans in arm:scan
+		if {![arm:isValidIP $host]} {
+			# -- only do this if it's not already an IPv4 IP
+			set ip [arm:dns:lookup $host A]
+			if {$ip == "error" || $ip == ""} { set ip 0 }	# -- fallback to disable IP scans in arm:scan
+		}		
 		set account 0;	# -- TODO: where do we get an ACCOUNT from in IRCnet /WHO response?;
 		# -- send it to userdb:who
 		# -- NOTE: the possible downside to this workaround, is additional processing for autologin on every /WHO response
@@ -8419,8 +8422,11 @@ proc arm:raw:genwho {server cmd arg} {
 		lassign $arg mynick type ident host server nick away hopcount sid
 		set rname [lrange $arg 9 end]
 		# -- NOTE: the above raw example doesn't appear to provide an actual IP; do a DNS lookup (doh! this slows us down)
-		set ip [arm:dns:lookup $host A]
-		if {$ip == "error" || $ip == ""} { set ip 0 }	# -- fallback to disable IP scans in arm:scan
+		if {![arm:isValidIP $host]} {
+			# -- only do this if it's not already an IPv4 IP
+			set ip [arm:dns:lookup $host A]
+			if {$ip == "error" || $ip == ""} { set ip 0 }	# -- fallback to disable IP scans in arm:scan
+		}
 		set account 0;	# -- TODO: where do we get an ACCOUNT from in IRCnet /WHO response?;
 		# -- send it to arm:who
 		# -- WARNING: how do we stop a scan happening on this network type, every time there is a /WHO response returned for them?
