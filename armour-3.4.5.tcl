@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v3.4.5 autobuild completed on: Sat Feb  1 05:35:08 PST 2020
+# armour.tcl v3.4.5 autobuild completed on: Sat Feb  1 05:42:44 PST 2020
 # ------------------------------------------------------------------------------------------------
 #
 #    _                         ___ ___ 
@@ -2273,7 +2273,7 @@ proc userdb:raw:genwho {server cmd arg} {
 			# -- only do this if it's not already an IPv4 IP
 			set ip [arm:dns:lookup $host A]
 			if {$ip == "error" || $ip == ""} { set ip 0 }	# -- fallback to disable IP scans in arm:scan
-		}		
+		} else { set ip $host }
 		set account 0;	# -- TODO: where do we get an ACCOUNT from in IRCnet /WHO response?;
 		# -- send it to userdb:who
 		# -- NOTE: the possible downside to this workaround, is additional processing for autologin on every /WHO response
@@ -8426,7 +8426,7 @@ proc arm:raw:genwho {server cmd arg} {
 			# -- only do this if it's not already an IPv4 IP
 			set ip [arm:dns:lookup $host A]
 			if {$ip == "error" || $ip == ""} { set ip 0 }	# -- fallback to disable IP scans in arm:scan
-		}
+		} else { set ip $host }
 		set account 0;	# -- TODO: where do we get an ACCOUNT from in IRCnet /WHO response?;
 		# -- send it to arm:who
 		# -- WARNING: how do we stop a scan happening on this network type, every time there is a /WHO response returned for them?
