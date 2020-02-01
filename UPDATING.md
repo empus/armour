@@ -1,5 +1,5 @@
 ----------------------------------------------------------------------------------------------------------------------------------------
- armour.tcl v3.4.4 - 2020.01.19
+ armour.tcl v3.4.5 - 2020.02.01
 ----------------------------------------------------------------------------------------------------------------------------------------
 
  ![Armour](./armour.png)
@@ -14,6 +14,33 @@
  Specifically, look for new config variables that have eventuated through new features.  Find these variables
  from the armour.conf.sample file provided and paste into your own *.conf file with appropriate values.
 
+----------------------------------------------------------------------------------------------------------------------------------------
+
+***2019.02.01	v3.4.5***
+
+	+ New release Armour v3.4.5
+	
+	+ Enhancement:	Added support for other ircds without extended WHO response (raw 354), such as IRCnet
+	
+		- Config var:	arm(cfg.ircd):		1: ircu/Undernet
+											2: IRCnet
+	
+	+ Enhancement: 	New config parameter for hostname of service clients, to better support networks other than Undernet
+	
+		- Config var:	arm(cfg.servicehost):	hostname
+		
+	+ Enhancement:	New config parameter for umode +x to achieve autologin on networks other than Undernet
+	
+		- Config var:	arm(cfg.xregex):		regex pattern
+		
+	+ Enhancement:	trakka plugin:  new config parameter for umode +x hosts, to better support other networks
+	
+		- Config var:	trakka(cfg.xhost): 		regex pattern
+		
+	+ Fixed bug:	Adaptive floodnet detection not working for patterns: nick!ident/rname, ident/rname, nick/rname
+	
+	+ Enhancement:	Ensure plugins also only send syntax via /notice if arm(cfg.help.notc) var is enabled
+		
 ----------------------------------------------------------------------------------------------------------------------------------------
 
 ***2019.01.15	v3.4.4***

@@ -36,8 +36,8 @@ set email(mode) 2
 # -------------------------------------------------------------------------------------------------------------------------------
 #	handle				address								lvl req.
 # -------------------------------------------------------------------------------------------------------------------------------
-set emailadd(empus)		{	empus@undernet.org						"#channel	"	}
-set emailadd(empfoo)		{	mail@empus.net							400			}
+set emailadd(empus)		{	empus@undernet.org						"#channel"	}
+set emailadd(empfoo)	{	mail@empus.net							400			}
 
 
 # ---------------------------------------------------------------------------------------
@@ -71,7 +71,10 @@ proc email:cmd:email {0 1 2 3 {4 ""}  {5 ""}} {
 	set type $0
 	if {$type == "pub"} {
 		set nick $1; set uh $2; set hand $3; set chan $4; set args $5; set target $chan; set source "$nick!$uh"
-		if {$email(mode) == 2} { if {![userdb:isValidchan $chan]} { return; } }
+		if {$email(mode) == 2} {
+			if {![userdb:isValidchan $chan]} { return; }
+			if {$arm(cfg.help.notc)} { set starget $nick; set stype "notc" } else { set stype "pub"; set starget $chan }
+		} else { set stype "pub"; set starget $chan }
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick;
@@ -108,7 +111,7 @@ proc email:cmd:email {0 1 2 3 {4 ""}  {5 ""}} {
 	set to [lindex $args 0]
 	set text [lrange $args 1 end]
 	
-	if {$from == "" || $to == "" || $text == ""} { email:reply $type $target "syntax: email <to> <message>"; return; }
+	if {$from == "" || $to == "" || $text == ""} { email:reply $stype $starget "syntax: email <to> <message>"; return; }
 	
 	email:debug 1 "email:pub:email: $nick!$uh requesting email from $from to $to (message: $text)"
 	

@@ -47,7 +47,7 @@ set trakka(routine) 360
 # -- subtract points daily at midnight
 bind cron - "0 0 * * *" trakka:cron:score
 
-# -- remove how maily points daily those not in the channel? - [1]
+# -- remove how many points daily those not in the channel? - [1]
 set trakka(subtract) 1
 
 # -- initial newcomer score gain after how many seconds in chan? - [20]
@@ -57,11 +57,14 @@ set trakka(init) "600"
 set trakka(debug) 1
 
 # -- version
-set trakka(version) "1.0"
+set trakka(version) "1.1"
 
 # -- realname
 set rname "trakking you."
 
+# -- regex to determine umode +x registered users
+# -- change with care to suit your own network
+set trakka(cfg.xhost) {([^\.]+)\.users\.undernet\.org}
 
 # -----------------------------------------------------------------------------
 # command			plugin		level req.	binds
@@ -129,7 +132,7 @@ proc trakka:raw:join {nick uhost hand chan} {
 	
 	# -- xuser
 	set xuser ""
-	if {[regexp -- {([^\.]+)\.users\.undernet\.org} $host -> xuser]} {
+	if {[regexp -- $trakka(cfg.xhost) $host -> xuser]} {
 		if {[info exists trakka(xuser,$xuser)]} {
 			# -- trakka xuser based score
 			trakka:debug 2 "trakka:raw:join: recognised xuser trakka for: $nick!$uhost (score: $trakka(xuser,$xuser))"
@@ -189,7 +192,7 @@ proc trakka:int:join {nick uhost hand chan {white 0}} {
 	
 		# -- xuser
 		set xuser ""
-		if {[regexp -- {([^\.]+)\.users\.undernet\.org} $host -> xuser]} {
+		if {[regexp -- $trakka(cfg.xhost) $host -> xuser]} {
 			incr trakka(xuser,$xuser)
 			trakka:debug 2 "trakka:int:join: increased xuser trakka for: $nick!$uhost (score: $trakka(xuser,$xuser))"
 		} else {
@@ -214,7 +217,10 @@ proc trakka:cmd:ack {0 1 2 3 {4 ""}  {5 ""}} {
 
 	if {$type == "pub"} {
 		set nick $1; set uh $2; set hand $3; set chan $4; set args $5; set target $chan; set source "$nick!$uh"
-		if {$trakka(mode) == 2} { if {![userdb:isValidchan $chan]} { return; } }
+		if {$tell(mode) == 2} {
+			if {![userdb:isValidchan $chan]} { return; }
+			if {$arm(cfg.help.notc)} { set starget $nick; set stype "notc" } else { set stype "pub"; set starget $chan }
+		} else { set stype "pub"; set starget $chan }
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick;
@@ -246,7 +252,7 @@ proc trakka:cmd:ack {0 1 2 3 {4 ""}  {5 ""}} {
 	if {$trakka(mode) == 0 || $trakka(chan) != $chan} { return; }
 	
 	set tnick [lindex $args 0]
-	if {$tnick == ""} { trakka:reply $type $target "usage: ack <nick>"; return; }
+	if {$tnick == ""} { trakka:reply $stype $starget "usage: ack <nick>"; return; }
 	
 	set tuh [getchanhost $tnick $chan]
 	
@@ -256,7 +262,7 @@ proc trakka:cmd:ack {0 1 2 3 {4 ""}  {5 ""}} {
 	# -- xuser
 	set xuser ""
 	set thost [lindex [split $tuh @] 1]
-	if {[regexp -- {([^\.]+)\.users\.undernet\.org} $thost -> xuser]} {
+	if {[regexp -- $trakka(cfg.xhost) $thost -> xuser]} {
 		incr trakka(xuser,$xuser)
 		trakka:debug 2 "trakka:cmd:ack: $nick!$uh acknowledged $tnick -- increased xuser trakka for: $tnick!$tuh (score: $trakka(xuser,$xuser))"
 	} else {
@@ -312,7 +318,7 @@ proc trakka:raw:signoff {nick uhost handle chan {text ""}} {
 	}
 	
 	# -- xuser
-	if {[regexp -- {([^\.]+)\.users\.undernet\.org} $host -> xuser]} {
+	if {[regexp -- $trakka(cfg.xhost) $host -> xuser]} {
 		if {[info exists trakka(xuser,$xuser)]} {
 			# -- unset trakka xuser based score
 			unset trakka(xuser,$xuser)
@@ -354,7 +360,7 @@ proc trakka:raw:kick {nick uhost handle chan vict reason} {
 	}
 		
 	# -- xuser
-	if {[regexp -- {([^\.]+)\.users\.undernet\.org} $host -> xuser]} {
+	if {[regexp -- $trakka(cfg.xhost) $host -> xuser]} {
 		if {[info exists trakka(xuser,$xuser)]} {
 			# -- unset trakka xuser based score
 			unset trakka(xuser,$xuser)
@@ -395,7 +401,7 @@ proc trakka:raw:part {nick uhost handle chan {text ""}} {
 	}
 	
 	# -- xuser
-	if {[regexp -- {([^\.]+)\.users\.undernet\.org} $host -> xuser]} {
+	if {[regexp -- $trakka(cfg.xhost) $host -> xuser]} {
 		if {[info exists trakka(xuser,$xuser)]} {
 			# -- unset trakka xuser based score
 			unset trakka(xuser,$xuser)
@@ -641,7 +647,6 @@ proc trakka:raw:who {server cmd arg} {
 	if {$query != "105"} { return; }
 	if {$nick == $botnick} { return; }
 
-
 	set uhost "$ident@$host"
 	set nuh "$nick!$uhost"
 	set chan $trakka(chan)
@@ -655,35 +660,35 @@ proc trakka:raw:who {server cmd arg} {
 		set value [lindex [split $entry ,] 1]
 		switch -- $type {
 			nick	{
-					# -- nickname
-					if {$value == $nick} {
-						# -- entry match exists, add 1 point
-						incr trakka($type,$value)
-						incr trakka(count)
-						incr trakka(ncount)
-						trakka:debug 5 "trakka:raw:who: routine trakka increment (+1): trakka($type,$value) (newscore: $trakka($type,$value))"
-					}
+				# -- nickname
+				if {$value == $nick} {
+					# -- entry match exists, add 1 point
+					incr trakka($type,$value)
+					incr trakka(count)
+					incr trakka(ncount)
+					trakka:debug 5 "trakka:raw:who: routine trakka increment (+1): trakka($type,$value) (newscore: $trakka($type,$value))"
+				}
 				}
 			uhost	{
-					# -- uhost
-					if {$value == $uhost} {
-						# -- entry match exists, add 1 point
-						incr trakka($type,$value)
-						incr trakka(count)
-						incr trakka(uhcount)
-						trakka:debug 5 "trakka:raw:who: routine trakka increment (+1): trakka($type,$value) (newscore: $trakka($type,$value))"
-					}
+				# -- uhost
+				if {$value == $uhost} {
+					# -- entry match exists, add 1 point
+					incr trakka($type,$value)
+					incr trakka(count)
+					incr trakka(uhcount)
+					trakka:debug 5 "trakka:raw:who: routine trakka increment (+1): trakka($type,$value) (newscore: $trakka($type,$value))"
 				}
+			}
 			xuser	{
-					# -- xuser
-					if {$value == $xuser} {
-						# -- entry match exists, add 1 point
-						incr trakka($type,$value)
-						incr trakka(count)
-						incr trakka(xcount)
-						trakka:debug 5 "trakka:raw:who: routine trakka increment (+1): trakka($type,$value) (newscore: $trakka($type,$value))"
-					}
+				# -- xuser
+				if {$value == $xuser} {
+					# -- entry match exists, add 1 point
+					incr trakka($type,$value)
+					incr trakka(count)
+					incr trakka(xcount)
+					trakka:debug 5 "trakka:raw:who: routine trakka increment (+1): trakka($type,$value) (newscore: $trakka($type,$value))"
 				}
+			}
 		}
 		
 	}
@@ -706,10 +711,10 @@ proc trakka:raw:endofwho {server cmd arg} {
   	
 	trakka:debug 0 "trakka:raw:endofwho: \002incremented $trakka(count) total trakka's in routine cycle\002 (nick: $trakka(ncount) uhost: $trakka(uhcount) xuser: $trakka(xcount))"
 
-        unset trakka(count)
-        unset trakka(ncount)
-        unset trakka(uhcount)
-        unset trakka(xcount)
+	unset trakka(count)
+	unset trakka(ncount)
+	unset trakka(uhcount)
+	unset trakka(xcount)
 	unset trakka(routinely)
 	
 	# -- start again
@@ -731,7 +736,7 @@ proc trakka:mode:addo {nick uhost hand chan mode target} {
 	trakka:debug 2 "trakka:modeadd:o: client opped -- increased nick trakka for: $nick!$uhost (score: $trakka(nick,$nick))"
 	# -- xuser
 	set xuser ""
-	if {[regexp -- {([^\.]+)\.users\.undernet\.org} $host -> xuser]} {
+	if {[regexp -- $trakka(cfg.xhost) $host -> xuser]} {
 		incr trakka(xuser,$xuser)
 		trakka:debug 2 "trakka:modeadd:o: client opped -- increased xuser trakka for: $nick!$uhost (score: $trakka(xuser,$xuser))"
 	} else {
@@ -760,7 +765,7 @@ proc trakka:mode:addv {nick uhost hand chan mode target} {
 	trakka:debug 2 "trakka:modeadd:o: client voiced -- increased nick trakka for: $nick!$uhost (score: $trakka(nick,$nick))"
 	# -- xuser
 	set xuser ""
-	if {[regexp -- {([^\.]+)\.users\.undernet\.org} $host -> xuser]} {
+	if {[regexp -- $trakka(cfg.xhost) $host -> xuser]} {
 		incr trakka(xuser,$xuser)
 		trakka:debug 2 "trakka:modeadd:o: client voiced -- increased xuser trakka for: $nick!$uhost (score: $trakka(xuser,$xuser))"
 	} else {

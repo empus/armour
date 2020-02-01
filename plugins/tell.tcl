@@ -54,7 +54,10 @@ proc tell:cmd:tell {0 1 2 3 {4 ""}  {5 ""}} {
 
 	if {$type == "pub"} {
 		set nick $1; set uh $2; set hand $3; set chan $4; set args $5; set target $chan; set source "$nick!$uh"
-		if {$tell(mode) == 2} { if {![userdb:isValidchan $chan]} { return; } }
+		if {$tell(mode) == 2} {
+			if {![userdb:isValidchan $chan]} { return; }
+			if {$arm(cfg.help.notc)} { set starget $nick; set stype "notc" } else { set stype "pub"; set starget $chan }
+		} else { set stype "pub"; set starget $chan }
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick;
@@ -126,7 +129,7 @@ proc tell:cmd:tell {0 1 2 3 {4 ""}  {5 ""}} {
 		tell:debug 3 "tell:cmd:tell adding tell to: $to prefix: $prefix timed: $timed delayed: $delayed priv: $priv what: $what"
 	} else {
 		# -- return syntax
-		tell:reply $type $target "usage: tell <who> ?<when>? (that|to|about) <something>"
+		tell:reply $stype $starget "usage: tell <who> ?<when>? (that|to|about) <something>"
 		return;
 	}
 	
