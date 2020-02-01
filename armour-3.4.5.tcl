@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v3.4.5 autobuild completed on: Sat Feb  1 05:42:44 PST 2020
+# armour.tcl v3.4.5 autobuild completed on: Sat Feb  1 07:15:31 PST 2020
 # ------------------------------------------------------------------------------------------------
 #
 #    _                         ___ ___ 
@@ -7046,7 +7046,7 @@ proc arm:cmd:add {0 1 2 3 {4 ""}  {5 ""}} {
 	
 	set list [lindex $args 0]
 	set method [lindex $args 1]
-	set value [lindex $args 2]
+	set value [lindex [split $args] 2]
 	set action [lindex $args 3]
 	
 	# -- catch method
@@ -7161,15 +7161,23 @@ proc arm:cmd:add {0 1 2 3 {4 ""}  {5 ""}} {
 		return;
 	}
 	# -- end dronebl add
-	
-	# -- see if the action is given
-	if {[string tolower [lindex $args 3]] == "accept" || [string tolower [lindex $args 3]] == "voice" || \
-		[string tolower [lindex $args 3]] == "op" || [string tolower [lindex $args 3]] == "ban"} {
-		set action [lindex $args 3]
+		
+	# -- see if the action is given (incl. shorthand)
+	if {[string tolower [lindex $args 3]] == "accept" || [string tolower [lindex $args 3]] == "a"} {
+		# -- accept the client
+		set theaction "A"
 		set tn 4
-	} else {
-		set tn 3
-	}
+	} elseif {[string tolower [lindex $args 3]] == "voice" || [string tolower [lindex $args 3]] == "v"} {
+		# -- voice the client
+		set theaction "V"
+		set tn 4
+	
+	} elseif {[string tolower [lindex $args 3]] == "kick" || [string tolower [lindex $args 3]] == "kickban" || [string tolower [lindex $args 3]] == "ban" \
+		|| [string tolower [lindex $args 3]] == "k" || [string tolower [lindex $args 3]] == "kb" || [string tolower [lindex $args 3]] == "b"} {
+		# -- kickban the client
+		set theaction "B"
+		set tn 4	
+	} else { set tn 3 }
 		
 	# -- detect if limit (joins:secs:hold) is specified as 4th argument
 	if {[regexp -- {(\d+):(\d+)(?::(\d+))?} [lindex $args 4] -> joins secs hold] || [regexp -- {(\d+):(\d+)(?::(\d+))?} [lindex $args 3] -> joins secs hold]} {
@@ -7182,9 +7190,9 @@ proc arm:cmd:add {0 1 2 3 {4 ""}  {5 ""}} {
 		set limit "$joins-$secs-$hold"
 		set reason [lrange $args $tn end]
 	} else {
-			# -- limit not specified
-			set limit "1-1-1"
-			set reason [lrange $args $tn end]
+		# -- limit not specified
+		set limit "1-1-1"
+		set reason [lrange $args $tn end]
 	}
 
 	if {$list == "" || $method == "" || $value == ""} {
@@ -7204,8 +7212,6 @@ proc arm:cmd:add {0 1 2 3 {4 ""}  {5 ""}} {
 		return;  
 	}
 	
-
-		
 	arm:debug 3 "arm:cmd:add: list: $list method: $method value: $value action: $action limit: $limit reason: $reason"
 	
 	# -- check if already exists
@@ -7238,13 +7244,13 @@ proc arm:cmd:add {0 1 2 3 {4 ""}  {5 ""}} {
 		set method "host"
 		set loop [lrange $lasthosts($arm(cfg.chan.def)) 0 [expr $value - 1]] 
 	} else { 
-			# -- allow for comma separated values (if not a regex or rname)
-			if {$method != "regex" && $method != "rname"} { set loop [split $value ,] } else { set loop $value }
+		# -- allow for comma separated values (if not a regex or rname)
+		if {$method != "regex" && $method != "rname"} { set loop [split $value ,] } else { set loop $value }
 	}
 		
 	foreach tvalue $loop {
 		set exists 0
-		if {[regexp -- {([^\.]+)\.users\.undernet\.org} $tvalue -> xuser]} {
+		if {[regexp -- $arm(cfg.xregex) $tvalue -> xuser]} {
 			set method "user"
 			set value $xuser
 		} else {
@@ -8749,9 +8755,9 @@ proc arm:scan {nick ident ip host xuser rname} {
 	set start [clock clicks]
 
 	# -- setup nuhr var for regex matching
-	arm:debug 3 "arm:scan: received: nick: [join $nick] -- ident: $ident -- host: $host -- ip: $ip -- rname: $rname"
+	arm:debug 3 "arm:scan: received: nick: [join $nick] -- ident: $ident -- host: $host -- ip: $ip -- rname: [join $rname]"
 
-	set nuhr "[join $nick]!$ident@$host/$rname"
+	set nuhr "[join $nick]!$ident@$host/[join $rname]"
 	set uhost "$ident@$host"
 	# -- add rname to newjoin(nick) array
 	if {[info exists newjoin($nick)]} { set newjoin($nick) "$newjoin($nick) $rname" }
@@ -8983,7 +8989,7 @@ proc arm:scan {nick ident ip host xuser rname} {
 									set uh [lindex $newjoin($newuser) 0]
 							}
 							# -- we now have the rname after /who
-							set realname [lrange $newjoin($newuser) 1 end]
+							set realname [join [lrange $newjoin($newuser) 1 end]]
 							set i [lindex [split $uh @] 0]
 							set h [lindex [split $uh @] 1]
 							switch -- $type {
@@ -9289,7 +9295,7 @@ proc arm:scan {nick ident ip host xuser rname} {
 			# putloglev d * "arm:scan: whitelist matching $nuhr against regex: [join $exp]"
 			if {[regexp -- [join $exp] $nuhr]} {
 				# -- match: whitelist entry, take action!
-				set id [arm:get:id white $method $value]
+				#set id [arm:get:id white $method $value]
 				set runtime [arm:runtime $start]
 				set action [arm:list2action $wline($method,$value)]
 				set reason [join [lrange [split $wline($method,$value) :] 9 end]]
@@ -9297,7 +9303,7 @@ proc arm:scan {nick ident ip host xuser rname} {
 				arm:debug 2 "arm:scan: ------------------------------------------------------------------------------------"
 				set mode [arm:wlist2mode $wline($method,$value)]
 				if {$mode != ""} { putquick "MODE $chan $mode $nick" -next } elseif {$arm(mode) == "secure"} { arm:voice $chan $nick }
-				arm:report white $nick "Armour: $nick!$ident@$host whitelisted (\002id:\002 $id \002type:\002 $method \002value:\002 $value \002action:\002 $action \002reason:\002 $reason)"
+				arm:report white $nick "Armour: $nick!$ident@$host whitelisted (\002id:\002 $id \002type:\002 $method \002value:\002 [join $exp] \002action:\002 $action \002reason:\002 $reason)"
 				# -- incr statistics
 				incr hits([arm:get:id white $method [join $exp]])
 				# -- pass join arguments to other standalone scripts, if configured
@@ -9623,38 +9629,38 @@ proc arm:scan {nick ident ip host xuser rname} {
 
 	
 	# -- begin blacklist: country
-        # -- only hit if allowed
-        set chit 1
-        if {($arm(cfg.country.ident) == 0) && ![string match "~*" $ident]} { set chit 0 }
-        if {$chit} {
-		if {$bcountry != "" && $ipscan} {
-			# -- set country
-			if {$country == ""} { set country [geo:ip2country $ip] }
-			foreach entry $bcountry {
-				set line [split $entry ,]
-				set method [lindex $line 0]
-				set value [lindex $line 1]
-				arm:debug 5 "arm:scan: blacklist scanning: bline($method,$value)"
-				if {[string tolower $country] == [string tolower $value]} {
-					# -- match: take blacklist action!
-					set id [arm:get:id black $method $value]
-					set runtime [arm:runtime $start]
-					set reason [join [lrange [split $bline($method,$value) :] 9 end]]
-					arm:debug 1 "arm:scan: blacklist matched $country: bline($method,$value) id: $id -- taking action! ($runtime)"
-					arm:debug 2 "arm:scan: ------------------------------------------------------------------------------------"
-					set string "Armour: blacklisted -- $country (reason: $reason) \[id: $id\]"
-					# -- truncate reason for X bans
-					if {[string tolower $arm(cfg.ban)] == "x" && [string length $string] >= 124} { set string "[string range $string 0 124]..." }
-					arm:kickban $nick $chan *!*@$host $arm(cfg.ban.time) "$string"
-					arm:report black $chan "Armour: $nick!$ident@$host blacklisted (\002id:\002 $id \002type:\002 $method \002value:\002 $country \002reason:\002 $reason)"
-					# -- incr statistics
-					incr hits([arm:get:id black $method $value])
-					# -- cleanup vars
-					arm:scan:cleanup $nick
-					return;
-				}
+	# -- only hit if allowed
+	set chit 1
+	if {($arm(cfg.country.ident) == 0) && ![string match "~*" $ident]} { set chit 0 }
+	if {$chit} {
+	if {$bcountry != "" && $ipscan} {
+		# -- set country
+		if {$country == ""} { set country [geo:ip2country $ip] }
+		foreach entry $bcountry {
+			set line [split $entry ,]
+			set method [lindex $line 0]
+			set value [lindex $line 1]
+			arm:debug 5 "arm:scan: blacklist scanning: bline($method,$value)"
+			if {[string tolower $country] == [string tolower $value]} {
+				# -- match: take blacklist action!
+				set id [arm:get:id black $method $value]
+				set runtime [arm:runtime $start]
+				set reason [join [lrange [split $bline($method,$value) :] 9 end]]
+				arm:debug 1 "arm:scan: blacklist matched $country: bline($method,$value) id: $id -- taking action! ($runtime)"
+				arm:debug 2 "arm:scan: ------------------------------------------------------------------------------------"
+				set string "Armour: blacklisted -- $country (reason: $reason) \[id: $id\]"
+				# -- truncate reason for X bans
+				if {[string tolower $arm(cfg.ban)] == "x" && [string length $string] >= 124} { set string "[string range $string 0 124]..." }
+				arm:kickban $nick $chan *!*@$host $arm(cfg.ban.time) "$string"
+				arm:report black $chan "Armour: $nick!$ident@$host blacklisted (\002id:\002 $id \002type:\002 $method \002value:\002 $country \002reason:\002 $reason)"
+				# -- incr statistics
+				incr hits([arm:get:id black $method $value])
+				# -- cleanup vars
+				arm:scan:cleanup $nick
+				return;
 			}
 		}
+	}
 	}
 	# -- end country blacklist
 
