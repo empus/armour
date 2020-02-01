@@ -61,7 +61,9 @@ if {$push(mode) == 1} {
 	}
 } else {
 	# -- unbind in case we changed mode during operation
-	catch { unbind pub - .push push:bind:pub:push }
+	if {[lsearch [info commands] "push:bind:pub:push"] != "-1"} {
+		unbind pub - .push push:bind:pub:push
+	}
 	# -- load commands
 	arm:loadcmds
 }

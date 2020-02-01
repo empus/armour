@@ -55,7 +55,9 @@ if {$email(mode) == 1} {
 	}
 } else {
 	# -- unbind in case we changed mode during operation
-	catch { unbind pub - .email email:pub:email }
+	if {[lsearch [info commands] "email:bind:pub:email"] != "-1"} {
+		unbind pub - .email email:bind:pub:email
+	}
 	# -- load commands
 	arm:loadcmds
 }

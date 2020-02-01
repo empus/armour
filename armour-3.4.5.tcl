@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v3.4.5 autobuild completed on: Sat Feb  1 07:15:31 PST 2020
+# armour.tcl v3.4.5 autobuild completed on: Sat Feb  1 08:33:18 PST 2020
 # ------------------------------------------------------------------------------------------------
 #
 #    _                         ___ ___ 
@@ -554,7 +554,7 @@ if {$arm(cfg.char.nick) || $arm(cfg.char.glob)} {
 				set res [lindex [info commands *:cmd:$second] 0]
 				if {$res != ""} {
 					# -- result is proc name, redirect to command proc
-					arm:coroexec $res pub $nick $uhost $hand $chan [split [lrange $text 2 end]]
+					arm:coroexec $res pub $nick $uhost $hand $chan [lrange [split $text] 2 end]
 					return;
 				}
 			}

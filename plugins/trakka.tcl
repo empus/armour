@@ -69,7 +69,7 @@ set trakka(cfg.xhost) {([^\.]+)\.users\.undernet\.org}
 # -----------------------------------------------------------------------------
 # command			plugin		level req.	binds
 # -----------------------------------------------------------------------------
-set addcmd(ack)		{	trakka		1		pub priv dcc	}
+set addcmd(ack)		{	trakka		1		pub msg dcc	}
 
 
 
@@ -88,10 +88,10 @@ if {$trakka(mode) == 1} {
 		trakka:cmd:ack pub $n $uh $h $c [split $a]
 	}
 } else {
-	# -- unbind in case we changed mode during operation
-	catch { unbind pub - .ack trakka:bind:pub:trakka }
 	# -- unbind just incase we changed modes during operation
-	catch { unbind join - * trakka:raw:join }
+	if {[lsearch [info commands] "trakka:bind:pub:ack"] != "-1"} {
+		unbind pub - .ack trakka:bind:pub:ack
+	}
 	# -- load commands
 	arm:loadcmds
 }

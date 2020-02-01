@@ -72,6 +72,9 @@ if {$sms(mode) == 1} {
 } else {
 	# -- unbind in case we changed mode during operation
 	catch { unbind pub - .sms sms:pub:sms }
+	if {[lsearch [info commands] "sms:bind:pub:sms"] != "-1"} {
+		unbind pub - .sms sms:bind:pub:sms
+	}
 	# -- load commands
 	arm:loadcmds
 }

@@ -34,7 +34,7 @@ if {$tell(mode) == 1} {
 	}
 } else {
 	# -- unbind in case we changed mode during operation
-	if {[lsearch [info commands] "tell:pub:tell"] != "-1"} {
+	if {[lsearch [info commands] "tell:bind:pub:tell"] != "-1"} {
 		unbind pub - .tell tell:pub:tell
 	}
 	# -- load commands
