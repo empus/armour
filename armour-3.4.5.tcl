@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v3.4.5 autobuild completed on: Sat Feb  1 22:14:16 PST 2020
+# armour.tcl v3.4.5 autobuild completed on: Sat Feb  1 22:19:43 PST 2020
 # ------------------------------------------------------------------------------------------------
 #
 #    _                         ___ ___ 
@@ -918,7 +918,7 @@ proc userdb:cmd:adduser {0 1 2 3 {4 ""}  {5 ""}} {
 	# -- add the user
         # U|id|user|level|curnick|curhost|lastnick|lasthost|lastseen|automode|pass|email|languages
         # U|1|Empus|Empus|500|Empus|empus@172.16.4.2|Empus|empus@172.16.4.2|1256364110|2|<MD5-PASSWORD>|empus@undernet.org|EN
-        putloglev d * "userdb:db:adduser U|$userid|$trguser|$trgxuser|${trglevel}||||||$automode|$encpas||EN"
+        putloglev d * "userdb:db:adduser U|$userid|$trguser|$trgxuser|${trglevel}||||||$automode|$encpass||EN"
 
         userdb:db:adduser "U|$userid|$trguser|$trgxuser|${trglevel}||||||$automode|$encpass||EN"
 	
@@ -1126,13 +1126,16 @@ proc userdb:cmd:moduser {0 1 2 3 {4 ""}  {5 ""}} {
 
 	if {$arm(cfg.ircd) == "1"} {
 		# -- ircu (Undernet/Quakenet)
-		if {$tuser == "" || $ttype == "" || $tvalue == ""} { userdb:reply $stype $starget "\002usage:\002 moduser <user> <user|level|xuser|automode|lang|email|pass> <value>";
-		return;
-	}
+		if {$tuser == "" || $ttype == "" || $tvalue == ""} { 
+			userdb:reply $stype $starget "\002usage:\002 moduser <user> <user|level|xuser|automode|lang|email|pass> <value>";
+			return;
+		}
 	} elseif {$arm(cfg.ircd) == "2"} {
 		# -- IRCnet/EFnet
-		if {$tuser == "" || $ttype == "" || $tvalue == ""} { userdb:reply $stype $starget "\002usage:\002 moduser <user> <user|level|automode|lang|email|pass> <value>";
-		return;	
+		if {$tuser == "" || $ttype == "" || $tvalue == ""} { 
+			userdb:reply $stype $starget "\002usage:\002 moduser <user> <user|level|automode|lang|email|pass> <value>";
+			return;
+		}
 	}
 	set user [userdb:uline:get user nick $nick]
 
