@@ -81,12 +81,12 @@ proc email:cmd:email {0 1 2 3 {4 ""}  {5 ""}} {
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick;
 		if {[info exists arm(cfg.chan.def)]} { set chan $arm(cfg.chan.def) } else { set chan $email(chan) }
-		set source "$nick!$uh"
+		set source "$nick!$uh"; set stype "msg"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; 
 		if {[info exists arm(cfg.chan.def)]} { set chan $arm(cfg.chan.def) } else { set chan $email(chan) }
-		set source "$hand/$idx"
+		set source "$hand/$idx"; set stype "dcc"; set starget $idx;
 	}
 	
 	set cmd "email"

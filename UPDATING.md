@@ -56,6 +56,10 @@
 	+ Enhancement:	Remove use of 'xuser' for ircds without ACCOUNT
 	
 	+ Improvement:	Safely unload vars on reload, to avoid script warnings
+	
+	+ Fixed bug:	Command syntax broken for msg and dcc command usage
+	
+	+ Fixed bug:	Commands not working in DCC partyline
 		
 ----------------------------------------------------------------------------------------------------------------------------------------
 

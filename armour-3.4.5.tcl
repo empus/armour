@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v3.4.5 autobuild completed on: Sat Feb  1 22:27:21 PST 2020
+# armour.tcl v3.4.5 autobuild completed on: Sat Feb  1 23:22:23 PST 2020
 # ------------------------------------------------------------------------------------------------
 #
 #    _                         ___ ___ 
@@ -633,9 +633,11 @@ proc userdb:cmd:do {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 
 	set cmd "do"
@@ -650,22 +652,25 @@ proc userdb:cmd:do {0 1 2 3 {4 ""}  {5 ""}} {
 
 	if {$tcl == ""} { userdb:reply $stype $starget "uhh.. do what?"; return; }
 
-        set start [clock clicks]
-        set errnum [catch {eval $tcl} error]
-        set end [clock clicks]
-        arm:reply 3 "userdb:cmd:do: tcl error: $error -- (errnum: $errnum)"
-        if {$error==""} {set error "<empty string>"}
-        switch -- $errnum {
-			0 {if {$error=="<empty string>"} {set error "OK"} {set error "OK: $error"}}
-			4 {set error "continue: $error"}
-			3 {set error "break: $error"}
-			2 {set error "return: $error"}
-			1 {set error "error: $error"}
-			default {set error "$errnum: $error"}
-        }
-        set error "$error ([expr ($end-$start)/1000.0] sec)"
-        set error [split $error "\n"]
-        foreach line $error { userdb:reply $type $target $line }
+	set start [clock clicks]
+	set errnum [catch {eval $tcl} error]
+	set end [clock clicks]
+	arm:reply 3 "userdb:cmd:do: tcl error: $error -- (errnum: $errnum)"
+	if {$error==""} {set error "<empty string>"}
+	switch -- $errnum {
+		0 {if {$error=="<empty string>"} {set error "OK"} {set error "OK: $error"}}
+		4 {set error "continue: $error"}
+		3 {set error "break: $error"}
+		2 {set error "return: $error"}
+		1 {set error "error: $error"}
+		default {set error "$errnum: $error"}
+	}
+	set error "$error ([expr ($end-$start)/1000.0] sec)"
+	set error [split $error "\n"]
+	foreach line $error { userdb:reply $type $target $line }
+	
+	# -- create log entry for command use
+	arm:log:cmdlog BOT [userdb:uline:get user curnick $nick] [userdb:uline:get id curnick $nick] [string toupper $cmd] [join $args] $source "" "" ""
 
 }
 
@@ -682,9 +687,11 @@ proc userdb:cmd:whois {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 	
 	set cmd "whois"
@@ -746,6 +753,8 @@ proc userdb:cmd:whois {0 1 2 3 {4 ""}  {5 ""}} {
 		if {$trgcurnick != ""} { userdb:reply $type $target "\002where:\002 $trgcurnick!$trgcurhost" } \
 		else { userdb:reply $type $target "\002last:\002 $trglastnick!$trglasthost" }
 	}	
+	# -- create log entry for command use
+	arm:log:cmdlog BOT [userdb:uline:get user curnick $nick] [userdb:uline:get id curnick $nick] [string toupper $cmd] [join $args] $source "" "" ""
 }
 
 # -- command: userlist
@@ -760,9 +769,11 @@ proc userdb:cmd:userlist {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 	
 	set cmd "userlist"
@@ -811,7 +822,8 @@ proc userdb:cmd:userlist {0 1 2 3 {4 ""}  {5 ""}} {
 		# -- heh this shouldn't /ever/ happen.
 		arm:reply $type $target "eek! userlist empty! \002epic fail.\002"
 	}
-	return;
+	# -- create log entry for command use
+	arm:log:cmdlog BOT [userdb:uline:get user curnick $nick] [userdb:uline:get id curnick $nick] [string toupper $cmd] [join $args] $source "" "" ""
 }
 
 # -- command: adduser
@@ -826,9 +838,11 @@ proc userdb:cmd:adduser {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 	
 	set cmd "adduser"
@@ -928,7 +942,8 @@ proc userdb:cmd:adduser {0 1 2 3 {4 ""}  {5 ""}} {
 		userdb:reply $type $target "added user $trguser \002(uid:\002 $userid -- \002level:\002 $trglevel -- \002automode:\002 $automodew\002)\002 -- temporary password sent via /notice."
 		userdb:reply $stype $starget "note: temporary password for user $trguser is: $genpass"
 	}
-	return;
+	# -- create log entry for command use
+	arm:log:cmdlog BOT $user [userdb:uline:get id curnick $nick] [string toupper $cmd] [join $args] $source "" "" ""
 }
 
 # -- command: remuser
@@ -943,9 +958,11 @@ proc userdb:cmd:remuser {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 	
 	set cmd "remuser"
@@ -977,6 +994,9 @@ proc userdb:cmd:remuser {0 1 2 3 {4 ""}  {5 ""}} {
 			
 	userdb:reply $type $target "removed user $trguser (\002uid:\002 $uid -- \002level:\002 $trglevel)"
 	
+	# -- create log entry for command use
+	arm:log:cmdlog BOT $user [userdb:uline:get id curnick $nick] [string toupper $cmd] [join $args] $source "" "" ""
+	
 }
 
 # -- command: verify
@@ -991,9 +1011,11 @@ proc userdb:cmd:verify {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 	
 	set cmd "verify"
@@ -1014,7 +1036,8 @@ proc userdb:cmd:verify {0 1 2 3 {4 ""}  {5 ""}} {
 	
 	userdb:reply $type $target "[userdb:uline:get nick nick $trgnick] is authenticated as $user (\002level:\002 [userdb:uline:get level user $user])"
 	
-	return;
+	# -- create log entry for command use
+	arm:log:cmdlog BOT [userdb:uline:get user curnick $nick] [userdb:uline:get id curnick $nick] [string toupper $cmd] [join $args] $source "" "" ""
 		
 }
 
@@ -1088,6 +1111,9 @@ proc userdb:msg:login {nick uhost hand arg} {
 		
 		# -- write changes to file (now a timer)
 		# userdb:db:write
+		
+		# -- create log entry for command use
+		arm:log:cmdlog BOT $user [userdb:uline:get id curnick $nick] [string toupper $cmd] $user $source "" "" ""
 		return;
 	} else {
 		# -- no password match
@@ -1108,9 +1134,11 @@ proc userdb:cmd:moduser {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 	
 	set cmd "moduser"
@@ -1175,8 +1203,6 @@ proc userdb:cmd:moduser {0 1 2 3 {4 ""}  {5 ""}} {
 		if {[userdb:isValiduser $tvalue]} { userdb:reply $type $target "\002(\002error\002)\002 $tvalue already exists."; return; }
 		# -- make the change
 		userdb:uline:set user $tvalue user $tuser
-		userdb:reply $type $target "done."
-		return;
 	}
 	
 	if {$ttype == "level"} {
@@ -1187,8 +1213,6 @@ proc userdb:cmd:moduser {0 1 2 3 {4 ""}  {5 ""}} {
 		if {$tvalue == $tlevel} { userdb:reply $type $target "\002(\002error\002)\002 what's the point?"; return; }
 		# -- make the change
 		userdb:uline:set level $tvalue user $tuser
-		userdb:reply $type $target "done."
-		return;
 	}
 
 	if {$arm(cfg.ircd) == "1"} {
@@ -1208,8 +1232,6 @@ proc userdb:cmd:moduser {0 1 2 3 {4 ""}  {5 ""}} {
 			if {[string tolower $curx] == [string tolower $tvalue]} { userdb:reply $type $target "\002(\002error\002)\002 what's the point?"; return; }
 			# -- make the change
 			userdb:uline:set xuser $tvalue user $tuser
-			userdb:reply $type $target "done."
-			return;
 		}
 	}
 	
@@ -1230,8 +1252,6 @@ proc userdb:cmd:moduser {0 1 2 3 {4 ""}  {5 ""}} {
 		if {$automode == $tmode} { userdb:reply $type $target "\002(\002error\002)\002 what's the point?"; return; }
 		# -- make the change
 		userdb:uline:set automode $automode user $tuser
-		userdb:reply $type $target "done."
-		return;
 	}
 	
 	if {$ttype == "pass"} {	
@@ -1239,8 +1259,6 @@ proc userdb:cmd:moduser {0 1 2 3 {4 ""}  {5 ""}} {
 		set encpass [userdb:encrypt $tvalue]
 		# -- make the change
 		userdb:uline:set pass $encpass user $tuser
-		userdb:reply $type $target "done."
-		return;
 	}
 	
 	if {$ttype == "email"} {	
@@ -1256,8 +1274,6 @@ proc userdb:cmd:moduser {0 1 2 3 {4 ""}  {5 ""}} {
 		if {![regexp -nocase {^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,4}$} $tvalue]} { userdb:reply $type $target "\002(\002error\002)\002 invalid e-mail address."; return; }
 		# -- make the change
 		userdb:uline:set email $tvalue user $tuser
-		userdb:reply $type $target "done."
-		return;
 	}
 	
 	if {$ttype == "lang"} {	
@@ -1285,14 +1301,22 @@ proc userdb:cmd:moduser {0 1 2 3 {4 ""}  {5 ""}} {
 				return;
 			}
 		}
-		
 		set langlist [string toupper $langlist]
 		# -- make the change
 		userdb:uline:set languages $langlist user $tuser
-		userdb:reply $type $target "done."
-		return;
 	}
-	
+
+	userdb:reply $type $target "done."
+		
+	# -- create log entry for command use
+	if {$ttype != "pass"} {
+		set output [join $args]
+	} else {
+		# -- don't reveal the password
+		set output "pass"
+	}
+	arm:log:cmdlog BOT $user [userdb:uline:get id curnick $nick] [string toupper $cmd] [join $args] $source "" "" ""
+	return;
 }
 
 # -- command: set
@@ -1307,9 +1331,11 @@ proc userdb:cmd:set {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 	
 	set cmd "set"
@@ -1353,8 +1379,6 @@ proc userdb:cmd:set {0 1 2 3 {4 ""}  {5 ""}} {
 		if {$automode == $tmode} { userdb:reply $type $target "\002(\002error\002)\002 what's the point?"; return; }
 		# -- make the change
 		userdb:uline:set automode $automode user $user
-		userdb:reply $type $target "done."
-		return;
 	}
 	
 	if {$ttype == "pass"} {	
@@ -1362,8 +1386,6 @@ proc userdb:cmd:set {0 1 2 3 {4 ""}  {5 ""}} {
 		set encpass [userdb:encrypt $tvalue]
 		# -- make the change
 		userdb:uline:set pass $encpass user $user
-		userdb:reply $type $target "done."
-		return;
 	}
 	
 	if {$ttype == "email"} {	
@@ -1373,8 +1395,6 @@ proc userdb:cmd:set {0 1 2 3 {4 ""}  {5 ""}} {
 		if {![regexp -nocase {^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,4}$} $tvalue]} { userdb:reply $type $target "\002(\002error\002)\002 invalid e-mail address."; return; }
 		# -- make the change
 		userdb:uline:set email $tvalue user $user
-		userdb:reply $type $target "done."
-		return;
 	}
 	
 	if {$ttype == "lang"} {	
@@ -1401,9 +1421,18 @@ proc userdb:cmd:set {0 1 2 3 {4 ""}  {5 ""}} {
 		set langlist [string toupper $langlist]
 		# -- make the change
 		userdb:uline:set languages $langlist user $user
-		userdb:reply $type $target "done."
-		return;
 	}
+	
+	userdb:reply $type $target "done."
+	# -- create log entry for command use
+	if {$ttype != "pass"} {
+		set output [join $args]
+	} else {
+		# -- don't reveal the password
+		set output "pass"
+	}
+	arm:log:cmdlog BOT $user [userdb:uline:get id curnick $nick] [string toupper $cmd] [join $args] $source "" "" ""
+	return;
 	
 }
 
@@ -1441,6 +1470,10 @@ proc userdb:msg:logout {nick uhost hand arg} {
 		userdb:reply notc $nick "logout successful."; 
 		# -- write changes to file (now a timer)
 		# userdb:db:write
+		
+		# -- create log entry for command use
+		set user [userdb:uline:get user curnick $nick]
+		arm:log:cmdlog BOT $user [userdb:uline:get id curnick $nick] [string toupper $cmd] $user "$nick!$uh" "" "" ""		
 		return;
 	} else {
 		# -- no password match
@@ -1471,6 +1504,8 @@ proc userdb:msg:newpass {nick uhost hand arg} {
 	userdb:reply notc $nick "password changed."; 
 	# -- write changes to file (now a timer)
 	# userdb:db:write
+	# -- create log entry for command use
+	arm:log:cmdlog BOT $user [userdb:uline:get id curnick $nick] [string toupper $cmd] "" $source "" "" ""
 }
 
 
@@ -4675,9 +4710,11 @@ proc arm:cmd:CMD {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 	
 	set cmd "CMD"
@@ -4703,9 +4740,11 @@ proc arm:cmd:help {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 	
 	set cmd "help"
@@ -4741,7 +4780,7 @@ proc arm:cmd:help {0 1 2 3 {4 ""}  {5 ""}} {
 		arm:reply $stype $starget "commands: [join [lsort -dictionary $cmdlist]]"
 		
 		# -- create log entry for command use
-		arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] "$nick!$uh" "" "" ""
+		arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" ""
 		
 		return;	
 	}
@@ -4793,7 +4832,7 @@ proc arm:cmd:help {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	
 	# -- create log entry for command use
-	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] "$nick!$uh" "" "" ""
+	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" ""
 	
 }
 
@@ -4810,9 +4849,11 @@ proc arm:cmd:op {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 	
 	set cmd "op"
@@ -4848,7 +4889,7 @@ proc arm:cmd:op {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	
 	# -- create log entry for command use
-	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] "$nick!$uh" "" "" ""
+	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" ""
 	
 }
 
@@ -4864,9 +4905,11 @@ proc arm:cmd:deop {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 	
 	set cmd "deop"
@@ -4903,7 +4946,7 @@ proc arm:cmd:deop {0 1 2 3 {4 ""}  {5 ""}} {
 		}
 	}
 	# -- create log entry for command use
-	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] "$nick!$uh" "" "" ""
+	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" ""
 }
 
 # -- command: voice
@@ -4918,9 +4961,11 @@ proc arm:cmd:voice {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 	
 	set cmd "voice"
@@ -4955,7 +5000,7 @@ proc arm:cmd:voice {0 1 2 3 {4 ""}  {5 ""}} {
 		}
 	}
 	# -- create log entry for command use
-	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] "$nick!$uh" "" "" ""
+	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" ""
 }
 
 # -- command: devoice
@@ -4970,9 +5015,11 @@ proc arm:cmd:devoice {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 	
 	set cmd "devoice"
@@ -5009,7 +5056,7 @@ proc arm:cmd:devoice {0 1 2 3 {4 ""}  {5 ""}} {
 		}
 	}
 	# -- create log entry for command use
-	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] "$nick!$uh" "" "" ""
+	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" ""
 	
 }
 
@@ -5025,9 +5072,11 @@ proc arm:cmd:invite {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 	
 	set cmd "invite"
@@ -5064,7 +5113,7 @@ proc arm:cmd:invite {0 1 2 3 {4 ""}  {5 ""}} {
 		else { arm:reply $type $target "done."	}
 	}
 	# -- create log entry for command use
-	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] "$nick!$uh" "" "" ""
+	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" ""
 }
 
 # -- command: kick
@@ -5079,9 +5128,11 @@ proc arm:cmd:kick {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 	
 	set cmd "kick"
@@ -5125,7 +5176,7 @@ proc arm:cmd:kick {0 1 2 3 {4 ""}  {5 ""}} {
 	if {[join $noton] != ""} { arm:reply $type $target "not on channel: [join $noton]" }
 	
 	# -- create log entry for command use
-	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] "$nick!$uh" "" "" ""
+	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" ""
 }
 
 # -- command: ban
@@ -5140,9 +5191,11 @@ proc arm:cmd:ban {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 	
 	set cmd "ban"
@@ -5216,7 +5269,7 @@ proc arm:cmd:ban {0 1 2 3 {4 ""}  {5 ""}} {
 		arm:kickban $tnick $chan $tmask $duration $reason
 	}
 	# -- create log entry for command use
-	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] "$nick!$uh" "" "" ""
+	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" ""
 }
 
 
@@ -5232,9 +5285,11 @@ proc arm:cmd:unban {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 
 	set cmd "unban"
@@ -5281,7 +5336,7 @@ proc arm:cmd:unban {0 1 2 3 {4 ""}  {5 ""}} {
     if {$length >= 6} { set modes "-bbbbbb" } else { set modes "-[string repeat "b" $length]" }
 	putnow "MODE $chan $modes [join $ublist]"
 	# -- create log entry for command use
-	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] "$nick!$uh" "" "" ""
+	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" ""
 }
 
 
@@ -5297,9 +5352,11 @@ proc arm:cmd:topic {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 	
 	set cmd "topic"
@@ -5325,7 +5382,7 @@ proc arm:cmd:topic {0 1 2 3 {4 ""}  {5 ""}} {
 	putquick "TOPIC $chan :$topic"
 	
 	# -- create log entry for command use
-	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] "$nick!$uh" "" "" ""
+	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" ""
 	
 }
 
@@ -5343,9 +5400,11 @@ proc arm:cmd:black {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 	
 	set cmd "black"
@@ -5381,7 +5440,7 @@ proc arm:cmd:black {0 1 2 3 {4 ""}  {5 ""}} {
 	putquick "WHO $tnick n%nuhiart,102"
 	
 	# -- create log entry for command use
-	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] "$nick!$uh" "" "" ""
+	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" ""
 
 }
 
@@ -5398,9 +5457,11 @@ proc arm:cmd:asn {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 	
 	set cmd "asn"
@@ -5459,7 +5520,7 @@ proc arm:cmd:asn {0 1 2 3 {4 ""}  {5 ""}} {
 	arm:reply $type $target "\002(\002ASN\002)\002 for $ip is $asn \002(desc:\002 $desc -- \002bgp:\002 $bgp -- \002country:\002 $country -- \002registry:\002 $registry -- \002allocation:\002 $allocation -- \002info:\002 http://www.robtex.com/as/as${asn}.html\002)\002"
 	
 	# -- create log entry for command use
-	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] "$nick!$uh" "" "" ""
+	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" ""
 	
 	return;
 
@@ -5478,9 +5539,11 @@ proc arm:cmd:chanscan {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 	
 	set cmd "chanscan"
@@ -5515,7 +5578,7 @@ proc arm:cmd:chanscan {0 1 2 3 {4 ""}  {5 ""}} {
 	putquick "WHO $chan n%nuhiart,102"
 	
 	# -- create log entry for command use
-	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] "$nick!$uh" "" "" ""
+	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" ""
 	
 	return;
 
@@ -5535,9 +5598,11 @@ proc arm:cmd:mode {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 	
 	set cmd "mode"
@@ -5608,7 +5673,7 @@ proc arm:cmd:mode {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	
 	# -- create log entry for command use
-	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] "$nick!$uh" "" "" ""
+	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" ""
 	
 	return;
 
@@ -5627,9 +5692,11 @@ proc arm:cmd:country {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 	
 	set cmd "country"
@@ -5686,7 +5753,7 @@ proc arm:cmd:country {0 1 2 3 {4 ""}  {5 ""}} {
 	arm:reply $type $target "\002(\002country\002)\002 for $ip is $country \002(desc:\002 $desc -- \002asn:\002 $asn -- \002bgp:\002 $bgp -- \002registry:\002 $registry -- \002allocation:\002 $allocation -- \002info:\002 http://www.robtex.com/as/as${asn}.html\002)\002"
 	
 	# -- create log entry for command use
-	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] "$nick!$uh" "" "" ""
+	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" ""
 	
 	return;
 	
@@ -5705,9 +5772,11 @@ proc arm:cmd:scanrbl {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 	
 	set cmd "scanrbl"
@@ -5744,7 +5813,7 @@ proc arm:cmd:scanrbl {0 1 2 3 {4 ""}  {5 ""}} {
 		arm:reply $type $target "\002(\002dnsbl\002)\002 $dnsbl \002desc:\002 $desc \002(ip:\002 $dst -- \002score:\002 $score\002)\002"
 	}
 	# -- create log entry for command use
-	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] "$nick!$uh" "" "" ""
+	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" ""
 		
 }
 
@@ -5763,9 +5832,11 @@ proc arm:cmd:scanports {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 	
 	set cmd "scanport"
@@ -5795,7 +5866,7 @@ proc arm:cmd:scanports {0 1 2 3 {4 ""}  {5 ""}} {
 	arm:reply $type $target "\002(\002open ports\002)\002 -> $openports"
 	
 	# -- create log entry for command use
-	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] "$nick!$uh" "" "" ""
+	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" ""
 
 }
 
@@ -5812,9 +5883,11 @@ proc arm:cmd:exempt {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 	
 	set cmd "exempt"
@@ -5847,7 +5920,7 @@ proc arm:cmd:exempt {0 1 2 3 {4 ""}  {5 ""}} {
 	timer $mins "catch { unset override([string tolower $exempt]) }"
 	
 	# -- create log entry for command use
-	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] "$nick!$uh" "" "" ""
+	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" ""
 }
 
 # -- command: scan
@@ -5868,9 +5941,11 @@ proc arm:cmd:scan {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 	
 	set cmd "scan"
@@ -6144,7 +6219,7 @@ proc arm:cmd:scan {0 1 2 3 {4 ""}  {5 ""}} {
 	arm:reply $type $target "scan complete ($runtime)"
 	
 	# -- create log entry for command use
-	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] "$nick!$uh" "" "" ""
+	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" ""
 	
 }
 
@@ -6163,9 +6238,11 @@ proc arm:cmd:search {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 	
 	set cmd "search"
@@ -6290,7 +6367,7 @@ proc arm:cmd:search {0 1 2 3 {4 ""}  {5 ""}} {
 	set runtime "[expr ($end-$start)/1000/1000.0] sec"
 	
 	# -- create log entry for command use
-	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] "$nick!$uh" "" "" ""
+	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" ""
 
 	if {!$match} {
 		if {$list == "*"} { set list "whitelist or blacklist" } else { set list "${list}list" }
@@ -6317,9 +6394,11 @@ proc arm:cmd:save {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 	
 	set cmd "save"
@@ -6340,7 +6419,7 @@ proc arm:cmd:save {0 1 2 3 {4 ""}  {5 ""}} {
 	arm:reply $type $target "saved [llength [array names wline]] whitelist, [llength [array names bline]] blacklist, and [llength [array names uline]] user entries to db"
 	
 	# -- create log entry for command use
-	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] "$nick!$uh" "" "" ""
+	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" ""
 	
 }
 
@@ -6357,9 +6436,11 @@ proc arm:cmd:load {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 	
 	set cmd "load"
@@ -6380,7 +6461,7 @@ proc arm:cmd:load {0 1 2 3 {4 ""}  {5 ""}} {
 	arm:reply $type $target "loaded [llength [array names wline]] whitelist, [llength [array names bline]] blacklist, and [llength [array names uline]] user entries to memory"
 	
 	# -- create log entry for command use
-	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] "$nick!$uh" "" "" ""
+	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" ""
 	
 }
 
@@ -6396,9 +6477,11 @@ proc arm:cmd:rehash {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 
 	set cmd "rehash"
@@ -6420,8 +6503,7 @@ proc arm:cmd:rehash {0 1 2 3 {4 ""}  {5 ""}} {
 	arm:reply $type $target "done." 
 	
 	# -- create log entry for command use
-	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] "$nick!$uh" "" "" ""
-
+	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" ""
 }
 
 
@@ -6438,9 +6520,11 @@ proc arm:cmd:restart {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 
 	set cmd "restart"
@@ -6466,7 +6550,7 @@ proc arm:cmd:restart {0 1 2 3 {4 ""}  {5 ""}} {
 	restart
 	
 	# -- create log entry for command use
-	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] "$nick!$uh" "" "" ""
+	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" ""
 
 }
 
@@ -6483,9 +6567,11 @@ proc arm:cmd:die {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 
 	set cmd "die"
@@ -6510,7 +6596,7 @@ proc arm:cmd:die {0 1 2 3 {4 ""}  {5 ""}} {
 	putnow "QUIT :shutdown: $reason"
 
 	# -- create log entry for command use
-	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] "$nick!$uh" "" "" ""
+	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" ""
 	
 	# -- kill bot
 	die $reason
@@ -6528,9 +6614,11 @@ proc arm:cmd:say {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 
 	set cmd "say"
@@ -6580,7 +6668,7 @@ proc arm:cmd:say {0 1 2 3 {4 ""}  {5 ""}} {
 	putquick "PRIVMSG $msglist :$string"
 	
 	# -- create log entry for command use
-	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] "$nick!$uh" "" "" ""
+	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" ""
 	
 	return;
 }
@@ -6601,9 +6689,11 @@ proc arm:cmd:jump {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 
 	set cmd "jump"
@@ -6622,7 +6712,7 @@ proc arm:cmd:jump {0 1 2 3 {4 ""}  {5 ""}} {
 	jump
 	
 	# -- create log entry for command use
-	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] "$nick!$uh" "" "" ""
+	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" ""
 
 }
 
@@ -6638,9 +6728,11 @@ proc arm:cmd:version {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 	
 	set cmd "version"
@@ -6655,7 +6747,7 @@ proc arm:cmd:version {0 1 2 3 {4 ""}  {5 ""}} {
 	arm:reply $type $target "version: Armour $arm(version)"
 	
 	# -- create log entry for command use
-	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] "$nick!$uh" "" "" ""
+	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" ""
 	
 }
 
@@ -6672,9 +6764,11 @@ proc arm:cmd:stats {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 	
 	set cmd "stats"
@@ -6758,7 +6852,7 @@ proc arm:cmd:stats {0 1 2 3 {4 ""}  {5 ""}} {
 	arm:reply $type $target "\002(\002blacklist\002)\002 \002total:\002 $count(black) \002hits:\002 $hitcount(black) -> (\002user:\002 $count(black,user) \002hits:\002 $hitcount(black,user)) -- (\002host:\002 $count(black,host) \002hits:\002 $hitcount(black,host)) -- (\002rname:\002 $count(black,rname) \002hits:\002 $hitcount(black,rname)) -- (\002regex:\002 $count(black,regex) \002hits:\002 $hitcount(black,regex)) -- (\002country:\002 $count(black,country) \002hits:\002 $hitcount(black,country)) -- (\002asn:\002 $count(black,asn) \002hits:\002 $hitcount(black,asn)) -- (\002chan:\002 $count(black,chan) \002hits:\002 $hitcount(black,chan))"
 
 	# -- create log entry for command use
-	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] "$nick!$uh" "" "" ""
+	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" ""
 	
 }
 
@@ -6778,9 +6872,11 @@ proc arm:cmd:status {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 
 	set cmd "status"
@@ -6798,7 +6894,7 @@ proc arm:cmd:status {0 1 2 3 {4 ""}  {5 ""}} {
 	arm:reply $type $target "whitelist db: [llength [array names wline]] entries -- blacklist db: [llength [array names bline]] entries"
 	
 	# -- create log entry for command use
-	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] "$nick!$uh" "" "" ""
+	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" ""
 
 }
 
@@ -6816,9 +6912,11 @@ proc arm:cmd:view {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 	
 	set cmd "view"
@@ -6830,7 +6928,7 @@ proc arm:cmd:view {0 1 2 3 {4 ""}  {5 ""}} {
 	
 	set list [lindex $args 0]
 	set method [lindex $args 1]
-	set value [lindex $args 2]
+	set value [lindex [split $args] 2]
 	
 	# -- check if ID is given
 	if {[regexp -- {^\d+(?:,\d+)*$} $list]} {
@@ -6952,7 +7050,7 @@ proc arm:cmd:view {0 1 2 3 {4 ""}  {5 ""}} {
 		# -- endof foreach ip
 		
 		# -- create log entry for command use
-		arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] "$nick!$uh" "" "" ""
+		arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" ""
 		
 		return;
 	}
@@ -7048,7 +7146,7 @@ proc arm:cmd:view {0 1 2 3 {4 ""}  {5 ""}} {
 	# -- end value loop
 	
 	# -- create log entry for command use
-	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] "$nick!$uh" "" "" ""
+	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" ""
 }
 
 # -- command: add
@@ -7069,9 +7167,11 @@ proc arm:cmd:add {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 	
 	set cmd "add"
@@ -7411,7 +7511,7 @@ proc arm:cmd:add {0 1 2 3 {4 ""}  {5 ""}} {
 	# -- end of loop
 	
 	# -- create log entry for command use
-	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] "$nick!$uh" "" "" ""
+	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" ""
 	
 	return;
 
@@ -7430,9 +7530,11 @@ proc arm:cmd:rem {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	if {$type == "msg"} {
 		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
 	}
 	if {$type == "dcc"} {
 		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
 	}
 	
 	set cmd "rem"
@@ -7444,7 +7546,7 @@ proc arm:cmd:rem {0 1 2 3 {4 ""}  {5 ""}} {
 
 	set list [lindex $args 0]
 	set method [lindex $args 1]
-	set value [lindex $args 2]
+	set value [lindex [split $args] 2]
 	
 	if {$list == ""} {
 		if {[info command ::dronebl::submit] == "" || [userdb:uline:get level nick $nick] < $arm(cfg.dronebl.lvl)} {
@@ -7666,7 +7768,7 @@ proc arm:cmd:rem {0 1 2 3 {4 ""}  {5 ""}} {
 		# -- endof foreach ip
 		
 		# -- create log entry for command use
-		arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] "$nick!$uh" "" "" ""
+		arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" ""
 		
 		return;
 	}
@@ -7812,7 +7914,7 @@ proc arm:cmd:rem {0 1 2 3 {4 ""}  {5 ""}} {
 	# -- end foreach value loop
 	
 	# -- create log entry for command use
-	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] "$nick!$uh" "" "" ""
+	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" ""
 	
 	return;
 
