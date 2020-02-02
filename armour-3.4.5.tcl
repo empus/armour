@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v3.4.5 autobuild completed on: Sat Feb  1 11:03:22 PST 2020
+# armour.tcl v3.4.5 autobuild completed on: Sat Feb  1 20:17:42 PST 2020
 # ------------------------------------------------------------------------------------------------
 #
 #    _                         ___ ___ 
@@ -2266,14 +2266,11 @@ proc userdb:raw:genwho {server cmd arg} {
 	} elseif {$userdb(cfg.ircd) == "2"} {		
 		# -- IRCnet
 		#irc.psychz.net	352	cori * _mxl ipv4.pl ircnet.hostsailor.com Maxell H :2 0PNH oskar@ipv4.pl
-		lassign $arg mynick type ident host server nick hopcount sid
-		set rname [lrange $arg 8 end]
-		# -- NOTE: the above raw example doesn't appear to provide an actual IP; do a DNS lookup (doh! this slows us down)
-		if {![arm:isValidIP $host]} {
-			# -- only do this if it's not already an IPv4 IP
-			set ip [arm:dns:lookup $host A]
-			if {$ip == "error" || $ip == ""} { set ip 0 }	# -- fallback to disable IP scans in arm:scan
-		} else { set ip $host }
+		lassign $arg mynick type ident host server nick away hopcount sid
+		set rname [lrange $arg 9 end]
+		# -- NOTE:	The above raw example doesn't appear to provide an actual IP;
+		# -- 		A DNS lookup would slow us down; be doubled up from real scans; and isn't needed for autologin
+		set ip 0;
 		set account 0;	# -- TODO: where do we get an ACCOUNT from in IRCnet /WHO response?;
 		# -- send it to userdb:who
 		# -- NOTE: the possible downside to this workaround, is additional processing for autologin on every /WHO response
@@ -8431,7 +8428,7 @@ proc arm:raw:genwho {server cmd arg} {
 		if {![arm:isValidIP $host]} {
 			# -- only do this if it's not already an IPv4 IP
 			set ip [arm:dns:lookup $host A]
-			if {$ip == "error" || $ip == ""} { set ip 0 }	# -- fallback to disable IP scans in arm:scan
+			if {$ip == "error" || $ip == ""} { set ip 0 };	# -- fallback to disable IP scans in arm:scan
 		} else { set ip $host }
 		set account 0;	# -- TODO: where do we get an ACCOUNT from in IRCnet /WHO response?;
 		# -- send it to arm:who
@@ -8515,7 +8512,7 @@ proc arm:who {ident ip host nick xuser rname} {
 	# -- check if 'black' command was used
 	if {[info exists black($nick)]} {
 		# -- /who triggered from 'black' command
-		arm:debug 2 "arm:raw:who: /who response received from 'black' command"
+		arm:debug 2 "arm:who: /who response received from 'black' command"
 		set mask [maskhost $nick!$ident@$host]
 		set timestamp [unixtime]
 		set modifby $black($nick,modif)
@@ -8538,7 +8535,7 @@ proc arm:who {ident ip host nick xuser rname} {
 		
 		# -- add the list entry
 		set line "B::$method:$value:$timestamp:$modifby:B:1-1-1:0:$reason"
-		arm:debug 1 "arm:raw:who adding line from 'black' command: $line"
+		arm:debug 1 "arm:who adding line from 'black' command: $line"
 		set id [arm:db:add $line]
 		# -- add the ban
 		arm:kickban $nick $chan $mask $arm(cfg.ban.time) $reason
@@ -8570,7 +8567,7 @@ proc arm:who {ident ip host nick xuser rname} {
 	set nickip($nick) $ip
 
 	# -- build list to use at /endofwho
-	arm:debug 3 "arm:raw:who: appending to scanlist(scanlist): nick: [join $nick] -- ident: $ident -- ip: $ip -- host: $host -- xuser: $xuser -- rname: [join [join $rname]]"
+	arm:debug 3 "arm:who: appending to scanlist(scanlist): nick: [join $nick] -- ident: $ident -- ip: $ip -- host: $host -- xuser: $xuser -- rname: [join [join $rname]]"
 	lappend scanlist(scanlist) "[list $nick] $ident $ip $host $xuser $rname"
 
 }
@@ -8855,8 +8852,15 @@ proc arm:scan {nick ident ip host xuser rname} {
 			# -- the host is an IPv4 IP
 			set ip $host
 		} else {
-			# -- disable IP scans
-			set dnsbl 0; set portscan 0; set ipscan 0
+			# -- disable IP scans if this isn't an ircu derived ircd (ie. IRCnet) and we cannot resolve the IP
+			# -- note that this scenario makes for a performance hit with all scans
+			if {$arm(cfg.ircd) != "1"} {
+				set ip [arm:dns:lookup $host A]
+				if {$ip == "error" || $ip == ""} {
+					set ip 0; # -- fallback to disable IP scans in arm:scan
+					set dnsbl 0; set portscan 0; set ipscan 0
+				}
+			}
 		}
 	}
 	
@@ -8874,236 +8878,12 @@ proc arm:scan {nick ident ip host xuser rname} {
 	set hit 0
 
 	# -- do floodnet detection
-	# - only if not chanscan & not secure mode
-	if {![info exists full(chanscan,$chan)] && $arm(mode) != "secure"} {
+	# - only if not chanscan & not secure mode & user not exempt
+	if {![info exists full(chanscan,$chan)] && $arm(mode) != "secure" && $exempt($nick) != "1"} {
 		set hand [nick2hand $nick]
 		set hit [arm:check:floodnet $nick $uhost $hand $chan $xuser $rname]
 	}
-	
-	# -- START LOCKOUT
-	if {0} {
-	
-	if {!$exempt($nick) && !$fullscan} {
-	
-		arm:debug 2 "arm:scan: adaptive regex matching beginning for user: $nick!$ident@$host"
-	
-		# -- do some basic nick!ident checks against adapt regex, prior to /WHO
-		# -- we want this to be a fast way to match floodnet joins
-	
-		# -- join flood rate  
-		set joins [lindex [split $arm(cfg.adapt.rate) :] 0]
-		set secs [lindex [split $arm(cfg.adapt.rate) :] 1]
-		set retain [lindex [split $arm(cfg.adapt.rate) :] 2]
-			
-		# ---- adaptive regex types
-		set types $arm(cfg.adapt.types.who)
-
-		# ---- adaptive regex types
-		# -- if mode is 'secure', match nick and ident, else only match rname (nick & ident were probably alrady done during client /join)
-		# if {$arm(mode) == "secure"} { set types "n i r" } else { set types "r" }
 		
-		# -- if mode is 'secure', combine /join and /who match types
-		if {$arm(mode) == "secure"} { set types "$arm(cfg.adapt.types.join) $arm(cfg.adapt.types.who)" } else { set types $arm(cfg.adapt.types.who) }
-	 
-
-		# -- build adaptive regex's
-		# -- only build what is required
-						
-		# -- nickname
-		if {[lsearch $types "n"] != -1} { set nregex  [split "^[join [arm:regex:adapt "$nick"]]$"] }
-		# -- ident
-		if {[lsearch $types "i"] != -1} { set iregex [split "^[join [arm:regex:adapt "$ident"]]$"] }
-		# -- nick!ident
-		if {[lsearch $types "ni"] != -1} { set niregex [split "^[join [arm:regex:adapt "$nick!$ident"]]$"] }
-		# -- nick!ident/rname
-		if {[lsearch $types "nir"] != -1} { set nirregex [split "^[join [arm:regex:adapt "$nick!$ident/$rname"]]$"] }
-		# -- ident!rname
-		if {[lsearch $types "ir"] != -1} { set irregex [split "^[join [arm:regex:adapt "$ident/$rname"]]$"] }
-		# -- realname
-		if {[lsearch $types "r"] != -1} { set rregex [split "^[join [arm:regex:adapt "$rname"]]$"] }
-		# -- nick/rname
-		if {[lsearch $types "nr"] != -1} { set nrregex [split "^[join [arm:regex:adapt "$nick/$rname"]]$"] }  
-				 
-
-		# -- copy newjoin array to mlist array
-		foreach client [array names newjoin] {
-			set mlist($client) 1
-		}
-		
-		# -- use hit var to stop unnecessary looping if client already got hit
-		set hit 0
-		
-		foreach type $types {
-
-			# -- allow for all permutations
-			switch -- $type {
-				n { set array "adaptn"; set exp $nregex }
-				ni { set array "adaptni"; set exp $niregex }
-				nir { set array "adaptnir"; set exp $nirregex }
-				nr { set array "adaptnr"; set exp $nrregex }
-				i { set array "adapti"; set exp $iregex }
-				ir { set array "adaptir"; set exp $irregex }
-				r { set array "adaptr"; set exp $rregex }
-			}
-			
-			# -- get longtype from ltypes array
-			set ltype $ltypes($type)
-			
-			arm:debug 3 "arm:scan: checking for adaptive regex type array: $array exp: [join $exp]"
-			
-			if {!$hit} {
-				
-				if {![info exists [subst $array]($exp)]} {
-					# -- no counter being tracked for this nickname pattern
-					set [subst $array]($exp) 1
-					arm:debug 4 "arm:scan: unsetting track array for $ltype pattern in $secs secs: [join $exp]"
-					utimer $secs "arm:adapt:unset $ltype [split $exp]"
-				} else {
-					# -- existing counter being tracked for this nickname pattern
-					arm:debug 2 "arm:scan: increasing counter for $ltype pattern: [join $exp]"
-					incr [subst $array]($exp)
-				
-					upvar 0 $array value
-					set count [subst $value($exp)]
-
-					if {$count >= $joins} {
-						# -- flood join limit reached! -- take action
-						arm:debug 1 "arm:scan: adaptive ($ltype) regex joinflood detected (joincount: $count): $nick!$uhost"
-						set hit 1
-						# -- store the active floodnet
-						set floodnet($chan) 1
-							
-						# -- hold pattern for longer after initial join rate hit
-						set secs $retain
-							
-						# -- we need a way of finding the previous nicknames on this pattern...              
-						set klist ""
-						set blist ""
-						arm:debug 3 "arm:raw:join: mlist: [array names mlist]"
-						foreach newuser [array names mlist] {
-							# set uh [getchanhost $newuser $chan]
-							if {![info exists newjoin($newuser)]} {
-								set uh [getchanhost $newuser $chan]
-								set newjoin($newuser) $uh
-							} else {
-									set uh [lindex $newjoin($newuser) 0]
-							}
-							# -- we now have the rname after /who
-							set realname [join [lrange $newjoin($newuser) 1 end]]
-							set i [lindex [split $uh @] 0]
-							set h [lindex [split $uh @] 1]
-							switch -- $type {
-								n	{ set match $newuser }
-								ni	{ set match "$newuser!$i" }
-								nir	{ set match "$newuser!$i@$h/$realname" }
-								nr	{ set match "$newuser/$realname" }
-								i	{ set match $i }
-								ir	{ set match "$i/$realname" }
-								r	{ set match $realname }
-							}
-							
-							if {[regexp -- [join $exp] $match]} {
-								arm:debug 4 "arm:raw:join: pre-record regex match: [join $exp] against string: $match"
-								# -- only include the pre-record users
-								# -- add this nick at the end
-								if {$newuser == $nick} { continue; }
-								# -- weed out people who rejoined from umode +x
-								arm:debug 4 "arm:raw:join: checking if recent umode+x"
-								if {[info exists setx($newuser)]} { continue; }
-								arm:debug 1 "arm:raw:join: pre-record! adaptive ($ltype) regex joinflood detected: [join $newuser]!$uh"
-								set mask "*!*@$h"
-								# -- add mask to ban queue if doesn't exist and wasn't recently banned
-								if {[lsearch $blist $mask] == -1} { lappend blist $mask }
-								if {[lsearch $gblist $mask] == -1} { lappend gblist $mask }
-								if {![info exists chanban($chan,$mask)]} {
-									set chanban($chan,$mask) 1
-									utimer $arm(cfg.time.newjoin) "arm:unset:chanban $chan $mask"
-								}
-								# -- add nick to kick queue
-								if {[lsearch $klist $newuser] == -1} { lappend klist $newuser }
-								if {[lsearch $gklist $newuser] == -1} { lappend gklist $newuser }
-								catch { unset mlist($newuser) }
-								# -- add any other nicknames on this host to kickqueue
-								foreach hnick $hostnicks($h) {
-									if {[lsearch $klist $hnick] == -1} { lappend klist $hnick }
-									if {[lsearch $gklist $hnick] == -1} { lappend gklist $hnick }
-								}
-							}
-						}
-					
-						# -- insert current user
-						set host [lindex [split $uhost @] 1]
-						arm:debug 4 "arm:raw:join: adding *!*@$host to banlist"
-						if {[lsearch $blist "*!*@$host"] == -1} { lappend blist "*!*@$host" }
-						if {[lsearch $gblist "*!*@$host"] == -1} { lappend gblist "*!*@$host" }
-						
-						arm:debug 4 "arm:raw:join: adding nick: $nick to kicklist"
-						if {$klist != ""} { lappend klist $nick } else { set klist $nick }
-						if {[lsearch $gklist $nick] == -1} { lappend gklist $nick }
-						# -- add any other nicknames on this host to kickqueue
-						foreach hnick $hostnicks($host) {
-							if {[lsearch $klist $hnick] == -1} { lappend klist $hnick }
-							if {[lsearch $gklist $hnick] == -1} { lappend gklist $hnick }
-						}					 
-						
-
-						
-						# -- automatic blacklist entries
-						if {$arm(cfg.auto.black)} {
-
-						 foreach ban $blist {
-							 # -- don't need a mask
-							 set thost [lindex [split $ban "@"] 1]
-	
-							 if {[regexp -- $arm(cfg.xhost) $thost -> tuser]} {
-								 # -- user is umode +x, add a 'user' blacklist entry instead of 'host'
-								 set method "user"
-								 set equal $tuser
-							 } else {
-								 # -- add a host blacklsit entry
-								 set method "host"
-								 set equal $thost
-							 }
-
-							 if {![info exists bline($method,$equal)] && ![info exists wline($method,$equal)]} {
-			 					 # -- add automatic blacklist entry
-
-								 set reason "(auto) join flood detected"
-								 set line "B::$method:$equal:[unixtime]:Armour:B:1-1-1:0:$reason"
-								 arm:debug 1 "arm:kickban: adding auto blacklist line: $line"
-
-								 # -- add the list entry
-								 set id [arm:db:add $line]
-							 }
-							 # -- end of exists
-						 }
-						 # -- foreach blist ban
-					 }						
-					 # -- end of automatic blacklist entries
-							
-						arm:debug 1 "arm:scan: adaptive regex join flood detected (\002type:\002 $ltype \002count:\002 $count \002list:\002 $klist)"
-					}
-					# -- end of flood detection
-						
-					# -- clear existing unset utimers for this pattern
-					arm:adapt:preclear [split $exp]
-						
-					# -- setup timer to clear adaptive pattern count
-					arm:debug 3 "arm:scan: unsetting in $secs secs: $ltype [join $exp] $count"
-					utimer $secs "arm:adapt:unset $ltype [split $exp]"
-				
-				}
-				# -- end if exists
-			}
-			# -- end of hit (prevents unnecessary loops)
-		}
-		# -- end foreach types
-	} else { arm:debug 1 "arm:scan: user was exempt from secondary (rname) adaptive regex scans" }
-	# -- end of exempt
-	
-	}
-	# --- END LOCKOUT
-	
 	# -- prevent further scans if adaptive regex matched
 	if {$hit} {
 		set runtime [arm:runtime $time($nick)]
@@ -11079,8 +10859,8 @@ proc arm:rbl:score {ip} {
 	
 	set start [clock clicks]
 
-        # -- reverse the ip
-        for {set i 0} {$i < 4} {incr i} {lappend rip [lindex [split $ip {.}] end-$i]}; set rip [join $rip {.}]
+	# -- reverse the ip
+	for {set i 0} {$i < 4} {incr i} {lappend rip [lindex [split $ip {.}] end-$i]}; set rip [join $rip {.}]
 
 	set total 0
 	set desc ""; set point ""; set info ""; set therbl "";
@@ -11106,7 +10886,7 @@ proc arm:rbl:score {ip} {
 
 	set output [list]
 	lappend output $ip
-        lappend output "$point $therbl {$desc} {$info}"
+    lappend output "$point $therbl {$desc} {$info}"
         
 	return $output
 }
