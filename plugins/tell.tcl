@@ -8,7 +8,7 @@
 set tell(chan) "#channel"
 
 # -- debug level (0-3) - [1]
-set tell(debug) 3
+set tell(debug) 1
 
 # -- tell mode
 # - modes:
@@ -180,6 +180,10 @@ proc tell:cmd:tell {0 1 2 3 {4 ""}  {5 ""}} {
 		set remind([string tolower [join $tx]]) [list $med $string]
 	}
 	tell:reply $type $target "okay, will do."
+	
+	# -- create log entry for command use (if integrated to Armour)
+	if {$tell(mode) == 2} { arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" "" }
+	
 	return
 }
 

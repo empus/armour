@@ -272,6 +272,10 @@ proc trakka:cmd:ack {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	
 	trakka:reply $type $target "done."
+
+	# -- create log entry for command use (if integrated to Armour)
+	if {$trakka(mode) == 2} { arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" "" }
+	
 	return;
 	
 }

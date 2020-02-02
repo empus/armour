@@ -16,7 +16,7 @@ set push(chan) "#channel"
 
 
 # -- debug level (0-3) - [1]
-set push(debug) 3
+set push(debug) 1
 
 
 # -- push mode
@@ -258,6 +258,10 @@ proc push:cmd:push {0 1 2 3 {4 ""}  {5 ""}} {
 	push:debug 1 "push:pub:push: notification sent (status: $status ncode: $ncode token: $token)"
 	
 	http::cleanup $tok
+	
+	# -- create log entry for command use (if integrated to Armour)
+	if {$push(mode) == 2} { arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" "" }
+	
 	return;
 
 }

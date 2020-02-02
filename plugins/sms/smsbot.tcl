@@ -28,7 +28,7 @@ set sms(cfg.inc.timer) "10"
 set sms(chan) "#channel"
 
 # -- debug level (0-3) - [1]
-set sms(debug) 3
+set sms(debug) 1
 
 # -- sms mode
 # - modes:
@@ -191,9 +191,6 @@ proc sms:cmd:sms {0 1 2 3 {4 ""}  {5 ""}} {
 		sms:debug 2 "sms:pub:sms: \002error:\002 acl rejected -- malformed acl ($req)"
 	}
 	
-	putlog "test"
-
-	
 	if {$reject} {
 		# -- ACL error
 		sms:debug 0 "sms:pub:sms: acl rejected SMS send from $from to $to (acl required: $req)"
@@ -264,6 +261,10 @@ proc sms:cmd:sms {0 1 2 3 {4 ""}  {5 ""}} {
 	sms:debug 1 "sms:pub:sms: message sent (status: $status ncode: $ncode token: $token)"
 	
 	http::cleanup $tok
+
+	# -- create log entry for command use (if integrated to Armour)
+	if {$sms(mode) == 2} { arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" "" }
+	
 	return;
 
 }

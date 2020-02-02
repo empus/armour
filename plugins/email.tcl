@@ -10,7 +10,7 @@ set email(chan) "#channel"
 
 
 # -- debug level (0-3) - [1]
-set email(debug) 3
+set email(debug) 1
 
 
 # -- email mode
@@ -186,6 +186,9 @@ proc email:cmd:email {0 1 2 3 {4 ""}  {5 ""}} {
 	# -- notification successfully sent
 	email:reply $type $target "email sent."	     
 	email:debug 1 "email:pub:email: message sent."
+	
+	# -- create log entry for command use (if integrated to Armour)
+	if {$email(mode) == 2} { arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" "" }
 	
 	return;
 
