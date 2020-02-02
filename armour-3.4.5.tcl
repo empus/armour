@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v3.4.5 autobuild completed on: Sat Feb  1 20:17:42 PST 2020
+# armour.tcl v3.4.5 autobuild completed on: Sat Feb  1 20:53:06 PST 2020
 # ------------------------------------------------------------------------------------------------
 #
 #    _                         ___ ___ 
@@ -11657,65 +11657,81 @@ unbind msg - ident *msg:ident
 # -- load lists to memory
 arm:db:load
 
+# ---- unset all vars on a rehash, to start fresh
+
 # -- unset existing exempt array
-catch { unset exempt }
+lappend unsetvars exempt
 
 # -- unset existing adaptive regex tracking arrays
-catch { unset adapt }
-catch { unset adaptn; unset adaptni; unset adaptnir; unset adaptnr; }
-catch { unset adapti; unset adaptir; }
-catch { unset adaptr; }
+lappend unsetvars adapt
+lappend unsetvars adaptn
+lappend unsetvars adaptni
+lappend unsetvars adaptnir
+lappend unsetvars adaptnr
+lappend unsetvars adapti
+lappend unsetvars adaptir
+lappend unsetvars adaptr
 # -- unset floodnet tracking counters
-catch { unset flud; }
-catch { unset floodnet; }
+lappend unsetvars flud
+lappend unsetvars floodnet
 
 # -- unset nicks on host tracking array
-catch { unset hostnicks; }
+lappend unsetvars hostnicks
 
 # -- unset nicks on ip tracking array
-catch { unset ipnicks; }
+lappend unsetvars ipnicks
 
 # -- unset host on nick tracking array
-catch { unset nickhost; }
+lappend unsetvars nickhost
 
 # -- unset ip on nick tracking array
-catch { unset nickip; }
+lappend unsetvars nickip
 
 # -- unset scanlist for /endofwho
-catch { unset scanlist; }
+lappend unsetvars scanlist
 
 # -- unset pranoid coroutine array for arm:scan:continue
-catch { unset paranoid; }
+lappend unsetvars paranoid
 
 # -- unset channel lock array (recently set chanmode +r)
-catch { unset chanlock; }
+lappend unsetvars chanlock
 
 # -- unset realname tracker
-catch { unset fullname; }
+lappend unsetvars fullname
 
 # -- unset kick reason array (tracks cumulative floodnet blacklist reason)
-catch { unset kreason; }
+lappend unsetvars kreason
 
 # -- unset existing setx array (newly umode +x clients)
-catch { unset setx }
+lappend unsetvars setx
 
 # -- unset existing newjoin array (temp array to identify newcomers in channel)
-catch { unset newjoin }
+lappend unsetvars newjoin
 
 # -- unset wholist (tracks users between /WHO's)
-catch { unset wholist }
+lappend unsetvars wholist
 
 # -- unset temporary exemption overrides (from 'exempt' command)
-catch { unset override }
+lappend unsetvars override
 
 # -- unset netsplit memory (track's users lost in netsplits)
-catch { unset netsplit }
+lappend unsetvars netsplit
 
 # --- unset global kicklist array
-catch { unset gklist }
+lappend unsetvars gklist
 
 # --- unset global banlist array
-catch { unset gblist }
+lappend unsetvars gblist
+
+# -- kill existing timers
+arm:killtimers
+
+# -- now do the safe unsets
+foreach var $unsetvars {
+	if {[info exists $var]} { 
+		arm:debug 4 "\[@\] Armour: unsetting variable: $var"
+	}
+}
 
 # -- kill existing timers
 arm:killtimers

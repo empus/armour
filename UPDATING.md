@@ -40,6 +40,8 @@
 	+ Fixed bug:	Adaptive floodnet detection not working for patterns: nick!ident/rname, ident/rname, nick/rname
 	
 	+ Enhancement:	Ensure plugins also only send syntax via /notice if arm(cfg.help.notc) var is enabled
+	
+	+ Improvement:	Safely unload vars on reload, to avoid script warnings
 		
 ----------------------------------------------------------------------------------------------------------------------------------------
 
