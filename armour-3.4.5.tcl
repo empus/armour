@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v3.4.5 autobuild completed on: Sat Feb  1 22:19:43 PST 2020
+# armour.tcl v3.4.5 autobuild completed on: Sat Feb  1 22:22:44 PST 2020
 # ------------------------------------------------------------------------------------------------
 #
 #    _                         ___ ___ 
@@ -11715,6 +11715,9 @@ unbind msg - ident *msg:ident
 arm:db:load
 
 # ---- unset all vars on a rehash, to start fresh
+
+# -- avoid doubling up when the bot rehashes more than once
+if {[info exists unsetvars]} { unset unsetvars }
 
 # -- unset existing exempt array
 lappend unsetvars exempt
