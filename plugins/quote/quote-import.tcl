@@ -8,7 +8,7 @@
 # <nick> 1 <quote>
 
 # -- load script to bot after editing the below file name
-set file "./armour/plugins/quote/quotes.txt"
+set file "./armour/plugins/quote/quotes-ts.txt"
 
 proc quote:db:load {} {
 	global file
