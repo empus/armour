@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v3.4.5 autobuild completed on: Sat Feb  1 22:22:44 PST 2020
+# armour.tcl v3.4.5 autobuild completed on: Sat Feb  1 22:27:21 PST 2020
 # ------------------------------------------------------------------------------------------------
 #
 #    _                         ___ ___ 
@@ -922,11 +922,10 @@ proc userdb:cmd:adduser {0 1 2 3 {4 ""}  {5 ""}} {
 
         userdb:db:adduser "U|$userid|$trguser|$trgxuser|${trglevel}||||||$automode|$encpass||EN"
 	
-	if {$xuser != ""} {
+	if {$trgxuser != ""} {
 		userdb:reply $type $target "added user $trguser \002(uid:\002 $userid \002xuser:\002 $trgxuser -- \002level:\002 $trglevel -- \002automode:\002 $automodew\002)\002"
 	} else {
-		userdb:reply $type $target "added user $trguser \002(uid:\002 $userid -- \002level:\002 $trglevel -- \002automode:\002 $automodew\002)\002"
-		userdb:reply $type $target "temporary password sent via /notice."
+		userdb:reply $type $target "added user $trguser \002(uid:\002 $userid -- \002level:\002 $trglevel -- \002automode:\002 $automodew\002)\002 -- temporary password sent via /notice."
 		userdb:reply $stype $starget "note: temporary password for user $trguser is: $genpass"
 	}
 	return;
