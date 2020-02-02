@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v3.4.5 autobuild completed on: Sat Feb  1 20:53:06 PST 2020
+# armour.tcl v3.4.5 autobuild completed on: Sat Feb  1 22:14:16 PST 2020
 # ------------------------------------------------------------------------------------------------
 #
 #    _                         ___ ___ 
@@ -840,9 +840,32 @@ proc userdb:cmd:adduser {0 1 2 3 {4 ""}  {5 ""}} {
 
 	set trguser [lindex $args 0]
 	set trglevel [lindex $args 1]
-	set trgxuser [lindex $args 2]
-	set trgamode [lindex $args 3]
-	if {$trguser == "" || $trglevel == "" || $trgxuser == ""} { userdb:reply $stype $starget "\002usage:\002 adduser <user> <level> <xuser> \[automode\]"; return; }
+	
+	# -- do some ircd dependant syntax handling
+	if {$arm(cfg.ircd) == 1} {
+		# -- ircu (Undernet/Quakenet)
+		set trgxuser [lindex $args 2]
+		set trgamode [lindex $args 3]
+		if {$trguser == "" || $trglevel == "" || $trgxuser == ""} {
+			userdb:reply $stype $starget "\002usage:\002 adduser <user> <level> <xuser> \[automode\]";
+			return;
+		}
+		set encpass ""; # -- do not set a temporary password
+	} elseif {$arm(cfg.ircd) == 2} {
+		# -- IRCnet/EFnet
+		set trgamode [lindex $args 2]
+		set trgxuser ""
+		if {$trguser == "" || $trglevel == ""} {
+			userdb:reply $stype $starget "\002usage:\002 adduser <user> <level> \[automode\]";
+			return;
+		}
+		# -- generate a password
+		set genpass [arm:randpass]; # -- default length from config, and chars from proc
+		# -- encrypt given pass
+		set encpass [userdb:encrypt $genpass]
+	}
+	
+	# -- default automode of none
 	if {$trgamode == ""} { set trgamode "none" }
 	
 	set user [userdb:uline:get user nick $nick]
@@ -895,11 +918,17 @@ proc userdb:cmd:adduser {0 1 2 3 {4 ""}  {5 ""}} {
 	# -- add the user
         # U|id|user|level|curnick|curhost|lastnick|lasthost|lastseen|automode|pass|email|languages
         # U|1|Empus|Empus|500|Empus|empus@172.16.4.2|Empus|empus@172.16.4.2|1256364110|2|<MD5-PASSWORD>|empus@undernet.org|EN
-        putloglev d * "userdb:db:adduser U|$userid|$trguser|$trgxuser|${trglevel}||||||$automode|||EN"
+        putloglev d * "userdb:db:adduser U|$userid|$trguser|$trgxuser|${trglevel}||||||$automode|$encpas||EN"
 
-        userdb:db:adduser "U|$userid|$trguser|$trgxuser|${trglevel}||||||$automode|||EN"
-			
-	userdb:reply $type $target "added user $trguser \002(uid:\002 $userid \002xuser:\002 $trgxuser -- \002level:\002 $trglevel -- \002automode:\002 $automodew\002)\002"
+        userdb:db:adduser "U|$userid|$trguser|$trgxuser|${trglevel}||||||$automode|$encpass||EN"
+	
+	if {$xuser != ""} {
+		userdb:reply $type $target "added user $trguser \002(uid:\002 $userid \002xuser:\002 $trgxuser -- \002level:\002 $trglevel -- \002automode:\002 $automodew\002)\002"
+	} else {
+		userdb:reply $type $target "added user $trguser \002(uid:\002 $userid -- \002level:\002 $trglevel -- \002automode:\002 $automodew\002)\002"
+		userdb:reply $type $target "temporary password sent via /notice."
+		userdb:reply $stype $starget "note: temporary password for user $trguser is: $genpass"
+	}
 	return;
 }
 
@@ -1095,8 +1124,16 @@ proc userdb:cmd:moduser {0 1 2 3 {4 ""}  {5 ""}} {
 	lassign $args tuser ttype
 	set tvalue [lrange $args 2 end]
 
-	if {$tuser == "" || $ttype == "" || $tvalue == ""} { userdb:reply $stype $starget "\002usage:\002 moduser <user> <user|level|xuser|automode|lang|email|pass> <value>"; return; }
-	
+	if {$arm(cfg.ircd) == "1"} {
+		# -- ircu (Undernet/Quakenet)
+		if {$tuser == "" || $ttype == "" || $tvalue == ""} { userdb:reply $stype $starget "\002usage:\002 moduser <user> <user|level|xuser|automode|lang|email|pass> <value>";
+		return;
+	}
+	} elseif {$arm(cfg.ircd) == "2"} {
+		# -- IRCnet/EFnet
+		if {$tuser == "" || $ttype == "" || $tvalue == ""} { userdb:reply $stype $starget "\002usage:\002 moduser <user> <user|level|automode|lang|email|pass> <value>";
+		return;	
+	}
 	set user [userdb:uline:get user nick $nick]
 
 	# -- check if target user exists
@@ -1151,24 +1188,27 @@ proc userdb:cmd:moduser {0 1 2 3 {4 ""}  {5 ""}} {
 		userdb:reply $type $target "done."
 		return;
 	}
-	
-	if {$ttype == "xuser"} {
-		# -- modifying xuser
-		set tvalue [lindex $tvalue 0]
-		# -- check this username doesn't already exist against a user
-		foreach i [array names uline] {
-			set iuser [userdb:uline:get xuser user $i]
-			if {[string tolower $iuser] == [string tolower $tvalue]} {
-				userdb:reply $type $target "\002(\002error\002)\002 xuser $iuser already exists for user $i"
-				return;
+
+	if {$arm(cfg.ircd) == "1"} {
+		# -- ircu (Undernet/Quakenet)
+		if {$ttype == "xuser"} {
+			# -- modifying xuser
+			set tvalue [lindex $tvalue 0]
+			# -- check this username doesn't already exist against a user
+			foreach i [array names uline] {
+				set iuser [userdb:uline:get xuser user $i]
+				if {[string tolower $iuser] == [string tolower $tvalue]} {
+					userdb:reply $type $target "\002(\002error\002)\002 xuser $iuser already exists for user $i"
+					return;
+				}
 			}
+			set curx [userdb:uline:get xuser user $tuser]
+			if {[string tolower $curx] == [string tolower $tvalue]} { userdb:reply $type $target "\002(\002error\002)\002 what's the point?"; return; }
+			# -- make the change
+			userdb:uline:set xuser $tvalue user $tuser
+			userdb:reply $type $target "done."
+			return;
 		}
-		set curx [userdb:uline:get xuser user $tuser]
-		if {[string tolower $curx] == [string tolower $tvalue]} { userdb:reply $type $target "\002(\002error\002)\002 what's the point?"; return; }
-		# -- make the change
-		userdb:uline:set xuser $tvalue user $tuser
-		userdb:reply $type $target "done."
-		return;
 	}
 	
 	if {$ttype == "automode"} {
@@ -11604,8 +11644,6 @@ proc arm:clean:scanlist {nick {leave ""}} {
 	}
 }
 
-
-
 # -- add log entry
 proc arm:log:cmdlog {source user user_id command params bywho target target_xuser wait} {
 	global arm
@@ -11632,6 +11670,22 @@ proc arm:log:cmdlog {source user user_id command params bywho target target_xuse
 		}
         }
 	return
+}
+
+# -- generate a random password
+# -- arm:randpass [length] [chars]
+# -- length to use is provided by config option if not provided
+# -- chars to randomise are defaulted if not provided
+proc arm:randpass {{length ""} {chars ")(*&^%$\#@!ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz)(*&^%$\#@!"}} {
+	global arm
+	if {$length == ""} { set length $arm(cfg.randpass) }
+    set range [expr {[string length $chars]-1}]
+    set text ""
+    for {set i 0} {$i < $length} {incr i} {
+       set pos [expr {int(rand()*$range)}]
+       append text [string range $chars $pos $pos]
+    }
+    return $text
 }
 
 arm:debug 0 "\[@\] Armour: loaded support functions."

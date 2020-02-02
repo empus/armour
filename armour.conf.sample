@@ -114,9 +114,13 @@ set arm(cfg.dir.prefix) "/home/armour/bots/armour"
 set arm(prefix) "c"
 
 # -- ircd type [1-2] - [1]
-# 1: ircu (Undernet)
-# 2: IRCnet
+# 1: ircu (Undernet/Quakenet)
+# 2: IRCnet/EFnet
 set arm(cfg.ircd) 1
+
+# -- random password string length
+# -- note: only relevant for ircd type: 2 (ie. IRCnet/EFnet)
+set arm(cfg.randpass) 10
 
 # -- hostname of services - [undernet.org]
 set arm(cfg.servicehost) "undernet.org"

@@ -22,10 +22,11 @@
 	
 	+ Enhancement:	Added support for other ircds without extended WHO response (raw 354), such as IRCnet
 	
-		- Config var:	arm(cfg.ircd):		1: ircu/Undernet
-											2: IRCnet
+		- Config var:	arm(cfg.ircd):		1: ircu (Undernet/Quakenet)
+											2: IRCnet/EFnet
 	
-	+ Enhancement: 	New config parameter for hostname of service clients, to better support networks other than Undernet
+	+ Enhancement: 	New config parameter for hostname of service clients, to better support networks other 
+					than Undernet
 	
 		- Config var:	arm(cfg.servicehost):	hostname
 		
@@ -40,6 +41,19 @@
 	+ Fixed bug:	Adaptive floodnet detection not working for patterns: nick!ident/rname, ident/rname, nick/rname
 	
 	+ Enhancement:	Ensure plugins also only send syntax via /notice if arm(cfg.help.notc) var is enabled
+	
+	+ Fixed bug:	Floodnet scans wrongfully detecting umode +x as being two channel joins
+	
+	+ Fixed bugs:	Regex blacklist and whitelist patterns:
+						- not saving correctly for some patterns
+						- not reporting correctly when a match is made
+						- not adding correctly when bot is commanded by botnick
+						
+	+ Enhancement:	Generate temporary random password when adding users, for non-ircu derived ircds
+	
+		- Config var:	arm(cfg.randpass):		length of generated password string
+	
+	+ Enhancement:	Remove use of 'xuser' for ircds without ACCOUNT
 	
 	+ Improvement:	Safely unload vars on reload, to avoid script warnings
 		
