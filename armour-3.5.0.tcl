@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v3.4.5 autobuild completed on: Sat Feb  1 23:49:08 PST 2020
+# armour.tcl v3.5.0 autobuild completed on: Mon Feb  3 08:28:23 PST 2020
 # ------------------------------------------------------------------------------------------------
 #
 #    _                         ___ ___ 
@@ -14,7 +14,7 @@
 #
 # Do not edit this code unless you really know what you are doing
 #
-# check for updates @ http://code.empus.com/armour
+# check for updates @ http://code.empus.net/armour
 #
 # - 	Empus
 #	empus@undernet.org
@@ -31,7 +31,7 @@
 #
 
 # -- script version
-set arm(version) "v3.4.5"
+set arm(version) "v3.5.0"
 
 # -- we require Tcl 8.6 for coroutines now
 package require Tcl 8.6
@@ -503,8 +503,8 @@ proc arm:loadcmds {} {
                 proc arm:cmd:v {0 1 2 3 {4 ""}  {5 ""}} { arm:coroexec arm:cmd:view $0 $1 $2 $3 $4 $5 }
                 # -- cmd: exempt
                 proc arm:cmd:e {0 1 2 3 {4 ""}  {5 ""}} { arm:coroexec arm:cmd:exempt $0 $1 $2 $3 $4 $5 }
-                # -- cmd: stats
-                proc arm:cmd:s {0 1 2 3 {4 ""}  {5 ""}} { arm:coroexec arm:cmd:stats $0 $1 $2 $3 $4 $5 }
+                # -- cmd: search
+                proc arm:cmd:s {0 1 2 3 {4 ""}  {5 ""}} { arm:coroexec arm:cmd:search $0 $1 $2 $3 $4 $5 }
                 # -- cmd: op
                 proc arm:cmd:o {0 1 2 3 {4 ""}  {5 ""}} { arm:coroexec arm:cmd:op $0 $1 $2 $3 $4 $5 }
                 # -- cmd: deop
@@ -531,7 +531,7 @@ if {$arm(cfg.char.nick) || $arm(cfg.char.glob)} {
 		# -- tidy nick
 		set nick [split $nick]
 		
-		set first [lindex $text 0]
+		set first [lindex [split $text] 0]
 		
 		# -- check for global prefix char '*' OR bot nickname
 		if {($arm(cfg.char.glob) && $first == "*") || ([string trimright [string tolower $first] :] == [string tolower $botnick])} {
@@ -1912,6 +1912,18 @@ proc userdb:nick {nick uhost handle chan newnick} {
 			lappend scanlist(paranoid) $newnick
 		}
 	}
+	
+	# -- textflud -- counts of lines matching blacklist text entries, for a nick
+	if {[info exists textflud]} {
+		foreach i [array names textflud] {
+			set tnick [lindex [split $i ,] 0]
+			set tvalue [lindex [split $i ,] 1]
+			if {$tnick == $nick} {
+				set textflud($newnick,$tvalue) $textflud($tnick,$tvalue)
+				unset textflud($tnick,$tvalue)
+			}
+		}
+	}
 
 	# -- tidy fullname array
 	if {[info exists fullname($nick)]} { set fullname($newnick) $fullname($nick); unset fullname($nick) }
@@ -1937,7 +1949,7 @@ proc userdb:nick {nick uhost handle chan newnick} {
 proc userdb:signoff {nick uhost handle chan {text ""}} {
 	global userdb 
 	global hostnicks fullname nickhost nickip ipnicks
-	global gklist scanlist
+	global gklist scanlist textflud
 	
 	set host [lindex [split $uhost @] 1]
 	
@@ -2003,6 +2015,15 @@ proc userdb:signoff {nick uhost handle chan {text ""}} {
 			set scanlist(paranoid) [lreplace $scanlist(paranoid) $pos $pos]
 		}
 	}
+	
+	# -- textflud -- counts of lines matching blacklist text entries, for a nick
+	if {[info exists textflud]} {
+		foreach i [array names textflud] {
+			set tnick [lindex [split $i ,] 0]
+			set tvalue [lindex [split $i ,] 1]
+			if {$tnick == $nick} { unset textflud($tnick,$tvalue) }
+		}
+	}
 
 	if {[userdb:isLogin $nick]} {
 		# -- begin autologout
@@ -2031,6 +2052,7 @@ proc userdb:part {nick uhost handle chan {text ""}} {
 	global hostnicks fullname nickhost nickip ipnicks
 	global gklist
 	global scanlist
+	global textflud
 	
 	if {$nick == $botnick && [onchan $nick]} {
 		# -- still on some channels common with me, leave data
@@ -2088,6 +2110,15 @@ proc userdb:part {nick uhost handle chan {text ""}} {
 		set pos [lsearch $scanlist(paranoid) $nick]
 		if {$pos != -1} {
 			set scanlist(paranoid) [lreplace $scanlist(paranoid) $pos $pos]
+		}
+	}
+	
+	# -- textflud -- counts of lines matching blacklist text entries, for a nick
+	if {[info exists textflud]} {
+		foreach i [array names textflud] {
+			set tnick [lindex [split $i ,] 0]
+			set tvalue [lindex [split $i ,] 1]
+			if {$tnick == $nick} { unset textflud($tnick,$tvalue) }
 		}
 	}
 	
@@ -2224,6 +2255,7 @@ proc userdb:kick {nick uhost handle chan vict reason} {
 	global userdb  botnick
 	global hostnicks fullname ipnicks nickhost nickip
 	global gklist scanlist
+	global textflud
 	
 	if {$nick == $botnick || [onchan $nick]} {
 		# -- still on some channels common with me, leave data
@@ -2285,6 +2317,15 @@ proc userdb:kick {nick uhost handle chan vict reason} {
 				set ipnicks($ip) [lreplace $ipnicks($ip) $pos $pos]
 				if {$ipnicks($ip) == ""} { unset ipnicks($ip) }
 			}		
+		}
+	}
+	
+	# -- textflud -- counts of lines matching blacklist text entries, for a nick
+	if {[info exists textflud]} {
+		foreach i [array names textflud] {
+			set tnick [lindex [split $i ,] 0]
+			set tvalue [lindex [split $i ,] 1]
+			if {$tnick == $nick} { unset textflud($tnick,$tvalue) }
 		}
 	}
 	
@@ -3271,11 +3312,11 @@ putlog "\[@\] Armour: loaded nmap scanner."
 
 # -- username
 # note: we set this in the main config now
-# set arm(auth.user) "USERNAME"
+# set arm(cfg.auth.user) "USERNAME"
 
 # -- password
 # note: we set this in the main config now
-# set arm(auth.pass) "PASSWORD"
+# set arm(cfg.auth.pass) "PASSWORD"
 
 
 
@@ -3291,15 +3332,16 @@ set loginsucceed 0
 proc x:init:server {type} {
 	global botnick arm
 
-	if {$arm(auth.user) != "" && $arm(auth.pass) != ""} {
+	if {$arm(cfg.auth.user) != "" && $arm(cfg.auth.pass) != ""} {
 		# -- set umode +x?
-		if {$arm(auth.hide)} {
+		if {$arm(cfg.auth.hide)} {
 			putserv "MODE $botnick +x"
-			putlog "\[@\] (xAuth) executed +x initially before logging into X."
+			putlog "\[@\] (xAuth) executed umode +x initially before logging into $arm(cfg.gnuworld.nick)."
 		}
-		putserv "PRIVMSG X@channels.undernet.org :login $arm(auth.user) $arm(auth.pass)"
+		set authhost "${arm(cfg.gnuworld.nick)}@${arm(cfg.gnuworld.host)}"
+		putserv "PRIVMSG $authhost :login $arm(cfg.auth.user) $arm(cfg.auth.pass)"
 
-		putlog "\[@\] (xAuth) sent credentials to X, waiting 30 seconds for a response..."
+		putlog "\[@\] (xAuth) sent credentials to $arm(cfg.gnuworld.nick), waiting 30 seconds for a response..."
 
 		bind notc - "AUTHENTICATION SUCCESSFUL*" x:login:success
 		bind notc - "AUTHENTICATION FAIL*" x:login:fail
@@ -3319,7 +3361,7 @@ proc x:init:server {type} {
 proc x:activate_chans {} {
 	global loginsucceed
 	if {$loginsucceed == 0} {
-		putlog "\[@\] (xAuth) X is lagged, I'll join my channels and wait."
+		putlog "\[@\] (xAuth) $arm(cfg.gnuworld.nick) is lagged, I'll join my channels and wait."
 		foreach chan [channels] {
 			channel set $chan -inactive
 		}
@@ -3332,9 +3374,9 @@ proc x:activate_chans {} {
 
 proc x:deactivate {type} {
 	global arm
-	if {$arm(auth.user) != "" && $arm(auth.pass) != ""} {
-		if {$arm(auth.hide)} {
-			putlog "\[@\] (xAuth) Staying outside all channels until I am logged into X..."
+	if {$arm(cfg.auth.user) != "" && $arm(cfg.auth.pass) != ""} {
+		if {$arm(cfg.auth.hide)} {
+			putlog "\[@\] (xAuth) Staying outside all channels until I am logged into $arm(cfg.gnuworld.nick)..."
 			foreach chan [channels] {
 				channel set $chan +inactive
 	 		}
@@ -3344,9 +3386,9 @@ proc x:deactivate {type} {
 
 proc x:login:late:success {mnick uhost hand text {dest ""}} {
 	global loginsucceed
-	if {$mnick == "X"} {
+	if {$mnick == $arm(cfg.gnuworld.nick)} {
 		set loginsucceed 1
-		putlog "\[@\] (xAuth) Successfully logged into X. *phew*"
+		putlog "\[@\] (xAuth) Successfully logged into $arm(cfg.gnuworld.nick). *phew*"
 		unbind notc - "AUTHENTICATION SUCCESSFUL*" x:login:late:success
 		unbind notc - "AUTHENTICATION FAIL*" x:login:late:fail
 	}
@@ -3354,9 +3396,9 @@ proc x:login:late:success {mnick uhost hand text {dest ""}} {
 
 proc x:login:late:fail {mnick uhost hand text {dest ""}} {
 	global loginsucceed
-	if {$mnick == "X"} {
+	if {$mnick == $arm(cfg.gnuworld.nick)} {
 		set loginsucceed 1
-		putlog "\[@\] (xAuth) After all this time, NOW X tells me authentication failed!!!"
+		putlog "\[@\] (xAuth) After all this time, NOW $arm(cfg.gnuworld.nick) tells me authentication failed!!!"
 		unbind notc - "AUTHENTICATION SUCCESSFUL*" x:login:late:success
 		unbind notc - "AUTHENTICATION FAIL*" x:login:late:fail
 	}
@@ -3364,12 +3406,12 @@ proc x:login:late:fail {mnick uhost hand text {dest ""}} {
 
 proc x:login:success {mnick uhost hand text {dest ""}} {
 	global loginsucceed
-	if {$mnick == "X"} {
+	if {$mnick == $arm(cfg.gnuworld.nick)} {
 		set loginsucceed 1
 		foreach chan [channels] {
 			channel set $chan -inactive
 		}
-		putlog "\[@\] (xAuth) Successfully logged into X, now joining my channels..."
+		putlog "\[@\] (xAuth) Successfully logged into $arm(cfg.gnuworld.nick), now joining my channels..."
 		unbind notc - "AUTHENTICATION SUCCESSFUL*" x:login:success
 		unbind notc - "AUTHENTICATION FAIL*" x:login:fail
 	 }
@@ -3377,18 +3419,18 @@ proc x:login:success {mnick uhost hand text {dest ""}} {
 
 proc x:login:fail {mnick uhost hand text {dest ""}} {
 	global loginsucceed
-	if {$mnick == "X"} {
+	if {$mnick == $arm(cfg.gnuworld.nick)} {
 	set loginsucceed 1
 		foreach chan [channels] {
 			channel set $chan -inactive
 		}
-		putlog "\[@\] (xAuth) Couldn't login to X, authentication failed somehow."
+		putlog "\[@\] (xAuth) Couldn't login to $arm(cfg.gnuworld.nick), authentication failed somehow."
 		putlog "\[@\] (xAuth) Joining my channels now..."
 		unbind notc - "AUTHENTICATION SUCCESSFUL*" x:login:success
 		unbind notc - "AUTHENTICATION FAIL*" x:login:fail
 	 }
 }
-putlog "\[@\] Armour: loaded cservice authentication."
+putlog "\[@\] Armour: loaded gnuworld (mod.cservice) authentication."
 
 
 
@@ -4611,7 +4653,7 @@ proc arm:kickban {nick chan mask duration reason} {
 		if {$addban} {
 			set level 100
 			arm:debug 1 "arm:kickban adding X ban -- chan: $chan mask: $mask duration: $duration"
-			putquick "PRIVMSG X :BAN $chan $mask $duration $level $reason" -next
+			putquick "PRIVMSG $arm(cfg.gnuworld.nick) :BAN $chan $mask $duration $level $reason" -next
 		} else {
 				# -- if already in X's banlist, no need to kick?
 				# putquick "PRIVMSG X :KICK $chan $nick $reason" -next 
@@ -4726,6 +4768,77 @@ proc arm:cmd:CMD {0 1 2 3 {4 ""}  {5 ""}} {
 
 	# INSERT PROC SPECIFIC STUFF HERE
 
+}
+
+
+# -- cmd: conf
+# synax: conf <setting|mask>
+# allows to search for configuration setting values
+# vars can be specified in dotted form (without 'cfg' prefix), or with spaces
+# wildcard searches supported
+proc arm:cmd:conf {0 1 2 3 {4 ""}  {5 ""}} {
+	global userdb arm
+	set type $0
+	if {$type == "pub"} {
+		set nick $1; set uh $2; set hand $3; set chan $4; set args $5; set target $chan; set source "$nick!$uh"
+		if {![userdb:isValidchan $chan]} { return; }
+		if {$arm(cfg.help.notc)} { set starget $nick; set stype "notc" } else { set stype "pub"; set starget $chan }
+	}
+	if {$type == "msg"} {
+		set nick $1; set uh $2; set hand $3; set args $4; set target $nick; set chan $arm(cfg.chan.def); set source "$nick!$uh"
+		set stype "notc"; set starget $nick;
+	}
+	if {$type == "dcc"} {
+		set hand $1; set idx $2; set args $3; set target $idx; set nick $hand; set chan $arm(cfg.chan.def); set source "$hand/$idx"
+		set stype "dcc"; set starget $idx; set uh $idx;
+	}
+	
+	set cmd "conf"
+	
+	# -- ensure user has required access for command
+	if {![userdb:isAllowed $nick $cmd $type]} { return; }
+
+	# -- end default proc template
+	
+	if {$args == ""} { arm:reply $stype $starget "syntax: conf <setting|mask>"; return; }
+
+	set cfg ""
+	if {[llength $args] == "1"} {
+		if {[string match "*.*" $args]} {
+			# -- var is dotted notation
+			set cfg [join $args]
+		}
+	} else {
+		# -- spaced delimited
+		set cfg [join $args .]
+	}
+	
+	# -- check the var
+	if {[info exists arm(cfg.$cfg)]} {
+		arm:reply $type $target "setting: arm(cfg.$cfg) -- value: $arm(cfg.$cfg)"
+	} else {
+		# -- return those that do match?
+		set thelist ""
+		foreach i [array names arm] {
+			set long [split $i .]
+			set one [lindex $long 0]
+			if {$one != "cfg"} { continue; }
+			# -- protect some sensitive vars
+			switch -- $i {
+				cfg.auth.pass	{ continue; }
+			}
+			set rest [lrange $long 1 end]
+			set tvar [join $rest .]
+			if {[string match $args $tvar] || [string match $cfg $tvar]} { lappend thelist $tvar }
+		}
+		if {$thelist != ""} {
+			# -- send the results
+			arm:reply $type $target "\002matched settings:\002 $thelist"
+		} else {
+			# -- no such var
+			arm:reply $type $target "no such configuration setting found."		
+		}
+	}
 }
 
 # -- command: help
@@ -5612,9 +5725,23 @@ proc arm:cmd:mode {0 1 2 3 {4 ""}  {5 ""}} {
 	set user [userdb:uline:get user nick $nick]
 	# -- end default proc template
 
-	set mode [lindex $args 0]
+	set mode [string tolower [lindex $args 0]]
 	if {$mode == ""} { arm:reply $type $target "mode is: $arm(mode)"; return; }
-	if {$mode != "on" && $mode != "off" && $mode != "secure" && $mode != ""} { arm:reply $stype $starget "\002usage:\002 mode <on|off|secure>"; return; }
+	
+	# -- prevent secure mode if ircd doesn't support it
+	if {$arm(cfg.ircd) == 1} {
+		# -- ircu (Undernet/Quakenet)
+		if {$mode != "on" && $mode != "off" && $mode != "secure" && $mode != ""} {
+			arm:reply $stype $starget "\002usage:\002 mode <on|off|secure>";
+			return;
+		}
+	} elseif {$arm(cfg.ircd) == 2} {
+		# -- IRCnet/EFnet
+		if {$mode != "on" && $mode != "off" && $mode != ""} {
+			arm:reply $stype $starget "\002usage:\002 mode <on|off>";
+			return;
+		}
+	}
 	
 	arm:debug 1 "arm:cmd:mode: changing mode for $nick to: $mode"
 	
@@ -5929,10 +6056,9 @@ proc arm:cmd:exempt {0 1 2 3 {4 ""}  {5 ""}} {
 # ie: scan 172.16.4.5
 # ie. scan Empus!empus@172.16.4.5/why? why not?
 # scans all appropriate lists for match
-
 proc arm:cmd:scan {0 1 2 3 {4 ""}  {5 ""}} {
 	global userdb arm
-	global wline bline regex
+	global wline bline regex pattern
 	set type $0
 	if {$type == "pub"} {
 		set nick $1; set uh $2; set hand $3; set chan $4; set args $5; set target $chan; set source "$nick!$uh"
@@ -5987,37 +6113,37 @@ proc arm:cmd:scan {0 1 2 3 {4 ""}  {5 ""}} {
 	
 	# -- check for IP
 	if {[regexp -- {^([01]?\d\d?|2[0-4]\d|25[0-5])\.([01]?\d\d?|2[0-4]\d|25[0-5])\.([01]?\d\d?|2[0-4]\d|25[0-5])\.([01]?\d\d?|2[0-4]\d|25[0-5])$} $search]} {
-	 # -- value is IP
-	 arm:debug 2 "arm:cmd:scan: value: $search is type: IP"
-	 set ip 1
-	 set match 1
-	 set vtype "ip"
-	 set dnsbl 1
-	 set tip $search
-	 set thost $tip
-	 set country [geo:ip2country $tip]
-	 set asn [geo:ip2asn $tip]
-	 arm:debug 2 "arm:cmd:scan: asn: $asn country: $country"
+		# -- value is IP
+		arm:debug 2 "arm:cmd:scan: value: $search is type: IP"
+		set ip 1
+		set match 1
+		set vtype "ip"
+		set dnsbl 1
+		set tip $search
+		set thost $tip
+		set country [geo:ip2country $tip]
+		set asn [geo:ip2asn $tip]
+		arm:debug 2 "arm:cmd:scan: asn: $asn country: $country"
 	}
 	
 	# -- check for nick!user@host/rname
 	if {[regexp -- {^([^!]+)!([^@]+)@([^/]+)/(.+)$} $search -> tnick tident thost trname]} {
-	 # -- value is nick!user@host/rname (regex)
-	 arm:debug 2 "arm:cmd:scan: value: $search is type: nuhr (regex)"
-	 set regexp 1
-	 set match 1
-	 set dnsbl 1
-	 set vtype "regex"
+		# -- value is nick!user@host/rname (regex)
+		arm:debug 2 "arm:cmd:scan: value: $search is type: nuhr (regex)"
+		set regexp 1
+		set match 1
+		set dnsbl 1
+		set vtype "regex"
 	}
 	
 	# -- check for nick!user@host
 	if {[regexp -- {^([^!]+)!([^@]+)@([^/]+)$} $search -> tnick tident thost]} {
-	 # -- value is nick!user@host
-	 arm:debug 2 "arm:cmd:scan: value: $search is type: nuh"
-	 set nuh 1
-	 set match 1
-	 set dnsbl 1
-	 set vtype "nuh"
+		# -- value is nick!user@host
+		arm:debug 2 "arm:cmd:scan: value: $search is type: nuh"
+		set nuh 1
+		set match 1
+		set dnsbl 1
+		set vtype "nuh"
 	}
 	
 	# -- check if thost is IP?
@@ -6031,29 +6157,29 @@ proc arm:cmd:scan {0 1 2 3 {4 ""}  {5 ""}} {
 	
 	# -- check for ASN
 	if {[regexp -- {^[0-9]+$} $search]} {
-	 # -- value is ASN
-	 arm:debug 2 "arm:cmd:scan: value: $search is type: ASN"
-	 set match 1
-	 set vtype "asn"
+		# -- value is ASN
+		arm:debug 2 "arm:cmd:scan: value: $search is type: ASN"
+		set match 1
+		set vtype "asn"
 	}
 	
 	# -- check for existence of '*'
 	if {[regexp -- {\*} $search]} {
-	 # -- value is hostmask
-	 arm:debug 2 "arm:cmd:scan: value: $search is type: hostmask"
-	 set hostmask 1
-	 set match 1
-	 set vtype "hostmask"
+		# -- value is hostmask
+		arm:debug 2 "arm:cmd:scan: value: $search is type: hostmask"
+		set hostmask 1
+		set match 1
+		set vtype "hostmask"
 	}
 	
 	# -- check for existence of '.'
 	if {[string match "*.*" $search] && $regexp != 1 && $nuh != 1 && $hostmask != 1 && $ip != 1} {
-	 # -- value is hostname
-	 arm:debug 2 "arm:cmd:scan: value: $search is type: hostname"
-	 set host 1
-	 set match 1
-	 set thost $search
-	 set vtype "host"
+		# -- value is hostname
+		arm:debug 2 "arm:cmd:scan: value: $search is type: hostname"
+		set host 1
+		set match 1
+		set thost $search
+		set vtype "host"
 	}
 	
 	# -- if no match so far, must be nickname, username or country
@@ -6065,16 +6191,16 @@ proc arm:cmd:scan {0 1 2 3 {4 ""}  {5 ""}} {
 			set nickxuser 1
 			set vtype "nickxuser"
 		} else {
-				if {[string length $search] > 2} {
-					# -- must be a nickname
-					arm:debug 2 "arm:cmd:scan: value: $search is type: nickname"
-					set nick 1
-					set vtype "nick"
-					set tnick $search
-				}
-				# -- either a nickname or country
-				set vtype "nickgeo"
-				arm:debug 2 "arm:cmd:scan: value: $search is type: nickgeo"
+			if {[string length $search] > 2} {
+				# -- must be a nickname
+				arm:debug 2 "arm:cmd:scan: value: $search is type: nickname"
+				set nick 1
+				set vtype "nick"
+				set tnick $search
+			}
+			# -- either a nickname or country
+			set vtype "nickgeo"
+			arm:debug 2 "arm:cmd:scan: value: $search is type: nickgeo"
 		}
 		# -- get host
 	}
@@ -6094,6 +6220,7 @@ proc arm:cmd:scan {0 1 2 3 {4 ""}  {5 ""}} {
 			set value [lindex $line 1]
 			arm:debug 2 "arm:cmd:scan: scanning: wline($method,$value)"
 			if {$method == "regex"} { continue; }
+			if {$method == "text"} { continue; }
 			if {[regexp -- {/} $value]} {
 				# -- CIDR notation
 				if {$tip != ""} {
@@ -6126,7 +6253,8 @@ proc arm:cmd:scan {0 1 2 3 {4 ""}  {5 ""}} {
 			set method [lindex $line 0]
 			set value [lindex $line 1]
 			if {$method == "regex"} { continue; }
-						if {[regexp -- {/} $value]} {
+			if {$method == "text"} { continue; }
+			if {[regexp -- {/} $value]} {
 				# -- CIDR notation
 				arm:debug 3 "arm:cmd:scan: checking CIDR"
 				if {$tip != ""} {
@@ -6168,10 +6296,10 @@ proc arm:cmd:scan {0 1 2 3 {4 ""}  {5 ""}} {
 					# -- whitelist entry
 					arm:reply $type $target [arm:listparse white regex $exp $wline(regex,$id)]
 				} else {
-						if {[info exists bline(regex,$id)]} {
-							# -- blacklist entry
-							arm:reply $type $target [arm:listparse black regex $exp $bline(regex,$id)]
-						}
+					if {[info exists bline(regex,$id)]} {
+						# -- blacklist entry
+						arm:reply $type $target [arm:listparse black regex $exp $bline(regex,$id)]
+					}
 				}
 				set match 1
 				incr mcount
@@ -6180,10 +6308,28 @@ proc arm:cmd:scan {0 1 2 3 {4 ""}  {5 ""}} {
 		# -- end of foreach 
 	}
 	# -- end of regex scans
-
+	
+	# -- text pattern scans
+	# -- NOTE -- it might be better later, to only scan these if the search value looks like a wildcard or regex pattern
+	foreach id [array names pattern] {
+		set exp [split $pattern($id)]
+		#set exp [join $exp]
+		# putloglev d * "arm:cmd:scan: matching $search against text: [join $exp]"
+		if {[regexp -- [join $exp] $search]} {
+			# -- match!
+			arm:debug 2 "arm:cmd:scan: matched $search: pattern($id) -- [join $exp]"
+			if {[info exists bline(text,$id)]} {
+				# -- blacklist entry
+				arm:reply $type $target [arm:listparse black text $exp $bline(text,$id)]
+			}
+			set match 1
+			incr mcount
+		}
+	}
+	# -- end text pattern search
 		
-        # -- dnsbl checks (if not ipv6)
-        if {$dnsbl && ![string match "*:*" $ip]} {
+	# -- dnsbl checks (if not ipv6)
+	if {$dnsbl && ![string match "*:*" $ip]} {
 		arm:debug 2 "arm:cmd:scan: scanning for dnsbl match: $thost (tip: $tip)"
 		# -- get score
 		set response [arm:rbl:score $thost]
@@ -6196,13 +6342,13 @@ proc arm:cmd:scan {0 1 2 3 {4 ""}  {5 ""}} {
 			# -- match found!
 			set match 1
 			arm:debug 2 "arm:cmd:scan: dnsbl match found for $thost: $response"
-		        set rbl [lindex $response 2]
-       			set desc [lindex $response 3]
-      			set info [lindex $response 4]
+			set rbl [lindex $response 2]
+			set desc [lindex $response 3]
+			set info [lindex $response 4]
 
 			arm:reply $type $target "\002dnsbl match:\002 $rbl \002desc:\002 $desc (\002ip:\002 $dst \002score:\002 $score \002info:\002 [join $info])"
 		} else {
-				arm:debug 1 "arm:cmd:scan: no dnsbl match found for $thost"
+			arm:debug 1 "arm:cmd:scan: no dnsbl match found for $thost"
 		}
 	}
 	# -- end of dnsbl
@@ -6229,7 +6375,7 @@ proc arm:cmd:scan {0 1 2 3 {4 ""}  {5 ""}} {
 # scans lists for matching value
 proc arm:cmd:search {0 1 2 3 {4 ""}  {5 ""}} {
 	global userdb arm
-	global wline bline regex
+	global wline bline regex pattern
 	set type $0
 	if {$type == "pub"} {
 		set nick $1; set uh $2; set hand $3; set chan $4; set args $5; set target $chan; set source "$nick!$uh"
@@ -6264,9 +6410,11 @@ proc arm:cmd:search {0 1 2 3 {4 ""}  {5 ""}} {
 	
 	set mcount 0
 	set match 0
+	set good 0
 	
-	if {$list == "white" || $list == "*"} {
+	if {$list == "white" || [string index $list 0] == "w" || $list == "*"} {
 		# -- whitelist
+		set good 1
 
 		# -- regex whitelist
 		foreach id [array names regex] {
@@ -6296,6 +6444,7 @@ proc arm:cmd:search {0 1 2 3 {4 ""}  {5 ""}} {
 			set method [lindex $line 0]
 			set value [lindex $line 1]
 			if {$method == "regex"} { continue; }
+			if {$method == "text"} { continue; }
 			if {[string match [string tolower $search] [string tolower $value]]} {
 				# -- match!
 				arm:debug 2 "arm:cmd:search: matched $search: wline($method,$value)"
@@ -6312,15 +6461,18 @@ proc arm:cmd:search {0 1 2 3 {4 ""}  {5 ""}} {
 			}
 		}
 
-	} elseif {$list == "black" || $list == "*"} {
+	}
+	
+	if {$list == "black" || [string index $list 0] == "b" || $list == "*"} {
 		# -- blacklist
+		set good 1
 
 		# -- regex blacklist
 		foreach id [array names regex] {
 			set exp [split $regex($id)]
 			#set exp $regex($id)
 			# putloglev d * "arm:cmd:search: matching $search against regex: [join $exp]"
-			if {[string match $search $exp] && [info exists bline(regex,$id)]} {
+			if {[string match [string tolower $search]  [string tolower $exp]] && [info exists bline(regex,$id)]} {
 				# -- match!
 				arm:debug 2 "arm:cmd:search: matched $search: regex($id) -- [join $exp]"
 				set match 1
@@ -6334,7 +6486,29 @@ proc arm:cmd:search {0 1 2 3 {4 ""}  {5 ""}} {
 				arm:reply $type $target [arm:listparse black regex $exp $bline(regex,$id)]
 			}
 		}
-		# -- end of foreach
+		# -- end of regex foreach
+		
+		# -- text blacklist
+		foreach id [array names pattern] {
+			set exp [split $pattern($id)]
+			#set exp $pattern($id)
+			# putloglev d * "arm:cmd:search: matching $search against pattern: [join $exp]"
+			if {[string match [string tolower $search] [string tolower $exp]] && [info exists bline(text,$id)]} {
+				# -- match!
+				arm:debug 2 "arm:cmd:search: matched $search: pattern($id) -- [join $exp]"
+				set match 1
+				incr mcount
+				if {$mcount > 5 && $type != "dcc"} { 
+					set end [clock clicks]
+					set runtime "[expr ($end-$start)/1000/1000.0] sec"
+					arm:reply $type $target "more than 5 matches, please refine search ($runtime)"
+					return;
+				}
+				arm:reply $type $target [arm:listparse black text $exp $bline(text,$id)]
+			}
+		}
+		# -- end of text foreach		
+
 		
 		# -- everything else (user, host, country, asn)
 		foreach entry [array names bline] {
@@ -6342,6 +6516,7 @@ proc arm:cmd:search {0 1 2 3 {4 ""}  {5 ""}} {
 			set method [lindex $line 0]
 			set value [lindex $line 1]
 			if {$method == "regex"} { continue; }
+			if {$method == "text"} { continue; }
 			if {[string match [string tolower $search] [string tolower $value]]} {
 				# -- match!
 				arm:debug 2 "arm:cmd:search: matched $search: bline($method,$value)"
@@ -6357,7 +6532,9 @@ proc arm:cmd:search {0 1 2 3 {4 ""}  {5 ""}} {
 				arm:reply $type $target [arm:listparse black $method $value $bline($method,$value)]
 			}
 		}
-	} else {
+	} 
+	
+	if {!$good} {
 		# -- invalid list type
 		arm:reply $stype $starget "\002usage:\002 search <white|black|*> <wildcard>"
 		return;
@@ -6629,7 +6806,7 @@ proc arm:cmd:say {0 1 2 3 {4 ""}  {5 ""}} {
 	# -- end default proc template
 
 	set dest [lindex $args 0]
-	set string [lrange $args 1 end]
+	set string [join [lrange $args 1 end]]
 	# -- should have at least two args
 	if {$dest == "" || $string ==""} { arm:reply $stype $starget "\002usage:\002 say \[-a\] <chan|*|nick> <string>"; return;  }
 	
@@ -6804,6 +6981,7 @@ proc arm:cmd:stats {0 1 2 3 {4 ""}  {5 ""}} {
 	set count(black,user) 0
 	set count(black,host) 0
 	set count(black,regex) 0
+	set count(black,text) 0
 	set count(black,country) 0
 	set count(black,asn) 0
 	set count(black,chan) 0
@@ -6813,6 +6991,7 @@ proc arm:cmd:stats {0 1 2 3 {4 ""}  {5 ""}} {
 	set hitcount(black,user) 0
 	set hitcount(black,host) 0
 	set hitcount(black,regex) 0
+	set hitcount(black,text) 0
 	set hitcount(black,country) 0
 	set hitcount(black,asn) 0
 	set hitcount(black,chan) 0
@@ -6849,7 +7028,7 @@ proc arm:cmd:stats {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 	
 	arm:reply $type $target "\002(\002whitelist\002)\002 \002total:\002 $count(white) \002hits:\002 $hitcount(white) -> (\002user:\002 $count(white,user) \002hits:\002 $hitcount(white,user)) -- (\002host:\002 $count(white,host) \002hits:\002 $hitcount(white,host)) -- (\002rname:\002 $count(white,rname) \002hits:\002 $hitcount(white,rname)) -- (\002regex:\002 $count(white,regex) \002hits:\002 $hitcount(white,regex)) -- (\002country:\002 $count(white,country) \002hits:\002 $hitcount(white,country)) -- (\002asn:\002 $count(white,asn) \002hits:\002 $hitcount(white,asn)) -- (\002chan:\002 $count(white,chan) \002hits:\002 $hitcount(white,chan))"
-	arm:reply $type $target "\002(\002blacklist\002)\002 \002total:\002 $count(black) \002hits:\002 $hitcount(black) -> (\002user:\002 $count(black,user) \002hits:\002 $hitcount(black,user)) -- (\002host:\002 $count(black,host) \002hits:\002 $hitcount(black,host)) -- (\002rname:\002 $count(black,rname) \002hits:\002 $hitcount(black,rname)) -- (\002regex:\002 $count(black,regex) \002hits:\002 $hitcount(black,regex)) -- (\002country:\002 $count(black,country) \002hits:\002 $hitcount(black,country)) -- (\002asn:\002 $count(black,asn) \002hits:\002 $hitcount(black,asn)) -- (\002chan:\002 $count(black,chan) \002hits:\002 $hitcount(black,chan))"
+	arm:reply $type $target "\002(\002blacklist\002)\002 \002total:\002 $count(black) \002hits:\002 $hitcount(black) -> (\002user:\002 $count(black,user) \002hits:\002 $hitcount(black,user)) -- (\002host:\002 $count(black,host) \002hits:\002 $hitcount(black,host)) -- (\002rname:\002 $count(black,rname) \002hits:\002 $hitcount(black,rname)) -- (\002regex:\002 $count(black,regex) \002hits:\002 $hitcount(black,regex)) -- (\002country:\002 $count(black,country) \002hits:\002 $hitcount(black,country)) -- (\002asn:\002 $count(black,asn) \002hits:\002 $hitcount(black,asn)) -- (\002chan:\002 $count(black,chan) \002hits:\002 $hitcount(black,chan)) -- (\002text:\002 $count(black,text) \002hits:\002 $hitcount(black,text))"
 
 	# -- create log entry for command use
 	arm:log:cmdlog BOT $user [userdb:uline:get id user $user] [string toupper $cmd] [join $args] $source "" "" ""
@@ -6902,7 +7081,7 @@ proc arm:cmd:status {0 1 2 3 {4 ""}  {5 ""}} {
 # -- command: view
 proc arm:cmd:view {0 1 2 3 {4 ""}  {5 ""}} {
 	global userdb arm
-	global wline bline regex hits
+	global wline bline regex pattern hits
 	
 	set type $0
 	if {$type == "pub"} {
@@ -6966,6 +7145,9 @@ proc arm:cmd:view {0 1 2 3 {4 ""}  {5 ""}} {
 			if {$limit != "1-1-1"} {
 				# -- non standard limit
 				regsub -all {\-} $limit {:} limit
+				set exlimit [split $limit :]
+				lassign $exlimit joins secs hold
+				if {$secs == $hold} { set limit "$joins:$secs" } else { set limit "$joins:$secs:$hold" }
 				set tl "\002limit:\002 $limit "
 			} else { set tl "" }
 			
@@ -6989,12 +7171,43 @@ proc arm:cmd:view {0 1 2 3 {4 ""}  {5 ""}} {
 	else {	
 		if {[info command ::dronebl::submit] == "" || [userdb:uline:get level nick $nick] < $arm(cfg.dronebl.lvl)} {
 			# -- libdronebl not loaded or user doesn't have sufficient access
-			arm:reply $stype $starget "\002usage:\002 view <white|black|id> ?<user|host|rname|regex|country|asn|chan> <value1,value2..>?";
+			arm:reply $stype $starget "\002usage:\002 view <white|black|id> ?<user|host|rname|regex|text|country|asn|chan> <value1,value2..>?";
 		} else {
 			# -- libdronebl loaded & user has sufficient access
-			arm:reply $stype $starget "\002usage:\002 view <white|black|dronebl|id> ?<user|host|rname|regex|country|asn|chan> <value1,value2..>?";
+			arm:reply $stype $starget "\002usage:\002 view <white|black|dronebl|id> ?<user|host|rname|regex|text|country|asn|chan> <value1,value2..>?";
 		}
 		return;
+	}
+
+	# -- catch method
+	switch -- $method {
+		regex	{ set method "regex" }
+		r		{ set method "regex" }
+		user	{ set method "user" }
+		u		{ set method "user" }
+		xuser	{ set method "user" }
+		host	{ set method "host" }
+		h		{ set method "host" }
+		ip		{ set method "host" }
+		net		{ set method "host" }
+		mask	{ set method "host" }
+		asn		{ set method "asn" }
+		a		{ set method "asn" }
+		country	{ set method "country" }
+		geo		{ set method "country" }
+		g		{ set method "country" }
+		chan	{ set method "chan" }
+		channel	{ set method "chan" }
+		c		{ set method "chan" }
+		rname	{ set method "rname" }
+		realname { set method "rname" }
+		name	{ set method "rname" }
+		ircname	{ set method "rname" }
+		n		{ set method "rname" }
+		l		{ set method "last" }
+		last	{ set method "last" }
+		text	{ set method "text" }
+		t		{ set method "text" }
 	}
 
 	arm:debug 3 "arm:cmd:view: view type: $list method: $method value: $value"
@@ -7003,7 +7216,7 @@ proc arm:cmd:view {0 1 2 3 {4 ""}  {5 ""}} {
 	if {$list == "dronebl"} {
 		# -- check if libdronebl loaded & user has access
 		if {[info command ::dronebl::submit] == "" || [userdb:uline:get level nick $nick] < $arm(cfg.dronebl.lvl)} {
-			arm:reply $stype $starget "\002usage:\002 view <white|black|id> ?<user|host|rname|regex|country|asn|chan> <value1,value2..>?"
+			arm:reply $stype $starget "\002usage:\002 view <white|black|id> ?<user|host|rname|regex|text|country|asn|chan> <value1,value2..>?"
 			return; 
 		} else {
 			if {$value == "" || $method == ""} {
@@ -7058,11 +7271,12 @@ proc arm:cmd:view {0 1 2 3 {4 ""}  {5 ""}} {
 	
 	set noexist 0
 	set regexmatch 0
+	set textmatch 0
 	
 	# -- loop through comma separated values
-	# -- only do this for types that aren't regex, or rname -- which could include ',' chars
+	# -- only do this for types that aren't regex, text, or rname -- which could include ',' chars
 	set origvalue $value
-	if {$method != "regex" && $method != "rname"} { set tvalue [split $origvalue ,] } else { set tvalue $origvalue }
+	if {$method != "regex" && $method != "rname" && $method != "text"} { set tvalue [split $origvalue ,] } else { set tvalue $origvalue }
 	foreach value $tvalue {
 	
 		if {$list == "white"} {
@@ -7093,8 +7307,18 @@ proc arm:cmd:view {0 1 2 3 {4 ""}  {5 ""}} {
 						set result $bline(regex,$dbid)
 					}
 				}
+			} elseif {$method == "text"} {
+				# -- regex blacklist
+				foreach dbid [array names pattern] {
+					set res [join [split $pattern($dbid)]]
+					arm:debug 3 "arm:cmd:view: res: $res value: $value"
+					if {$res == $value} { 
+						set textmatch 1
+						set result $bline(text,$dbid)
+					}
+				}
 			} else {
-				# -- endof regex blacklist
+				# -- endof regex& text blacklists
 				set tid [arm:get:id black $method $value]
 				set result [arm:get:line $tid]
 				if {$result == ""} { incr noexist; set result "" }
@@ -7103,15 +7327,15 @@ proc arm:cmd:view {0 1 2 3 {4 ""}  {5 ""}} {
 			# -- invalid list type
 			if {[info command ::dronebl::submit] == "" || [userdb:uline:get level nick $nick] < $arm(cfg.dronebl.lvl)} {
 				# -- libdronebl not loaded or user doesn't have sufficient access
-				arm:reply $stype $starget "\002usage:\002 view <white|black|id> ?<user|host|rname|regex|country|asn|chan> <value1,value2..>?";
+				arm:reply $stype $starget "\002usage:\002 view <white|black|id> ?<user|host|rname|regex|text|country|asn|chan> <value1,value2..>?";
 			} else {
 				# -- libdronebl loaded & user has sufficient access
-				arm:reply $stype $starget "\002usage:\002 view <white|black|dronebl|id> ?<user|host|rname|regex|country|asn|chan> <value1,value2..>?";
+				arm:reply $stype $starget "\002usage:\002 view <white|black|dronebl|id> ?<user|host|rname|regex|text|country|asn|chan> <value1,value2..>?";
 			}
 			return;
 		}
 		
-		if {$noexist == 1 || $method == "regex" && $regexmatch == 0} { 
+		if {$noexist == 1 || ($method == "regex" && !$regexmatch) || ($method == "text" && !$textmatch)} { 
 			arm:debug 2 "arm:cmd:view: no such entry exists"
 			arm:reply $type $target "no such entry exists."
 			continue; 
@@ -7153,7 +7377,7 @@ proc arm:cmd:view {0 1 2 3 {4 ""}  {5 ""}} {
 # add a whitelist or blacklist entry
 proc arm:cmd:add {0 1 2 3 {4 ""}  {5 ""}} {
 	global userdb arm
-	global wline bline regex hits
+	global wline bline regex pattern hits
 	# -- recently joined hosts (for fast blacklist entry)
 	global lasthosts
 	# -- nicks on a host
@@ -7213,15 +7437,17 @@ proc arm:cmd:add {0 1 2 3 {4 ""}  {5 ""}} {
 		name	{ set method "rname" }
 		ircname	{ set method "rname" }
 		n		{ set method "rname" }
-		l	{	 set method "last" }
+		l		{ set method "last" }
 		last	{ set method "last" }
+		text	{ set method "text" }
+		t		{ set method "text" }
 		default {
 			if {[info command ::dronebl::submit] == "" || [userdb:uline:get level nick $nick] < $arm(cfg.dronebl.lvl)} {
 				# -- libdronebl not loaded, or no access to dronebl submit
-				arm:reply $stype $starget "\002usage:\002 add <white|black> <user|host|rname|regex|country|asn|chan|last> <value1,value2..> <accept|voice|op|ban> ?joins:secs:hold? \[reason\]"
+				arm:reply $stype $starget "\002usage:\002 add <white|black> <user|host|rname|regex|text|country|asn|chan|last> <value1,value2..> <accept|voice|op|ban> ?joins:secs:hold? \[reason\]"
 			} else {
 				# -- libdronebl loaded & user has access to dronebl submit
-				arm:reply $stype $starget "\002usage:\002 add <white|black|dronebl> <user|host|rname|regex|country|asn|chan|last> <value1,value2..> <accept|voice|op|ban> ?joins:secs:hold? \[reason\]"		
+				arm:reply $stype $starget "\002usage:\002 add <white|black|dronebl> <user|host|rname|regex|text|country|asn|chan|last> <value1,value2..> <accept|voice|op|ban> ?joins:secs:hold? \[reason\]"		
 			}
 			return;
 		}
@@ -7233,19 +7459,19 @@ proc arm:cmd:add {0 1 2 3 {4 ""}  {5 ""}} {
 	else {
 		if {[info command ::dronebl::submit] == "" || [userdb:uline:get level nick $nick] < $arm(cfg.dronebl.lvl)} {
 			# -- libdronebl not loaded, or no access to dronebl submit
-			arm:reply $stype $starget "\002usage:\002 add <white|black> <user|host|rname|regex|country|asn|chan|last> <value1,value2..> <accept|voice|op|ban> ?joins:secs:hold? \[reason\]"
+			arm:reply $stype $starget "\002usage:\002 add <white|black> <user|host|rname|regex|text|country|asn|chan|last> <value1,value2..> <accept|voice|op|ban> ?joins:secs:hold? \[reason\]"
 		} else {
 			# -- libdronebl loaded & user has access to dronebl submit
-			arm:reply $stype $starget "\002usage:\002 add <white|black|dronebl> <user|host|rname|regex|country|asn|chan|last> <value1,value2..> <accept|voice|op|ban> ?joins:secs:hold? \[reason\]"		
+			arm:reply $stype $starget "\002usage:\002 add <white|black|dronebl> <user|host|rname|regex|text|country|asn|chan|last> <value1,value2..> <accept|voice|op|ban> ?joins:secs:hold? \[reason\]"		
 		}
 		return;
 	}
-
+	
 	# -- DroneBL
 	if {$list == "dronebl"} {
 		# -- check if libdronebl loaded & user has access
 		if {[info command ::dronebl::submit] == "" || [userdb:uline:get level nick $nick] < $arm(cfg.dronebl.lvl)} {
-			arm:reply $stype $starget "\002usage:\002 add <white|black> <user|host|rname|regex|country|asn|chan|last> <value1,value2..> <accept|voice|op|ban> ?joins:secs:hold? \[reason\]"
+			arm:reply $stype $starget "\002usage:\002 add <white|black> <user|host|rname|regex|text|country|asn|chan|last> <value1,value2..> <accept|voice|op|ban> ?joins:secs:hold? \[reason\]"
 			return; 
 		} else {
 			if {$value == "" || $method == ""} {
@@ -7323,9 +7549,10 @@ proc arm:cmd:add {0 1 2 3 {4 ""}  {5 ""}} {
 		# -- set the reason position dependant on where the joins:secs:hold is (because 'action' is also optional)
 		if {[regexp -- {(\d+):(\d+)(?::(\d+))?} [lindex $args 4]]} { set tn 5 } else { set tn 4 }
 		# -- limit specified
-		if {$list == "white" || ($method != "host" && $method != "regex")} { arm:reply $type $target "\002(\002error\002)\002 joinflood limit settings only pertinent to 'host' and 'regex' blacklists"; return; }
+		if {$list == "white" || ($method != "host" && $method != "regex" && $method != "text")} { arm:reply $type $target "\002(\002error\002)\002 joinflood limit settings only relevant for host, regex, and text blacklist types"; return; }
 		if {$hold == ""} { set hold $secs }
 		set origlimit "$joins:$secs:$hold"
+		if {$secs == $hold} { set newlimit "$joins:$secs" } else { set newlimit $origlimit }
 		set limit "$joins-$secs-$hold"
 		set reason [lrange $args $tn end]
 	} else {
@@ -7337,11 +7564,17 @@ proc arm:cmd:add {0 1 2 3 {4 ""}  {5 ""}} {
 	if {$list == "" || $method == "" || $value == ""} {
 		if {[info command ::dronebl::submit] == "" || [userdb:uline:get level nick $nick] < $arm(cfg.dronebl.lvl)} {
 			# -- libdronebl not loaded, or no access to dronebl submit
-			arm:reply $stype $starget "\002usage:\002 add <white|black> <user|host|rname|regex|country|asn|chan|last> <value1,value2..> <accept|voice|op|ban> ?joins:secs:hold? \[reason\]"
+			arm:reply $stype $starget "\002usage:\002 add <white|black> <user|host|rname|regex|text|country|asn|chan|last> <value1,value2..> <accept|voice|op|ban> ?joins:secs:hold? \[reason\]"
 		} else {
 			# -- libdronebl loaded & user has access to dronebl submit
-			arm:reply $stype $starget "\002usage:\002 add <white|black|dronebl> <user|host|rname|regex|country|asn|chan|last> <value1,value2..> <accept|voice|op|ban> ?joins:secs:hold? \[reason\]"		
+			arm:reply $stype $starget "\002usage:\002 add <white|black|dronebl> <user|host|rname|regex|text|country|asn|chan|last> <value1,value2..> <accept|voice|op|ban> ?joins:secs:hold? \[reason\]"		
 		}
+		return;
+	}
+	
+	# -- text entries only relevant for blacklists
+	if {$list == "white" && $method == "text"} {
+		arm:reply $type $target "\002(\002error\002)\002 text type is only relevant for blacklists."
 		return;
 	}
 	
@@ -7356,7 +7589,6 @@ proc arm:cmd:add {0 1 2 3 {4 ""}  {5 ""}} {
 	# -- check if already exists
 	set exists 0
 	if {$method == "regex"} {
-		
 		# -- check if already exists
 		foreach id [array names regex] {
 			if {$value == $regex($id)} { 
@@ -7366,12 +7598,31 @@ proc arm:cmd:add {0 1 2 3 {4 ""}  {5 ""}} {
 				return; 
 			}
 		}
-			
 		# -- regex is method, validate expression (we don't want regex errors ie. invalid backreference)
 		catch { regexp -- $value "nick!user@host/rname" } err
 		if {$err != 0} {
 			arm:reply $type $target "error: $err"
 			return;
+		}
+	}
+
+	# -- text blacklist type
+	if {$method == "text"} {
+		set value [join $value]
+		# -- check if already exists
+		foreach id [array names pattern] {
+			if {$value == $pattern($id)} { 
+				if {[info exists bline(text,$id)]} { set thelist "blacklist"; } else { set thelist "blacklist"; }
+				arm:reply $type $target "error: a matching $thelist entry already exists. (id: $id type: text value: $value)"; 
+				return; 
+			}
+		}
+		# -- regex is method, validate expression (we don't want regex errors ie. invalid backreference)
+		catch { regexp -- $value "nick!user@host/rname" } err
+		if {$err != 0} {
+			arm:debug 4 "arm:cmd:add: pattern $value is not a regular expression."; # -- allow it anyway for now
+			#arm:reply $type $target "error: $err"
+			#return;
 		}
 	}
 	
@@ -7479,7 +7730,7 @@ proc arm:cmd:add {0 1 2 3 {4 ""}  {5 ""}} {
 		set id [arm:db:add $line]
 		set hits($id) 0
 	
-		if {$limit != "1-1-1"} { set textlimit " \002limit:\002 $origlimit "  } else { set textlimit " " }
+		if {$limit != "1-1-1"} { set textlimit " \002limit:\002 $newlimit "  } else { set textlimit " " }
 	
 		if {$reason != ""} { arm:reply $type $target "added $method ${list}list entry (\002id:\002 $id \002value:\002 $value \002action:\002 ${theaction}${textlimit}\002reason:\002 $reason)" } \
 		else { arm:reply $type $target "added $method ${list}list entry (\002id:\002 $id \002value:\002 $value \002action:\002 ${theaction}${textlimit})" }
@@ -7488,7 +7739,7 @@ proc arm:cmd:add {0 1 2 3 {4 ""}  {5 ""}} {
 		if {$theaction == "kickban" && $arm(cfg.ban.auto)} {
 			set hit 0
 			set addban 0
-			if {$method == "user"} { set mask "*!*@$tvalue.users.undernet.org"; set addban 1 }
+			if {$method == "user"} { set mask "*!*@$tvalue.$arm(cfg.xhost)"; set addban 1 }
 			if {$method == "host"} {
 				if {[regexp -- {\*} $tvalue]} { set mask $tvalue } else { set mask "*!*@$tvalue" }
 				set addban 1
@@ -7521,7 +7772,7 @@ proc arm:cmd:add {0 1 2 3 {4 ""}  {5 ""}} {
 # remove a whitelist or blacklist entry
 proc arm:cmd:rem {0 1 2 3 {4 ""}  {5 ""}} {
 	global userdb arm
-	global wline bline regex fline hits
+	global wline bline regex pattern fline hits idban
 	set type $0
 	if {$type == "pub"} {
 		set nick $1; set uh $2; set hand $3; set chan $4; set args $5; set target $chan; set source "$nick!$uh"
@@ -7551,10 +7802,10 @@ proc arm:cmd:rem {0 1 2 3 {4 ""}  {5 ""}} {
 	if {$list == ""} {
 		if {[info command ::dronebl::submit] == "" || [userdb:uline:get level nick $nick] < $arm(cfg.dronebl.lvl)} {
 			# -- libdronebl not loaded or user does not have submit access
-			arm:reply $stype $starget "\002usage:\002 rem <white|black|id> ?<user|host|rname|regex|country|asn|chan> <value1,value2..>?"
+			arm:reply $stype $starget "\002usage:\002 rem <white|black|id> ?<user|host|rname|regex|text|country|asn|chan> <value1,value2..>?"
 		} else {
 			# -- libdronebl loaded & user has submit access
-			arm:reply $stype $starget "\002usage:\002 rem <white|black|dronebl|id> ?<user|host|rname|regex|country|asn|chan> <value1,value2..>? \[type\]"
+			arm:reply $stype $starget "\002usage:\002 rem <white|black|dronebl|id> ?<user|host|rname|regex|text|country|asn|chan> <value1,value2..>? \[type\]"
 		}
 		return;
 	}
@@ -7590,13 +7841,17 @@ proc arm:cmd:rem {0 1 2 3 {4 ""}  {5 ""}} {
 					unset wline(regex,$id)
 				}
 			} else {
-				# -- blacklist
-				if {$method != "regex"} {
-					unset bline($method,$value)
-				} else {
+				# -- blacklist					
+				if {$method == "regex"} {
 					# -- regex blacklist
 					unset regex($id)
 					unset bline(regex,$id)
+				} elseif {$method == "text"} {
+					# -- text blacklist
+					unset pattern($id)
+					unset bline(text,$id)				
+				} else {
+					unset bline($method,$value)
 				}
 				# -- unset flood detection cumulative limit if exists
 				if {[info exists fline($method,$value)]} { unset fline($method,$value) }
@@ -7620,14 +7875,27 @@ proc arm:cmd:rem {0 1 2 3 {4 ""}  {5 ""}} {
 			}
 			
 			# -- try to remove any existing ban?
-			if {$method == "host"} {
-				arm:debug 2 "arm:cmd:rem: attempting to remove an assocated host ban"
+			set mask ""; set bantype ""
+			if {[info exists idban($id)]} {
+				set mask $idban($id)
+			} elseif {$method == "host"} {
+				set bantype " host"
 				if {[regexp -- {\*} $value]} { set mask $value } else { set mask "*!*@$value" }
-				putquick "PRIVMSG X :UNBAN $chan $mask"
-			} elseif {$method == "user"} {
-				arm:debug 2 "arm:cmd:rem: attempting to remove an assocated xuser ban"
-				set mask "*!*@$value.users.undernet.org"
-				putquick "PRIVMSG X :UNBAN $chan $mask"
+			} elseif {$method == "user" || $method == "xuser"} {
+				set bantype " user"
+				set mask "*!*@$value.$arm(cfg.xhost)"
+			} 
+			
+			if {$mask != ""} {
+				# -- attempt the unban
+				arm:debug 2 "arm:cmd:rem: attempting to remove an assocated${bantype} ban"
+				if {$arm(cfg.ban) == "chan"} {
+					# -- channel unban
+					putquick "MODE $chan -b $mask"
+				} elseif {$arm(cfg.ban) == "x"} {
+					# -- set service unban
+					putquick "PRIVMSG $arm(cfg.gnuworld.nick) :UNBAN $chan $mask"
+				}
 			}
 	
 			arm:debug 1 "arm:cmd:rem: removed $list $method entry $tmethod: $value action: $action reason: $reason"
@@ -7653,6 +7921,8 @@ proc arm:cmd:rem {0 1 2 3 {4 ""}  {5 ""}} {
 	switch -- $method {
 		regex	{ set method "regex" }
 		r		{ set method "regex" }
+		text	{ set method "text" }
+		t		{ set method "text" }
 		user	{ set method "user" }
 		u		{ set method "user" }
 		xuser	{ set method "user" }
@@ -7677,10 +7947,10 @@ proc arm:cmd:rem {0 1 2 3 {4 ""}  {5 ""}} {
 		default {
 			if {[info command ::dronebl::submit] == "" || [userdb:uline:get level nick $nick] < $arm(cfg.dronebl.lvl)} {
 				# -- libdronebl not loaded or user does not have submit access
-				arm:reply $stype $starget "\002usage:\002 rem <white|black|id> ?<user|host|rname|regex|country|asn|chan> <value1,value2..>?"
+				arm:reply $stype $starget "\002usage:\002 rem <white|black|id> ?<user|host|rname|regex|text|country|asn|chan> <value1,value2..>?"
 			} else {
 				# -- libdronebl loaded & user has submit access
-				arm:reply $stype $starget "\002usage:\002 rem <white|black|dronebl|id> ?<user|host|rname|regex|country|asn|chan> <value1,value2..>? \[type\]"
+				arm:reply $stype $starget "\002usage:\002 rem <white|black|dronebl|id> ?<user|host|rname|regex|text|country|asn|chan> <value1,value2..>? \[type\]"
 			}
 			return;
 		}
@@ -7692,10 +7962,10 @@ proc arm:cmd:rem {0 1 2 3 {4 ""}  {5 ""}} {
 	else {
 		if {[info command ::dronebl::submit] == "" || [userdb:uline:get level nick $nick] < $arm(cfg.dronebl.lvl)} {
 			# -- libdronebl not loaded or user does not have submit access
-			arm:reply $stype $starget "\002usage:\002 rem <white|black|id> ?<user|host|rname|regex|country|asn|chan> <value1,value2..>?"
+			arm:reply $stype $starget "\002usage:\002 rem <white|black|id> ?<user|host|rname|regex|text|country|asn|chan> <value1,value2..>?"
 		} else {
 			# -- libdronebl loaded & user has submit access
-			arm:reply $stype $starget "\002usage:\002 rem <white|black|dronebl|id> ?<user|host|rname|regex|country|asn|chan> <value1,value2..>? \[type\]"
+			arm:reply $stype $starget "\002usage:\002 rem <white|black|dronebl|id> ?<user|host|rname|regex|text|country|asn|chan> <value1,value2..>? \[type\]"
 		}
 		return;
 	}
@@ -7704,7 +7974,7 @@ proc arm:cmd:rem {0 1 2 3 {4 ""}  {5 ""}} {
 	if {$list == "dronebl"} {
 		# -- check if libdronebl loaded & user has access
 		if {[info command ::dronebl::submit] == "" || [userdb:uline:get level nick $nick] < $arm(cfg.dronebl.lvl)} {
-			arm:reply $stype $starget "\002usage:\002 rem <white|black|id> ?<user|host|rname|regex|country|asn|chan> <value1,value2..>?"
+			arm:reply $stype $starget "\002usage:\002 rem <white|black|id> ?<user|host|rname|regex|text|country|asn|chan> <value1,value2..>?"
 			return; 
 		} else {
 			if {$value == "" || $method == ""} {
@@ -7713,7 +7983,6 @@ proc arm:cmd:rem {0 1 2 3 {4 ""}  {5 ""}} {
 			}
 		
 		}
-		
 		
 		set ttype [lindex $args 3]
 		
@@ -7772,15 +8041,15 @@ proc arm:cmd:rem {0 1 2 3 {4 ""}  {5 ""}} {
 		
 		return;
 	}
-	# -- end dronebl add
+	# -- end dronebl rem
 	
 	if {$list == "" || $method == "" || $value == ""} {
 		if {[info command ::dronebl::submit] == "" || [userdb:uline:get level nick $nick] < $arm(cfg.dronebl.lvl)} {
 			# -- libdronebl not loaded or user does not have submit access
-			arm:reply $stype $starget "\002usage:\002 rem <white|black|id> ?<user|host|rname|regex|country|asn|chan> <value1,value2..>?"
+			arm:reply $stype $starget "\002usage:\002 rem <white|black|id> ?<user|host|rname|regex|text|country|asn|chan> <value1,value2..>?"
 		} else {
 			# -- libdronebl loaded & user has submit access
-			arm:reply $stype $starget "\002usage:\002 rem <white|black|dronebl|id> ?<user|host|rname|regex|country|asn|chan> <value1,value2..>? \[type\]"
+			arm:reply $stype $starget "\002usage:\002 rem <white|black|dronebl|id> ?<user|host|rname|regex|text|country|asn|chan> <value1,value2..>? \[type\]"
 		}
 		return;
 	}
@@ -7788,11 +8057,12 @@ proc arm:cmd:rem {0 1 2 3 {4 ""}  {5 ""}} {
 	
 	set noexist 0
 	set regexmatch 0
+	set textmatch 0
 	
 	set origvalue $value
 	# -- loop through comma separated values
-	# -- only do this for types that aren't regex, or rname -- which could include ',' chars
-	if {$method != "regex" && $method != "rname"} { set tvalue [split $origvalue ,] } else { set tvalue $origvalue }
+	# -- only do this for types that aren't regex, text, or rname -- which could include ',' chars
+	if {$method != "regex" && $method != "rname" && $method != "text"} { set tvalue [split $origvalue ,] } else { set tvalue $origvalue }
 	foreach value $tvalue {
 	
 		# -- determine what list to remove from
@@ -7849,6 +8119,25 @@ proc arm:cmd:rem {0 1 2 3 {4 ""}  {5 ""}} {
 						break;
 					}
 				}
+			} elseif {$method == "text"} {
+				# -- regex blacklist
+				foreach dbid [array names pattern] {
+					#set res [split $pattern($dbid)]
+					set res $pattern($dbid)
+					arm:debug 2 "arm:cmd:rem: res: $res value: $value"
+					if {$res == $value} { 
+						set textmatch 1
+						set id $dbid
+						set action [lindex [split $bline(text,$dbid) :] 6]
+						set limit [lindex [split $bline(text,$dbid) :] 7]
+						set reason [lrange [split $bline(text,$dbid) :] 9 end]
+						unset bline(text,$dbid)
+						unset pattern($dbid)
+						# -- remove fline in case it exists (floodnet detection)
+						if {[info exists fline($method,$value)]} { unset fline($method,$value) }
+						break;
+					}
+				}
 			} elseif {![info exists bline($method,$value)]} { set noexist 1 } \
 				else {
 					set id [lindex [split $bline($method,$value) :] 1]
@@ -7863,17 +8152,20 @@ proc arm:cmd:rem {0 1 2 3 {4 ""}  {5 ""}} {
 			# -- unknown
 			if {[info command ::dronebl::submit] == "" || [userdb:uline:get level nick $nick] < $arm(cfg.dronebl.lvl)} {
 				# -- libdronebl not loaded or user does not have submit access
-				arm:reply $stype $starget "\002usage:\002 rem <white|black|id> ?<user|host|rname|regex|country|asn|chan> <value1,value2..>?"
+				arm:reply $stype $starget "\002usage:\002 rem <white|black|id> ?<user|host|rname|regex|text|country|asn|chan> <value1,value2..>?"
 			} else {
 				# -- libdronebl loaded & user has submit access
-				arm:reply $stype $starget "\002usage:\002 rem <white|black|dronebl|id> ?<user|host|rname|regex|country|asn|chan> <value1,value2..>? \[type\]"
+				arm:reply $stype $starget "\002usage:\002 rem <white|black|dronebl|id> ?<user|host|rname|regex|text|country|asn|chan> <value1,value2..>? \[type\]"
 			}
 			continue;
 		}
 		
 		
 		# -- error if entry didn't exist
-		if {$noexist || $method == "regex" && !$regexmatch} { arm:reply $type $target "$method $list entry $value does not exist"; continue; }
+		if {$noexist || ($method == "regex" && !$regexmatch) || ($method == "text" && !$textmatch)} {
+			arm:reply $type $target "$method $list entry $value does not exist";
+			continue;
+		}
 		
 		# -- remove from sqlite if in use
 		if {$userdb(method) == "sqlite"} {
@@ -7885,16 +8177,29 @@ proc arm:cmd:rem {0 1 2 3 {4 ""}  {5 ""}} {
 		} else { set tmethod "from file" }
 		
 		arm:debug 1 "arm:cmd:rem: removed $method $list entry $tmethod: $value reason: $reason"
-	
+		
 		# -- try to remove any existing ban?
-		if {$method == "host"} { 
-			arm:debug 2 "arm:cmd:rem: attempting to remove an assocated host ban"
+		set mask ""; set bantype ""
+		if {[info exists idban($id)]} {
+			set mask $idban($id)
+		} elseif {$method == "host"} {
+			set bantype " host"
 			if {[regexp -- {\*} $value]} { set mask $value } else { set mask "*!*@$value" }
-			putquick "PRIVMSG X :UNBAN $chan $mask"
-		} elseif {$method == "xuser"} {
-			arm:debug 2 "arm:cmd:rem: attempting to remove an assocated xuser ban"
-			mask "*!*@$value.users.undernet.org"
-			putquick "PRIVMSG X :UNBAN $chan $mask"
+		} elseif {$method == "user" || $method == "xuser"} {
+			set bantype " user"
+			set mask "*!*@$value.$arm(cfg.xhost)"
+		} 
+		
+		if {$mask != ""} {
+			# -- attempt the unban
+			arm:debug 2 "arm:cmd:rem: attempting to remove an assocated${bantype} ban"
+			if {$arm(cfg.ban) == "chan"} {
+				# -- channel unban
+				putquick "MODE $chan -b $mask"
+			} elseif {$arm(cfg.ban) == "x"} {
+				# -- set service unban
+				putquick "PRIVMSG $arm(cfg.gnuworld.nick) :UNBAN $chan $mask"
+			}
 		}
 		
 		switch -- $action {
@@ -8081,7 +8386,7 @@ proc arm:raw:join {nick uhost hand chan} {
 	}
 	
 	# -- exempt if umode +x
-	if {[string match -nocase "*.users.undernet.org" $host] && !$exempt($nick)} { 
+	if {[string match -nocase "*.$arm(cfg.xhost)" $host] && !$exempt($nick)} { 
 		arm:debug 1 "arm:raw:join: [join $nick]!$uhost is umode +x (exempt from floodnet detection)" 
 		set exempt($nick) 1
 	}
@@ -8398,12 +8703,10 @@ proc arm:raw:fullbanlist {server cmd args} {
 	}
 	
 	# -- use generic ban
-	putquick "PRIVMSG X :BAN $chan $banmask $arm(cfg.ban.time) $arm(cfg.ban.level) Armour: generic ban (full banlist)" -next
-	
+	if {$arm(cfg.ban) == "x"} {
+		putquick "PRIVMSG $arm(cfg.gnuworld.nick) :BAN $chan $banmask $arm(cfg.ban.time) $arm(cfg.ban.level) Armour: generic ban (full banlist)" -next
+	}
 }
-
-
-			
 
 # -- signoff procedure to exempt clients from adaptive scans when setting umode +x
 proc arm:raw:quit {nick uhost hand chan reason} {
@@ -8412,6 +8715,8 @@ proc arm:raw:quit {nick uhost hand chan reason} {
 	
 	set nick [split $nick]
 	set host [lindex [split $uhost @] 1]
+	
+	arm:debug 4 "arm:raw:quit: quit detected in $chan: [join $nick]!$uhost (reason: $reason)"
 	
 	# -- remove nick from hostnicks if exists
 	if {[info exists hostnicks($host)]} {
@@ -8453,8 +8758,6 @@ proc arm:raw:quit {nick uhost hand chan reason} {
 	
 	if {[info exists nickhost($nick)]} { unset nickhost($nick) }
 	if {[info exists fullname($nick)]} { unset fullname($nick) }
-		
-	arm:debug 4 "arm:raw:quit: quit detected in $chan: [join $nick]!$uhost (reason: $reason)"
 	
 	# -- those who set umode +x
 	if {$reason == "Registered"} {
@@ -8860,6 +9163,8 @@ arm:debug 0 "\[@\] Armour: loaded raw functions."
 # core list scanner (triggered by /who responses)
 #
 
+bind pubm - * { arm:coroexec arm:pubm:scan }; # -- scanner for 'text' blacklist entries
+
 proc arm:scan {nick ident ip host xuser rname} {
 	global userdb arm botnick
 	global full fullname chanban
@@ -8876,9 +9181,11 @@ proc arm:scan {nick ident ip host xuser rname} {
 	# -- track nicks on the host
 	global hostnicks
 	
-	# -- NEW SINCE LOCKOUT
+	# -- chan join time; recent join tracker; manual exempt
 	global jointime newjoin override
-		
+	
+	# -- banmask tracker to allow recent unbans from blacklist removal
+	global idban
 	
 	global botnet-nick
 
@@ -9418,6 +9725,7 @@ proc arm:scan {nick ident ip host xuser rname} {
 				# -- truncate reason for X bans
 				if {[string tolower $arm(cfg.ban)] == "x" && [string length $string] >= 124} { set string "[string range $string 0 124]..." }
 				arm:kickban $nick $chan *!*@$host $arm(cfg.ban.time) "$string"
+				set idban($id) "*!*@$host"; utimer $arm(cfg.idunban.time) "unset idban($id)"; # -- allow automatic unban of recently banned mask, when removing blacklist by id
 				arm:report black $chan "Armour: $nick!$ident@$host blacklisted (\002id:\002 $id \002type:\002 $method \002value:\002 $value \002reason:\002 $reason)"
 				# -- incr statistics
 				incr hits([arm:get:id black $method $value])
@@ -9477,6 +9785,7 @@ proc arm:scan {nick ident ip host xuser rname} {
 				# -- truncate reason for X bans
 				if {[string tolower $arm(cfg.ban)] == "x" && [string length $string] >= 124} { set string "[string range $string 0 124]..." }
 				arm:kickban $nick $chan *!*@$host $arm(cfg.ban.time) "$string"
+				set idban($id) "*!*@$host"; utimer $arm(cfg.idunban.time) "unset idban($id)"; # -- allow automatic unban of recently banned mask, when removing blacklist by id
 				arm:report black $chan "Armour: $nick!$ident@$host blacklisted (\002id:\002 $id \002type:\002 $method \002value:\002 $value \002reason:\002 $reason)"
 				# -- incr statistics
 				incr hits([arm:get:id black $method $value])
@@ -9506,6 +9815,7 @@ proc arm:scan {nick ident ip host xuser rname} {
 				# -- truncate reason for X bans
 				if {[string tolower $arm(cfg.ban)] == "x" && [string length $string] >= 124} { set string "[string range $string 0 124]..." }
 				arm:kickban $nick $chan *!*@$host $arm(cfg.ban.time) "$string"
+				set idban($id) "*!*@$host"; utimer $arm(cfg.idunban.time) "unset idban($id)"; # -- allow automatic unban of recently banned mask, when removing blacklist by id
 				arm:report black $chan "Armour: $nick!$ident@$host blacklisted (\002id:\002 $id \002type:\002 $method \002value:\002 $value \002reason:\002 $reason)"
 				# -- incr statistics
 				incr hits([arm:get:id black $method $value])
@@ -9540,6 +9850,7 @@ proc arm:scan {nick ident ip host xuser rname} {
 				# -- truncate reason for X bans
 				if {[string tolower $arm(cfg.ban)] == "x" && [string length $string] >= 124} { set string "[string range $string 0 124]..." }
 				arm:kickban $nick $chan *!*@$host $arm(cfg.ban.time) "$string"
+				set idban($id) "*!*@$host"; utimer $arm(cfg.idunban.time) "unset idban($id)"; # -- allow automatic unban of recently banned mask, when removing blacklist by id
 				arm:report black $chan "Armour: $nick!$ident@$host blacklisted (\002id:\002 $id \002type:\002 $method \002value:\002 [join $exp] \002reason:\002 $reason)"
 				# -- incr statistics
 				incr hits([arm:get:id black $method [join $exp]])
@@ -9576,6 +9887,7 @@ proc arm:scan {nick ident ip host xuser rname} {
 				# -- truncate reason for X bans
 				if {[string tolower $arm(cfg.ban)] == "x" && [string length $string] >= 124} { set string "[string range $string 0 124]..." }
 				arm:kickban $nick $chan *!*@$host $arm(cfg.ban.time) "$string"
+				set idban($id) "*!*@$host"; utimer $arm(cfg.idunban.time) "unset idban($id)"; # -- allow automatic unban of recently banned mask, when removing blacklist by id
 				arm:report black $chan "Armour: $nick!$ident@$host blacklisted (\002id:\002 $id \002type:\002 $method \002value:\002 $country \002reason:\002 $reason)"
 				# -- incr statistics
 				incr hits([arm:get:id black $method $value])
@@ -9608,6 +9920,7 @@ proc arm:scan {nick ident ip host xuser rname} {
 				# -- truncate reason for X bans
 				if {[string tolower $arm(cfg.ban)] == "x" && [string length $string] >= 124} { set string "[string range $string 0 124]..." }
 				arm:kickban $nick $chan *!*@$host $arm(cfg.ban.time) "$string"
+				set idban($id) "*!*@$host"; utimer $arm(cfg.idunban.time) "unset idban($id)"; # -- allow automatic unban of recently banned mask, when removing blacklist by id
 				arm:report black $chan "Armour: $nick!$ident@$host blacklisted (\002id:\002 $id \002type:\002 $method \002value:\002 $asn \002reason:\002 $reason)"
 				# -- incr statistics
 				incr hits([arm:get:id black $method $value])
@@ -9895,13 +10208,272 @@ proc arm:scan:continue {nick ident ip host xuser rname chan} {
 }
 
 
+# -- scanner for 'text' type blacklist entries
+# -- public chatter matching using standard wildcard or regex entries
+proc arm:pubm:scan {nick uhost hand chan text} {
+	global arm botnick bline pattern fline hits
+	global textflud lineflud
+	global override
+	global idban
+	
+	set start [clock clicks]
+	
+	if {$nick == $botnick} { return; }; # -- ignore text from bot
+	if {![userdb:isValidchan $chan]} { return; }; # -- only run on main scan chan
+	
+	# -- tidy nick
+	set nick [split $nick]
+
+	set ident [lindex [split $uhost @] 0]
+	set host [lindex [split $uhost @] 1]
+	
+	set exempt(text) 0; set exempt(lines) 0;
+	
+	# -- check if nick has newly joined
+	if {[info exists newjoin($nick)]} { set newcomer 1 } else { set newcomer 0 }
+	
+	# -- exempt if overridden from 'exempt' command
+	if {[info exists override($nick)]} {
+		arm:debug 5 "arm:pubm:scan: client manually exempted (cmd: exempt) from channel text matching ($nick!$uhost)"
+		set exempt(text) 1	
+	}
+	
+	# -- exempt if opped on common chan
+	if {[isop $nick $chan] && $arm(cfg.text.exempt.op)} {
+		arm:debug 5 "arm:pubm:scan: opped nick exempted from channel text matching ($nick!$uhost)"
+		set exempt(text) 1
+	}
+
+	# -- exempt if voiced on common chan
+	if {[isvoice $nick $chan] && $arm(cfg.text.exempt.voice)} {
+		arm:debug 5 "arm:pubm:scan: voiced nick exempted from channel text matching ($nick!$uhost)"
+		set exempt(text) 1
+	}
+	
+	# -- exempt if nick has recently joined
+	if {$arm(cfg.text.newcomer) && $newcomer} {
+		arm:debug 5 "arm:pubm:scan: newcomer nick exempted from channel text matching ($nick!$uhost)"
+		set exempt(text) 1
+	}
+
+	# -- exempt if opped on common chan
+	if {[isop $nick $chan] && $arm(cfg.lineflood.exempt.op)} {
+		arm:debug 5 "arm:pubm:scan: opped nick exempted from channel lineflood matching ($nick!$uhost)"
+		set exempt(lines) 1
+	}
+
+	# -- exempt if voiced on common chan
+	if {[isvoice $nick $chan] && $arm(cfg.lineflood.exempt.voice)} {
+		arm:debug 5 "arm:pubm:scan: voiced nick exempted from channel lineflood matching ($nick!$uhost)"
+		set exempt(lines) 1
+	}
+	
+	# -- exempt if nick has newly joined
+	if {$arm(cfg.lineflood.newcomer) && $newcomer} {
+		arm:debug 5 "arm:pubm:scan: newcomer nick exempted from channel lineflood matching ($nick!$uhost)"
+		set exempt(lines) 1
+	}	
+	
+	# -- line flood counters -- for the nickname
+	set linehit(nick) 0; set linehit(chan) 0; set action(lines) 0
+	# -- only continue if not already exempt for lineflood matching
+	if {!$exempt(lines)} {
+		if {$arm(cfg.lineflood.nicks) != ""} {
+			# -- line flood tracking for nicknames is enabled
+			if {![regexp -- {^\d+:\d+$} $arm(cfg.lineflood.nicks)]} {
+				arm:debug 0 "arm:pubm:scan: \002(error)\002 invalid value for config setting arm(cfg.lineflood.nicks)"
+			} else {
+				# -- config value is good
+				set llines [lindex [split $arm(cfg.lineflood.nicks) :] 0]
+				set lsecs [lindex [split $arm(cfg.lineflood.nicks) :] 1]
+				if {[info exists lineflud($nick)]} {
+					incr lineflud($nick)
+				} else {
+					set lineflud($nick) 1
+				}
+				if {$lineflud($nick) >= $llines} {
+					# -- hit!
+					set linehit(nick) 1; set action(lines) 1
+					arm:debug 1 "arm:pubm:scan: lineflood hit! match on $lineflud($nick) lines (nick: $nick!$uhost)"
+				}
+				utimer $lsecs "arm:lineflud:decr $nick";	# -- decrease the counter by 1 x line
+			}
+		}
+
+		# -- line flood counters -- for the channel
+		if {$arm(cfg.lineflood.chan) != ""} {
+			# -- line flood tracking for nicknames is enabled
+			if {![regexp -- {^\d+:\d+$} $arm(cfg.lineflood.chan)]} {
+				arm:debug 0 "arm:pubm:scan: \002(error)\002 invalid value for config setting arm(cfg.lineflood.chan)"
+			} else {
+				# -- config value is good
+				set llines [lindex [split $arm(cfg.lineflood.chan) :] 0]
+				set lsecs [lindex [split $arm(cfg.lineflood.chan) :] 1]
+				if {[info exists lineflud($chan)]} {
+					incr lineflud($chan)
+				} else {
+					set lineflud($chan) 1
+				}
+				if {$lineflud($chan) >= $llines} {
+					# -- hit!
+					set linehit(chan) 1; set action(lines) 1
+					arm:debug 1 "arm:pubm:scan: lineflood hit! match on $lineflud($chan) lines (chan: $chan)"
+				}
+				utimer $lsecs "arm:lineflud:decr $chan";	# -- decrease the counter by 1 x line
+			}
+		}
+	}
+	# -- end of lineflood exemption
+	
+	# -- begin textflood matching
+	set action(text) 0; set hit(text) 0
+	if {!$exempt(text)} {
+		set ids ""
+		# -- find all the text type blacklist entries
+		foreach entry [array names bline] {
+			set method [lindex [split $entry ,] 0]
+			if {$method != "text"} { continue; }; # -- we're only interested in text entries
+			set id [lindex [split $entry ,] 1]
+			lappend ids $id
+		}
+		
+		# -- match the actual text against all entries
+		foreach id $ids {
+			set value $pattern($id)
+			# -- try wildcard first
+			if {[string match [string tolower $value] $text]} {
+				# -- wildcard hit!
+				set hit(text) 1
+				arm:debug 1 "arm:pubm:scan: wildcard hit! pattern($id) of value: $value (nick: $nick -- text: $text)"
+				break;
+			} else {
+				# -- try regex match
+				catch { regexp -nocase -- $value $text } err
+				if {$err == 1} {
+					# -- regex hit!
+					set hit(text) 1
+					arm:debug 1 "arm:pubm:scan: pattern($id) hit! match of value: $value (nick: $nick -- text: $text)"
+					break;
+				} elseif {$err == 0} {
+					# -- error; probably just a wildcard
+					#arm:debug 0 "arm:pubm:scan: \002(error)\002 regexp parse err: $err"
+				}
+			}
+		}
+		
+		if {$hit(text)} {
+			# -- match: blacklist entry, take action!
+			set limit [lindex [split $bline(text,$id) :] 7]
+			if {$limit != "1-1-1"} { 
+				# -- check cumulative count
+				
+				# -- set or increase existing counter
+				if {![info exists textflud($nick,$value)]} {
+					set textflud($nick,$value) 1
+				} else { incr textflud($nick,$value) }
+				
+				set extlimit [split $limit "-"]
+				lassign $extlimit matches secs hold
+				
+				if {$textflud($nick,$value) >= $matches} {
+					# -- cumulative match threshold reached!
+					set action(text) 1
+					# -- extend timer by secs
+				} else {
+					if {$textflud($nick,$value) == 1} {
+						# -- check if we need to warn them
+						if {$arm(cfg.text.warn)} {
+							# -- send a warning
+							if {$arm(cfg.text.warn.type) == "notc"} {
+								# -- send via /notice
+								arm:reply notc $nick $arm(cfg.text.warn.msg)
+							} elseif {$arm(cfg.text.warn.type) == "chan"} {
+								# -- send to public chan
+								arm:reply msg $chan "$nick: $arm(cfg.text.warn.msg)"
+							} else {
+								arm:debug 0 "arm:pubm:scan: \002(error)\002 invalid value for config setting arm(cfg.text.warn.type)"
+							}
+						}
+					}
+					# -- set timer to unset after secs
+					set thevar "$nick,$value"
+					utimer $secs "arm:textflud:unset $thevar"
+				}
+			} else { set action(text) 1 }; # -- this is a hit because it's a single 1:1 match
+		}; # -- end of text hit
+	}
+	# -- end of textflood exemption
+
+	# -- do we add an automatic blacklist entry?
+	if {($arm(cfg.text.autoblack) || $arm(cfg.lineflood.autoblack)) && ($action(text) || $action(lines))} {
+		# -- add the entry!
+		if {[regexp -- $arm(cfg.xregex) $host -> xuser]} {
+			# -- user is umode +x
+			set ttype "xuser"
+			set entry $xuser
+		} else {
+			# -- normal host entry
+			set ttype "host"
+			set entry $host
+		}
+		if {![info exists bline($ttype,$entry)]} {
+			# -- add automatic blacklist entry
+			if {$action(text)} {
+				set reason $arm(cfg.text.autoblack.reason)
+			} else {
+				set reason $arm(cfg.lineflood.autoblack.reason)
+			}
+			# -- get next id
+			set id [arm:get:nextID]
+			set line "B:$id:$ttype:$entry:[unixtime]:Armour:B:1-1-1:0:$reason"
+			arm:debug 1 "arm:pubm:scan: adding auto blacklist line: $line"
+			# -- add the list entry
+			arm:db:add $line
+		}
+	}
+	
+	# -- take action!
+	if {$action(text)} {
+		set reason [join [lrange [split $bline(text,$id) :] 9 end]]
+		set runtime [arm:runtime $start]
+		arm:debug 1 "arm:scan: blacklist matched $nick!$uhost: pattern($id) id: $id -- $value -- taking action! ($runtime)"
+		arm:debug 2 "arm:scan: ------------------------------------------------------------------------------------"
+		set string "Armour: blacklisted text (reason: $reason) \[id: $id\]"
+		# -- truncate reason for X bans
+		if {[string tolower $arm(cfg.ban)] == "x" && [string length $string] >= 124} { set string "[string range $string 0 124]..." }
+		arm:kickban $nick $chan *!*@$host $arm(cfg.ban.time) "$string"
+		arm:report black $chan "Armour: blacklisted text (\002id:\002 $id \002type:\002 text \002value:\002 $value \002reason:\002 $reason)"
+		# -- incr statistics
+		incr hits($id)
+		set idban($id) "*!*@$host"; utimer $arm(cfg.idunban.time) "unset idban($id)"; # -- allow automatic unban of recently banned mask, when removing blacklist by id
+		return;
+	} elseif {$hit(text)} {
+		# -- cumulative match not yet reached
+		set runtime [arm:runtime $start]
+		arm:debug 1 "arm:pubm:scan: cumulative match (current: $textflud($nick,$value)) not yet found (required: $matches)! (runtime: $runtime -- nick: $nick -- text: $text)"
+	}
+	
+	# -- line flood matching.
+	# -- we do these separately to focus on individual floods first
+	if {$linehit(chan)} {
+		# -- channel reached line threshold
+		if {$arm(cfg.lineflood.chan.mode) != ""} {
+			# -- temporarily lockdown channel
+			putnow "MODE $chan $arm(cfg.lineflood.chan.mode)"
+			arm:reply notc "@$chan" "Armour: line flood detected -- temporarily locking channel for $arm(cfg.lineflood.chan.lock) secs (exceeded $llines lines in $lsecs secs)"
+			# -- remove the lock after the configured timer
+			utimer $arm(cfg.lineflood.chan.lock) "arm:lineflud:unmode $chan"
+			
+		}
+	}
+	if {$linehit(nick)} {
+		# -- nickname reached line threshold
+		arm:kickban $nick $chan *!*@$host $arm(cfg.ban.time) $arm(cfg.lineflood.reason)
+	}
+}
+
 
 arm:debug 0 "\[@\] Armour: loaded scanner."
-
-
-
-
-
 # ------------------------------------------------------------------------------------------------
 # Armour: merged from arm-15_floodnet.tcl
 #
@@ -10589,7 +11161,7 @@ arm:debug 0 "\[@\] Armour: loaded floodnet detection."
 # type:id:method:value:timestamp:modifby:action:limit:hits:reason
 proc arm:db:add {string} {
 	global arm userdb
-	global uline wline bline regex
+	global uline wline bline regex pattern
 	global fline
 	
 	set list [split $string :]	
@@ -10627,8 +11199,9 @@ proc arm:db:add {string} {
 		# -- blacklist
 		set llist "blacklist"
 		set array "bline"
-		if {$limit != "1-1-1" && ($method == "regex" || $method == "host")} { set fline($method,$value) "$limit [join [lrange $list 8 end]]" } 
+		if {$limit != "1-1-1" && ($method == "regex" || $method == "host" || $method == "text")} { set fline($method,$value) "$limit [join [lrange $list 9 end]]" } 
 		if {$method == "regex"} { set bline(regex,$id) $string; set regex($id) $value } \
+		elseif {$method == "text"} { set bline(text,$id) $string; set pattern($id) $value } \
 		else { set bline($method,$value) $string }
 		
 	} else { 
@@ -10646,15 +11219,16 @@ proc arm:db:add {string} {
 # type:id:method:value:timestamp:modifby:action:limit:hits:reason
 proc arm:db:load {} {
 	global arm userdb 
-	global wline bline regex fline hits
+	global wline bline regex pattern fline hits
 	arm:debug 2 "userdb:db:load: started"
 
 	# -- flush existing from memory
-	catch { unset wline }
-	catch { unset bline }
-	catch { unset regex }
-	catch { unset fline }
-	catch { unset hits }
+	if {[info exists wline]}   { unset wline   }
+	if {[info exists bline]}   { unset bline   }
+	if {[info exists regex]}   { unset regex   }
+	if {[info exists pattern]} { unset pattern }
+	if {[info exists fline]}   { unset fline   }
+	if {[info exists hits]}    { unset hits    }
 	
 	# -- check the database method
 	if {$userdb(method) == "file"} {
@@ -10707,6 +11281,13 @@ proc arm:db:load {} {
 		if {$type == "B"} { 
 			if {$method == "regex"} { 
 				set bline(regex,$id) $dbline; set regex($id) $value 
+				if {$limit != "1-1-1"} {
+					# -- non-default join flood limit used
+					# -- create separate array for faster floodnet detection
+					set fline($method,$value) "$limit $reason"
+				}
+			} elseif {$method == "text"} { 
+				set bline(text,$id) $dbline; set pattern($id) $value 
 				if {$limit != "1-1-1"} {
 					# -- non-default join flood limit used
 					# -- create separate array for faster floodnet detection
@@ -10786,47 +11367,47 @@ proc arm:db:write {} {
 		arm:debug 5 "arm:db:write: full sorted list: $list"
 		
 		foreach entry $list {
-				set line [split $entry ,]
-				set dbid [lindex $line 0]
-				set type [lindex $line 1]
-				set method [lindex $line 2]
-				set value [lindex $line 3]
+			set line [split $entry ,]
+			set dbid [lindex $line 0]
+			set type [lindex $line 1]
+			set method [lindex $line 2]
+			set value [lindex $line 3]
 
-				arm:debug 5 "arm:db:write: type: $type method: $method value: $value -> line: $line"
+			arm:debug 5 "arm:db:write: type: $type method: $method value: $value -> line: $line"
 
-				if {$type == "wline"} {
-						set list [split $wline($method,$value) :]
-						if {[lindex $list 0] == "#" || [lindex $list 0] != "B" && [lindex $list 0] != "W" || $list == ""} { continue; }
-						set type [lindex $list 0]
-						set id [lindex $list 1]
-						set method [lindex $list 2]
-						set value [lindex $list 3]
-						set timestamp [lindex $list 4]
-						set modifby [lindex $list 5]
-						set action [lindex $list 6]
-						set limit [lindex $list 7]
-						if {![info exists hits($id)]} { set hits($id) 0 }
-						set hitnum $hits($id)
-						set reason [join [lrange $list 9 end]]
-						set dbline "$type:$id:$method:$value:$timestamp:$modifby:$action:$limit:$hitnum:[join $reason]"
-						puts $fd $dbline;
-				} else {
-						set list [split $bline($method,$value) :]
-						if {[lindex $list 0] == "#" || [lindex $list 0] != "B" && [lindex $list 0] != "W" || $list == ""} { continue; }
-						set type [lindex $list 0]
-						set id [lindex $list 1]
-						set method [lindex $list 2]
-						set value [lindex $list 3]
-						set timestamp [lindex $list 4]
-						set modifby [lindex $list 5]
-						set action [lindex $list 6]
-						set limit [lindex $list 7]/
-						if {![info exists hits($id)]} { set hits($id) 0 }
-						set hitnum $hits($id)
-						set reason [join [lrange $list 9 end]]
-						set dbline "$type:$id:$method:$value:$timestamp:$modifby:$action:$limit:$hitnum:[join $reason]"
-						puts $fd $dbline;
-				}
+			if {$type == "wline"} {
+				set list [split $wline($method,$value) :]
+				if {[lindex $list 0] == "#" || [lindex $list 0] != "B" && [lindex $list 0] != "W" || $list == ""} { continue; }
+				set type [lindex $list 0]
+				set id [lindex $list 1]
+				set method [lindex $list 2]
+				set value [lindex $list 3]
+				set timestamp [lindex $list 4]
+				set modifby [lindex $list 5]
+				set action [lindex $list 6]
+				set limit [lindex $list 7]
+				if {![info exists hits($id)]} { set hits($id) 0 }
+				set hitnum $hits($id)
+				set reason [join [lrange $list 9 end]]
+				set dbline "$type:$id:$method:$value:$timestamp:$modifby:$action:$limit:$hitnum:[join $reason]"
+				puts $fd $dbline;
+			} else {
+				set list [split $bline($method,$value) :]
+				if {[lindex $list 0] == "#" || [lindex $list 0] != "B" && [lindex $list 0] != "W" || $list == ""} { continue; }
+				set type [lindex $list 0]
+				set id [lindex $list 1]
+				set method [lindex $list 2]
+				set value [lindex $list 3]
+				set timestamp [lindex $list 4]
+				set modifby [lindex $list 5]
+				set action [lindex $list 6]
+				set limit [lindex $list 7]/
+				if {![info exists hits($id)]} { set hits($id) 0 }
+				set hitnum $hits($id)
+				set reason [join [lrange $list 9 end]]
+				set dbline "$type:$id:$method:$value:$timestamp:$modifby:$action:$limit:$hitnum:[join $reason]"
+				puts $fd $dbline;
+			}
 
 		}
 		
@@ -10879,18 +11460,22 @@ proc arm:db:get {item list source {silent ""}} {
 
 # -- obtain ID of given list entry
 proc arm:get:id {list method value} {
-	global regex
+	global regex pattern
 
-	if {$method != "regex"} {
-
-		return [arm:db:get id $list [join "$method $value" ,]]
-
+	if {$method == "regex"} {
+		# -- type is regex
+		foreach pid [array names regex] {
+			set exp $regex($pid)
+			if {$exp == $value} { return $pid }
+		}
+	} elseif {$method == "text"} {
+		# -- type is text
+		foreach pid [array names pattern] {
+			set exp $pattern($pid)
+			if {$exp == $value} { return $pid }
+		}	
 	} else {
-			# -- type is regex
-			foreach pid [array names regex] {
-				set pattern $regex($pid)
-				if {$pattern == $value} { return $pid }
-			}
+		return [arm:db:get id $list [join "$method $value" ,]]
 	}
 
 	# -- else, return 0 if no match found
@@ -11238,7 +11823,7 @@ proc arm:pubm:all {nick uhost hand chan text} {
 	if {[isvoice $nick]} { return; }
 	
 	# -- exempt if umode +x
-	if {[string match -nocase "*.users.undernet.org" $host]} { return; }
+	if {[string match -nocase "*.$arm(cfg.xhost)" $host]} { return; }
 	
 	# -- exempt if resolved ident
 	if {![string match "~*" $ident]} { return; }
@@ -11361,10 +11946,41 @@ proc arm:adapt:unset {type exp} {
 # clear floodnet track
 proc arm:flud:unset {value} {
 	global flud
-	arm:debug 3 "arm:adapt:unset: removing floodnet tracker flud([join $value])"
+	arm:debug 3 "arm:flud:unset: removing floodnet tracker flud([join $value])"
 	catch { unset flud($value) }
 }
 
+# -- arm:textflud:unset
+# clear cumulative text entry tracker
+proc arm:textflud:unset {value} {
+	global textflud
+	arm:debug 3 "arm:textflud:unset: removing floodnet tracker textflud([join $value])"
+	catch { unset textflud($value) }
+}
+
+# -- arm:textflud:unset
+# clear cumulative text entry tracker
+proc arm:lineflud:decr {value} {
+	global lineflud
+	# -- value is a nick or a channel, depending on counter type
+	if {[info exists lineflud($value)]} {
+		arm:debug 5 "arm:lineflud:unset: decreasing lineflud tracker lineflud([join $value]) -- current: $lineflud($value)"
+		incr lineflud($value) -1
+		if {$lineflud($value) == 0} {
+			arm:debug 5 "arm:lineflud:unset: removing nil lineflud tracker lineflud([join $value])"
+			unset lineflud($value)
+		}
+	}
+}
+
+# -- remove the temp channel lock after a channel line flood
+proc arm:lineflud:unmode {chan} {
+	global arm
+	regsub -all {\+} $arm(cfg.lineflood.chan.mode) unmode
+	# -- NOTE: we don't need to make the removal dependant on the flood continuing at this time
+	#          as it can be safe to assume that the channel lock should prevent further floods
+	putnow "MODE $chan $unmode"
+}
 
 
 # -- unset netsplit tracker
@@ -11619,8 +12235,8 @@ proc arm:runtime {start} {
 # -- ctcp version response
 proc arm:ctcp:version {nick uhost hand dest keyword args} {
 	global arm
-	putquick "NOTICE $nick :\001VERSION Armour $arm(version) -- Empus <empus@undernet.org>\001"
- 	return 1;
+	putquick "NOTICE $nick :\001VERSION Armour $arm(version) -- https://gitub.com/empus/armour -- Empus <empus@undernet.org>\001"
+	return 1;
 }
 
 
@@ -11640,7 +12256,7 @@ proc arm:isValidIP {ip} {
 	if {![regexp -- {(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)} $ip]} { 
 		return 0; 
 	}
-  	return 1;
+	return 1;
 }
 
 # -- cleanup some vars when finished scan
@@ -11768,11 +12384,11 @@ proc arm:log:cmdlog {source user user_id command params bywho target target_xuse
 	}
 	if {$arm(cfg.chan.report) != ""} {
 		if {$params != ""} {
-                        putquick "PRIVMSG $arm(cfg.chan.report) :cmd: [string tolower $command] $params (user: $user)"
-                } else {
-                        putquick "PRIVMSG $arm(cfg.chan.report) :cmd: [string tolower $command] (user: $user)"
+						putquick "PRIVMSG $arm(cfg.chan.report) :cmd: [string tolower $command] $params (user: $user)"
+				} else {
+						putquick "PRIVMSG $arm(cfg.chan.report) :cmd: [string tolower $command] (user: $user)"
 		}
-        }
+		}
 	return
 }
 
@@ -11783,13 +12399,13 @@ proc arm:log:cmdlog {source user user_id command params bywho target target_xuse
 proc arm:randpass {{length ""} {chars ")(*&^%$\#@!ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz)(*&^%$\#@!"}} {
 	global arm
 	if {$length == ""} { set length $arm(cfg.randpass) }
-    set range [expr {[string length $chars]-1}]
-    set text ""
-    for {set i 0} {$i < $length} {incr i} {
-       set pos [expr {int(rand()*$range)}]
-       append text [string range $chars $pos $pos]
-    }
-    return $text
+	set range [expr {[string length $chars]-1}]
+	set text ""
+	for {set i 0} {$i < $length} {incr i} {
+	   set pos [expr {int(rand()*$range)}]
+	   append text [string range $chars $pos $pos]
+	}
+	return $text
 }
 
 arm:debug 0 "\[@\] Armour: loaded support functions."
@@ -11835,6 +12451,12 @@ lappend unsetvars adaptr
 # -- unset floodnet tracking counters
 lappend unsetvars flud
 lappend unsetvars floodnet
+
+# -- unset text type blacklist counters
+lappend unsetvars textflud
+
+# -- unset line flood counters
+lappend unsetvars lineflud
 
 # -- unset nicks on host tracking array
 lappend unsetvars hostnicks

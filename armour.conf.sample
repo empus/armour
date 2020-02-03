@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v3.4.5 - 2020.02.01
+# armour.tcl v3.4.5 - 2020.02.03
 # ------------------------------------------------------------------------------------------------
 #
 #    _                         ___ ___ 
@@ -33,6 +33,7 @@
 #	user	:		authenticated username
 #	host	:		hostmask, hostname, IP and CIDR notation accepted
 #	regex	:		nick!user@host/rname
+#	text	:		channel text matches
 #	country	:		geo location ip lookup
 #	asn	:			autonomous system number lookup
 #	chan	:		onchan #channel
@@ -62,10 +63,13 @@
 # ------------------------------------------------------------------------------------------------
 #
 # Code by		: 	Empus @ Undernet - empus@undernet.org
-# Last modified	:	2020.02.01
+# Last modified	:	2020.02.03
 #
 # Please contact me should you need any assistence, but I hope most config options are explanatory.
 #
+# Issues and feature requests can be submitted on GitHub:
+#
+# 		https://github.com/empus/armour
 #
 # ------------------------------------------------------------------------------------------------
 
@@ -128,6 +132,10 @@ set arm(cfg.servicehost) "undernet.org"
 # -- regex to determine umode +x registered users
 # -- change with care to suit your own network
 set arm(cfg.xregex) {([^\.]+)\.users\.undernet\.org}
+
+# -- non-regex extension for umode +x registered users
+# -- change to suit your own network
+set arm(cfg.xhost) "users.undernet.org"
 
 # -- allow use of nickname (with or without nick completion char :) as control char? (0|1) - [1]
 set arm(cfg.char.nick) 1
@@ -199,7 +207,7 @@ set arm(cfg.gline.mask) "*"
 set arm(cfg.gline.nomask) "G-lined (AUTO *"
 
 # -- realname
-set realname "Armour [lindex $arm(version) 0]"
+set realname "Armour - https://github.com/empus/armour"
 
 # -- lockdown eggdrop dcc commands? (0|1) - [1]
 set arm(cfg.lockegg) 1
@@ -256,19 +264,26 @@ set arm(cfg.lasthosts) 20
 # -- how to set channel bans? (chan|x) - [x]
 set arm(cfg.ban) "chan"
 
-# -- csc username
+# -- authentication username
 # leave blank if login not used or handled in another script
-set arm(auth.user) ""
+set arm(cfg.auth.user) ""
 
-# -- csc password
+# -- authentication password
 # leave blank if login not used or handled in another script
-set arm(auth.pass) ""
+set arm(cfg.auth.pass) ""
+
+# -- gnuworld nickname - [X]
+set arm(cfg.gnuworld.nick) "X"
+
+# -- gnuworld auth host - [channels.undernet.org]
+# -- ie. /msg x@channels.undernet.org login <user> <pass>
+set arm(cfg.gnuworld.host) "channels.undernet.org"
 
 # -- use umode +x? (host hiding) (0|1) - [1]
-set arm(auth.hide) 1
+set arm(cfg.auth.hide) 1
 
-# -- how long to set temp bans? - [1h]
-set arm(cfg.ban.time) "7d"
+# -- how long to set temp bans? - [3d]
+set arm(cfg.ban.time) "3d"
 
 # -- autoban on blacklist entry addition? (0|1) - [1]
 set arm(cfg.ban.auto) 1
@@ -277,18 +292,24 @@ set arm(cfg.ban.auto) 1
 set arm(cfg.ban.level) "100"
 
 # -- how long to set temp adaptive regex bans? - [7d]
-set arm(cfg.ban.time.adapt) "14d"
+set arm(cfg.ban.time.adapt) "7d"
 
-# -- how long (secs) to remember 'newcomers' for (for stringent public chatter rules) - [20]
+# -- how long (secs) to remember 'newcomers' for (for stringent public chatter rules) - [60]
 # -- stringent rules apply to newcomers after first joining channel:
 # - excessive word repeat
 # - profanity (badwords)
 # - spam (channels / website)
 # - coloured text
-set arm(cfg.time.newjoin) "20"
+set arm(cfg.time.newjoin) "60"
 
 # -- badword masks for public chatter (space delimited with wildcards)
+# -- note: more powerful string now matching supported by 'text' type blacklist entries
 set arm(cfg.badwords) "*fuck* *shit* *cunt* *nigger*"
+
+# -- time to allow automatic removal of recent bans by specifying blacklist id (secs) - [300]
+set arm(cfg.idunban.time) 600
+
+
 
 
 # ------------------------------------------------------------------------------------------------
@@ -343,7 +364,7 @@ set arm(cfg.whois) 1
 # -- show channel name in badchan kick reasons? (0|1) - [1]
 set arm(cfg.bchan.reason) 1
 
-# -- enable botnet (remote) /whois lookups? (0|1) - [1]
+# -- enable botnet (remote) /whois lookups? (0|1) - [0]
 # - not required, but lowers server queue to improve response time on busy channels
 set arm(cfg.whois.remote) 0
 
@@ -355,6 +376,77 @@ set arm(cfg.scans.all) 0
 set arm(cfg.bot.remote.dnsbl) "remote-bot"
 set arm(cfg.bot.remote.port) "remote-bot"
 set arm(cfg.bot.remote.whois) "remote-bot"
+
+
+# ------------------------------------------------------------------------------------------------
+# TEXT MATCH BLACKLIST ENTRY SETTINGS
+# ------------------------------------------------------------------------------------------------
+# This section relates to blacklist entries matching channel text (wildcard or regex)
+
+# -- exempt from matching if they are opped? (0|1) - [1]
+set arm(cfg.text.exempt.op) 1
+
+# -- exempt from matching if they are voiced? (0|1) - [0]
+set arm(cfg.text.exempt.voice) 0
+
+# -- only match clients who have recently joined the channel? (0|1) - [0]
+#    this relates to above variable arm(cfg.time.newjoin)
+set arm(cfg.text.newcomer) 0
+
+# -- add automatic blacklist entries for users who trigger text matches? (0|1) - [0]
+set arm(cfg.text.autoblack) 0
+
+# -- if automatic blacklist entries are enabled, what reason to use?
+set arm(cfg.text.autoblack.reason) "(auto) blacklisted from text match violation"
+
+# -- if threshold is >1, display warning to user on first occurrence? (0|1) - [0]
+set arm(cfg.text.warn) 1
+
+# -- if warning is enabled, send via channel (chan) or /notice (notc)? (chan|notc) - [notc]
+set arm(cfg.text.warn.type) "notc"
+
+# -- if warning is enabled, what should the message say?
+set arm(cfg.text.warn.msg) "Please avoid using such language in #channel.  Consider this a warning."
+
+
+# ------------------------------------------------------------------------------------------------
+# LINE FLOOD SETTINGS
+# ------------------------------------------------------------------------------------------------
+# This section relates to line flood handling (from individual clients, or the entire channel)
+
+# -- how many lines to allow from a single client in how many seconds before acting? (lines:secs) - [5:2]
+# -- leave config value blank to disable nickname based line flood tracking
+set arm(cfg.lineflood.nicks) "5:2"
+
+# -- how many lines to allow from the whole channel in how many seconds before acting? (lines:secs) - [10:2]
+# -- NOTE: this should be set based on the expected activity of the channel (to avoid false positives)
+# -- leave config value blank to disable channel based line flood tracking
+set arm(cfg.lineflood.chan) "10:2"
+
+# -- modes to temporarily lockdown channel with, during entire channel lineflood - [+mr]
+set arm(cfg.lineflood.chan.mode) "+mr"
+
+# -- temporary lockdown time when whole channel encounters lineflood (secs) - [60]
+set arm(cfg.lineflood.chan.lock) 60
+
+# -- exempt from matching if they are opped? (0|1) - [1]
+set arm(cfg.lineflood.exempt.op) 1
+
+# -- exempt from matching if they are voiced? (0|1) - [1]
+set arm(cfg.lineflood.exempt.voice) 1
+
+# -- only match clients who have recently joined the channel? (0|1) - [1]
+#    this relates to above variable arm(cfg.time.newjoin)
+set arm(cfg.lineflood.newcomer) 1
+
+# -- kickban reason when user reaches line limit
+set arm(cfg.lineflood.reason) "Armour: flood detected"
+
+# -- add automatic blacklist entries for users who trigger text matches? (0|1) - [0]
+set arm(cfg.lineflood.autoblack) 0
+
+# -- if automatic blacklist entries are enabled, what reason to use?
+set arm(cfg.lineflood.autoblack.reason) "(auto) blacklisted from line flood"
 
 
 # ------------------------------------------------------------------------------------------------
@@ -508,8 +600,8 @@ set arm(cfg.dronebl.type) 17
 # -------------------------------------------------------------------------------
 set addcmd(cmds)		{	arm		1		pub msg dcc	}
 set addcmd(help)		{	arm		1		pub msg dcc	}
-set addcmd(whois)		{	userdb		1		pub msg dcc	}
-set addcmd(verify)		{	userdb		1		pub msg dcc	}
+set addcmd(whois)		{	userdb	1		pub msg dcc	}
+set addcmd(verify)		{	userdb	1		pub msg dcc	}
 set addcmd(version)		{	arm		1		pub msg dcc	}
 set addcmd(view)		{	arm		1		pub msg dcc	}
 # -- shortcut
@@ -517,10 +609,12 @@ set addcmd(v)			{	arm		1		pub msg dcc	}
 set addcmd(stats)		{	arm		1		pub msg dcc	}
 set addcmd(status)		{	arm		1		pub msg dcc	}
 set addcmd(scan)		{	arm		1		pub msg dcc	}
+# -- shortcut
+set addcmd(s)			{	arm		1		pub msg dcc	}
 set addcmd(search)		{	arm		1		pub msg dcc	}
 set addcmd(scanrbl)		{	arm		1		pub msg dcc	}
-set addcmd(scanport)		{	arm		1		pub msg dcc	}
-set addcmd(set)			{	userdb		1		pub msg dcc	}
+set addcmd(scanport)	{	arm		1		pub msg dcc	}
+set addcmd(set)			{	userdb	1		pub msg dcc	}
 set addcmd(asn)			{	arm		1		pub msg dcc	}
 set addcmd(country)		{	arm		1		pub msg dcc	}
 set addcmd(exempt)		{	arm		1		pub msg dcc	}
@@ -554,11 +648,11 @@ set addcmd(kb)			{	arm		100		pub msg dcc	}
 
 set addcmd(topic)		{	arm		100		pub msg dcc	}
 set addcmd(invite)		{	arm		100		pub msg dcc	}
-set addcmd(chanscan)		{	arm		200		pub msg dcc	}
-set addcmd(adduser)		{	userdb		400		pub msg dcc	}
-set addcmd(remuser)		{	userdb		400		pub msg dcc	}
-set addcmd(userlist)		{	userdb		400		pub msg dcc	}
-set addcmd(moduser)		{	userdb		400		pub msg dcc	}
+set addcmd(chanscan)	{	arm		200		pub msg dcc	}
+set addcmd(adduser)		{	userdb	400		pub msg dcc	}
+set addcmd(remuser)		{	userdb	400		pub msg dcc	}
+set addcmd(userlist)	{	userdb	400		pub msg dcc	}
+set addcmd(moduser)		{	userdb	400		pub msg dcc	}
 set addcmd(say)			{	arm		400		pub msg dcc	}
 set addcmd(jump)		{	arm		400		pub msg dcc	}
 set addcmd(save)		{	arm		450		pub msg dcc	}
@@ -566,8 +660,9 @@ set addcmd(load)		{	arm		450		pub msg dcc	}
 set addcmd(reload)		{	arm		450		pub msg dcc	}
 set addcmd(restart)		{	arm		450		pub msg dcc	}
 set addcmd(rehash)		{	arm		450		pub msg dcc	}
-set addcmd(do)			{	userdb		500		pub msg dcc	}
-set addcmd(die)			{	userdb		500		pub msg dcc	}
+set addcmd(do)			{	userdb	500		pub msg dcc	}
+set addcmd(die)			{	userdb	500		pub msg dcc	}
+set addcmd(conf)		{	arm		500		pub msg dcc	}
 
 
 # ------------------------------------------------------------------------------------------------

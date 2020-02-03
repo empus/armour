@@ -1,5 +1,5 @@
 ----------------------------------------------------------------------------------------------------------------------------------------
- armour.tcl v3.4.5 - 2020.02.01
+ armour.tcl v3.5.0 - 2020.02.03
 ----------------------------------------------------------------------------------------------------------------------------------------
 
  ![Armour](./armour.png)
@@ -14,6 +14,55 @@
  Specifically, look for new config variables that have eventuated through new features.  Find these variables
  from the armour.conf.sample file provided and paste into your own *.conf file with appropriate values.
 
+----------------------------------------------------------------------------------------------------------------------------------------
+
+***2019.02.03	v3.4.5***
+
+	+ New release Armour v3.5.0
+	
+	+ Enhancement:	New blacklist entry type 'text' -- supporting wildcard and regular expression matching of
+					channel text, including cumulative time based matching.
+					
+		- Config vars:	arm(cfg.text.exempt.op):	whether to exempt opped users from the text matching
+						arm(cfg.text.exempt.voice):	whether to exempt voiced users from the text matching
+						arm(cfg.text.newcomer):		whether the text matches only apply to newly joined users
+						arm(cfg.text.autoblack):	whether to automatically add blacklist entries upon match
+						arm(cfg.text.autoblack.reason):	the automatic blacklist entry reason to use
+						arm(cfg.text.warn):			whether to warn a user on first match (where threshold >1)
+						arm(cfg.text.warn.type):	notc: warn via /notice; chan: warn via channel
+						arm(cfg.text.warn.msg):		the warning message to display (channel will prefix with nick)
+
+	+ Enhancement:	Support to manage channel line floods -- for a single client; or entire channel
+	
+		- Config vars:	arm(cfg.lineflood.nicks):	number of lines per secs to allow for single client (lines:secs)
+						arm(cfg.lineflood.chan):	number of lines per secs to allow for whole channel (lines:secs)
+						arm(cfg.lineflood.chan.mode):		modes to temporarily set during channel lineflood
+						arm(cfg.lineflood.chan.lock):		temporary lockdown time when during channel lineflood
+						arm(cfg.lineflood.exempt.op):		whether to exempt opped users
+						arm(cfg.lineflood.exempt.voice):	whether to exempt voiced users
+						arm(cfg.lineflood.newcomer):		whether to only count lines for newly joined users
+						arm(cfg.lineflood.reason):			kick reason to use for kickban when user reaches limit
+						arm(cfg.lineflood.autoblack):		whether to automatically add blacklist entries on match
+						arm(cfg.lineflood.autoblack.reason)	the automatic blacklist entry to reason to use
+						
+	+ Enhancement:	Allow automatic removal of recent bans by upon blacklist removal by ID
+	
+		- Config var:	arm(cfg.idunban.time):		time to allow automatic removal of recent bans by specifying id
+		
+	+ Enhancement:	Improved support for other networks using GNUWorld services
+	
+		- Config vars:	arm(cfg.auth.user):			renamed from arm(auth.user)
+						arm(cfg.auth.pass):			renamed from arm(auth.pass)
+						arm(cfg.auth.hide):			renamed from arm(auth.hide)
+						arm(cfg.gnuworld.nick):		the nickname of the mod.cservice GNUWorld service
+						arm(cfg.gnuworld.host):		the authentication hostname of the mod.cservice GNUWorld service
+						arm(cfg.xhost):				the non-regex extension for umode+x users
+		
+	+ Improvement:	Prevent secure mode if ircd does not support it (ie. IRCnet/EFnet)
+	
+	+ Enhancement:	New command 'conf' to retrieve configuration setting values.
+					Ensure to add addcmd(conf) line in configuration file.
+		
 ----------------------------------------------------------------------------------------------------------------------------------------
 
 ***2019.02.01	v3.4.5***

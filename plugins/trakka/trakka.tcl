@@ -732,6 +732,10 @@ proc trakka:reply {type target msg} {
 	  notc { set med "NOTICE" }
 	  pub { set med "PRIVMSG" }
 	  msg { set med "PRIVMSG" }
+	  dcc {
+		if {[userdb:isInteger $target]} { putidx $target $msg; return; } \
+		else { putidx [hand2idx $target] $msg; return; }
+	  }
 	}
 	putquick "$med $target :$msg"
 }
