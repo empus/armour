@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v3.5.0 autobuild completed on: Tue Feb  4 08:40:50 PST 2020
+# armour.tcl v3.5.0 autobuild completed on: Tue Feb  4 08:48:20 PST 2020
 # ------------------------------------------------------------------------------------------------
 #
 #    _                         ___ ___ 
@@ -748,7 +748,7 @@ proc userdb:cmd:whois {0 1 2 3 {4 ""}  {5 ""}} {
 	
 	# -- greeting?	
 	::armdb::db_connect
-	set id [userdb:uline:get id nick $nick]
+	set id [userdb:uline:get id nick $targetuser]
 	set query "SELECT greet FROM greets WHERE uid=$id"
 	set row [::armdb::db_query $query]
 	set greet [lindex [lindex $row 0] 0]
