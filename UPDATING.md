@@ -62,6 +62,10 @@
 	
 	+ Enhancement:	New command 'conf' to retrieve configuration setting values.
 					Ensure to add addcmd(conf) line in configuration file.
+					
+	+ Enhancement:	New onjoin channel greeting setting for users (set with 'set' or 'moduser' commands)
+	
+		- Config var:	arm(cfg.greet.self):		whether users can set their own greetings (via 'set' command)
 		
 ----------------------------------------------------------------------------------------------------------------------------------------
 

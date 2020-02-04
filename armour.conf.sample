@@ -219,6 +219,9 @@ set arm(cfg.lockegg.flag) "n"
 # - via 'exempt' command, time can be overriden
 set arm(cfg.exempt.time) 5
 
+# -- allow users to set their own channel greetings? (0|1) - [1]
+set arm(cfg.greet.self) 1
+
 
 
 # ------------------------------------------------------------------------------------------------
@@ -235,11 +238,20 @@ set arm(cfg.chan.valid) "EDITMECHAN,#armour"
 
 # -- autologin chan list
 # - for periodic /who check of channel (leave blank to disable)
-set arm(cfg.chan.login) "EDITMECHAN"
+#
+# - If the below channel list (comma delimited) includes the primary arm(cfg.chan.auto) channel,
+# - there is a risk of a race condition.  This can occur if autologin returns endofwho before an
+# - existing scan is complete on a nick.  The scenario results in a false positive joinflood.
+# - The risk is increased on networks like IRCnet/EFnet who do not support extended /WHO (such as
+# - Undernet or other ircu-derived ircds).  For safety, use a chanlist below which excludes the
+# - primary channel. Use only backchannele, or even leave this option empty.  Autologin will still
+# - occur when a user joins a channel (even if not umode +x).
+set arm(cfg.chan.login) ""
 
-# -- autologin /who cycle (secs) - [20]
+# -- autologin /who cycle (secs) - [60]
+# -- how frequently to check the channel list for people who authenticated to X after joining
 # - only if enabled above
-set arm(cfg.autologin.cycle) 30
+set arm(cfg.autologin.cycle) 60
 
 # -- default command chan (for applicable privmsg & dcc commands)
 set arm(cfg.chan.def) $arm(cfg.chan.auto)
@@ -471,6 +483,9 @@ set arm(cfg.adapt.types.join) "n i ni"
 # i	: ident
 # ir	: ident/rname
 # r	: rname
+#
+# use types involving rname and do not duplicate those done above in arm(cfg.adapt.types.join)
+# this will prevent double handling for a given pattern (ie. false positives)
 set arm(cfg.adapt.types.who) "nir nr r"
 
 # -- match explicit rname in adaptive regex? (0|1) - [1]

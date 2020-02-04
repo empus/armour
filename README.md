@@ -109,7 +109,7 @@ when new versions have been downloaded.
  WHITELISTS & BLACKLISTS
 ----------------------------------------------------------------------------------------------------------------
 
-Armour has the ability to maintain both ***whitelists*** and ***blacklists***.  The lists are stored to file and are saved
+Armour has the ability to maintain both ***whitelists* and ***blacklists***.  The lists are stored to file and are saved
 to disk periodically.
 
 The script can run in one of three modes, outlined below:
@@ -131,7 +131,7 @@ The Armour mode is configurable and can be set on the fly with the 'mode' comman
 If floodnet detection is enabled, this is done prior to ***whitelist*** & ***blacklist*** checking, with some intelligence 
 to reduce false positive matches.  This is described in another section below.
 
-***Whitelist*** scanning is always completed before ***blacklist*** scanning commences.  Blacklists are not checked if a user
+***Whitelist*** scanning is always completed before ***blacklist** scanning commences.  Blacklists are not checked if a user
 matches a whitelist.
 
 List entries can be of multiple types, described below:
@@ -161,11 +161,6 @@ List entries can be of multiple types, described below:
 		nick!ident@host/realname
 
 		ex.	^\w+\d{4,}!~[^/]+/Mr\sBob$
-		
-	text:	A wildcard pattern or regular expression matching text spoken in a channel. Wildcard matches
-		are case insensitive.
-	
-		ex.	*fuck*			visit\s(www\.[A-Za-z0-9]+|\#)
 
 
 	country:A geographical country of the IP space, in two digit ISO 3166-1 format.  CYMRU TXT DNS 
@@ -208,7 +203,7 @@ ACTIONS:
 		- 'ban' will kickban the user from the channel
 
 
-***usage:*** add <white|black> <user|host|rname|regex|text|country|asn|chan|last> <value1,value2..> <accept|voice|op|ban> ?joins:secs:hold? [reason]
+***usage:*** add <white|black> <user|host|rname|regex|country|asn|chan|last> <value1,value2..> <accept|voice|op|ban> ?joins:secs:hold? [reason]
 
 
 Multiple values can be given comma separated, for efficiency.
@@ -226,7 +221,7 @@ ex. 2		Add a hostname blacklist entry for a spammer
 
 ex. 3		Add all Chinese IP space to blacklist
 
-			add black country cn ban compromised host
+			add black country cn ban compromised host***
 
 
 ex. 4		Add some RFC1918 IP space to the whitelist, and autoop all
@@ -243,8 +238,8 @@ NOTES:
 
 	-	With BLACKLIST entries, the 'action' is optional -- 'ban' is implied.
 
-	-	The 'joins:secs:hold' field is only relevant to 'host', 'regex', and 'text' blacklist entries.  This 
-		field allows for such a blacklist entry to not be explicit, but rather cumulative -- whereby a certain
+	-	The 'joins:secs:hold' field is only relevant to 'host' and 'regex' blacklist entries.  This field
+		allows for such a blacklist entry to not be explicit, but rather cumulative -- whereby a certain
 		join threshold must be met before action is taken.
 		For example, a more broad pattern can be added but only triggered if 3 matching clients join in 
 		2 seconds.
@@ -260,9 +255,7 @@ NOTES:
 		The 'hold' value is optional whereby 3:2 implies 3:2:2
 
 		Leaving this optional field out, effectively would imply a value of '1:1:1'
-		
-		In the case of 'text' entries, this means lines:secs, setting the number of lines that must be spoken
-		in a period before the match will be made.  An optional warning can be sent on the first line.
+
 
 		ex. 5		Add pattern for lower case nicks and lower case unresolved idents, where 3 join in 1
 				second.
@@ -479,8 +472,7 @@ authenticated.
 Optionally, the bot can periodically send a /WHO to a channel (or comma delimited list of channels), to find
 users who have authenticated to Channel Services since joining the channel.
 
-NOTES:  - A client does not need to be usermode +x (host hiding) for the above to occur.
-	- Autologin is only possible on networks which support ACCOUNT or umode +x to reveal username from host.
+NOTE:  A client does not need to be usermode +x (host hiding) for the above to occur.
 
 Manual login is always allowed, but a client must be in a common channel with the bot for this to be successful.
 
@@ -491,8 +483,7 @@ Manual login is always allowed, but a client must be in a common channel with th
 ----------------------------------------------------------------------------------------------------------------
 
 When in mode '***secure***', the channel will be in mode +Dm and voice joining users when they have passed all scans,
-effectively making them visible to the rest of the channel.  Secure mode is only available on ircu derived ircds,
-or those set by ircd type '1' in the configuration.
+effectively making them visible to the rest of the channel.
 
 The cycle at which the '/NAMES -d' cycle is done, is configurable.  More frequent means a shorter wait, but can
 potentially create bot lag.
@@ -560,12 +551,8 @@ The data passed to these procs is in the following format: nick uhost hand chan
 
 This script has evolved over a long period.  It's always improving.  There will be bugs.  I'm open to ideas.
 
-If you have questions or feedback of any kind, please do reach out:
+If you have questions or feedback of any kind, please do contact me!
 
-	- #Armour on Undernet
-	- GitHub Issues page -- https://github.com/empus/armour/issues
-	- E-mail: empus@undernet.org
-	
 Cheers,
 
-- Empus <empus@undernet.org>
+- Empus <mail@empus.net>

@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v3.5.0 autobuild completed on: Mon Feb  3 10:14:05 PST 2020
+# armour.tcl v3.5.0 autobuild completed on: Tue Feb  4 08:15:22 PST 2020
 # ------------------------------------------------------------------------------------------------
 #
 #    _                         ___ ___ 
@@ -746,6 +746,15 @@ proc userdb:cmd:whois {0 1 2 3 {4 ""}  {5 ""}} {
 	if {$trgemail == ""} { set trgemail "(not set)" }
 	if {$trglang == ""} { set trglang "EN" }
 	
+	# -- greeting?	
+	::armdb::db_connect
+	set id [userdb:uline:get id nick $nick]
+	set query "SELECT greet FROM greets WHERE uid=$id"
+	set row [::armdb::db_query $query]
+	set greet [lindex [lindex $row 0] 0]
+	::armdb::db_close
+
+	
 	userdb:reply $type $target "\002user:\002 $targetuser -- \002xuser:\002 $trgxuser -- \002level:\002 $trglevel "
 	userdb:reply $type $target "\002automode:\002 $automode -- \002lastseen:\002 $lastseen"
 	userdb:reply $type $target "\002email:\002 $trgemail -- \002languages:\002 $trglang"
@@ -753,6 +762,9 @@ proc userdb:cmd:whois {0 1 2 3 {4 ""}  {5 ""}} {
 		if {$trgcurnick != ""} { userdb:reply $type $target "\002where:\002 $trgcurnick!$trgcurhost" } \
 		else { userdb:reply $type $target "\002last:\002 $trglastnick!$trglasthost" }
 	}	
+	if {$greet != ""} {
+		userdb:reply $type $target "\002greet:\002 $greet"
+	}
 	# -- create log entry for command use
 	arm:log:cmdlog BOT [userdb:uline:get user curnick $nick] [userdb:uline:get id curnick $nick] [string toupper $cmd] [join $args] $source "" "" ""
 }
@@ -1151,23 +1163,7 @@ proc userdb:cmd:moduser {0 1 2 3 {4 ""}  {5 ""}} {
 	lassign $args tuser ttype
 	set tvalue [lrange $args 2 end]
 
-	if {$arm(cfg.ircd) == "1"} {
-		# -- ircu (Undernet/Quakenet)
-		if {$tuser == "" || $ttype == "" || $tvalue == ""} { 
-			userdb:reply $stype $starget "\002usage:\002 moduser <user> <user|level|xuser|automode|lang|email|pass> <value>";
-			return;
-		}
-	} elseif {$arm(cfg.ircd) == "2"} {
-		# -- IRCnet/EFnet
-		if {$tuser == "" || $ttype == "" || $tvalue == ""} { 
-			userdb:reply $stype $starget "\002usage:\002 moduser <user> <user|level|automode|lang|email|pass> <value>";
-			return;
-		}
-	}
 	set user [userdb:uline:get user nick $nick]
-
-	# -- check if target user exists
-	if {![userdb:isValiduser $tuser]} { userdb:reply $type $target "\002(\002error\002)\002 who is $tuser?"; return; }
 
 	# -- check level
 	set level [userdb:uline:get level user $user]
@@ -1181,10 +1177,28 @@ proc userdb:cmd:moduser {0 1 2 3 {4 ""}  {5 ""}} {
 	elseif {[string match "la*" $ttype]} { set ttype "lang" } \
 	elseif {[string match "a*" $ttype] || [string match "m*" $ttype]} { set ttype "automode" } \
 	elseif {[string match "p*" $ttype]} { set ttype "pass" } \
+	elseif {[string match "g*" $ttype]} { set ttype "greet" } \
 	else {
-		userdb:reply $stype $starget "\002usage:\002 moduser <user> <user|level|xuser|automode|lang|email|pass> <value>"
+		userdb:reply $stype $starget "\002usage:\002 moduser <user> <user|level|xuser|automode|greet|lang|email|pass> <value>"
 		return;
 	}
+
+	if {$arm(cfg.ircd) == "1"} {
+		# -- ircu (Undernet/Quakenet)
+		if {$tuser == "" || $ttype == "" || ($tvalue == "" && $ttype != "greet")} { 
+			userdb:reply $stype $starget "\002usage:\002 moduser <user> <user|level|xuser|automode|greet|lang|email|pass> <value>";
+			return;
+		}
+	} elseif {$arm(cfg.ircd) == "2"} {
+		# -- IRCnet/EFnet
+		if {$tuser == "" || $ttype == "" || ($tvalue == "" && $ttype != "greet")} { 
+			userdb:reply $stype $starget "\002usage:\002 moduser <user> <user|level|automode|greet|lang|email|pass> <value>";
+			return;
+		}
+	}
+	
+	# -- check if target user exists
+	if {![userdb:isValiduser $tuser]} { userdb:reply $type $target "\002(\002error\002)\002 who is $tuser?"; return; }
 	
 	if {$tlevel >= $level} {
 		# -- allow user to change own password && automode if level>=100
@@ -1305,6 +1319,33 @@ proc userdb:cmd:moduser {0 1 2 3 {4 ""}  {5 ""}} {
 		# -- make the change
 		userdb:uline:set languages $langlist user $tuser
 	}
+	
+	if {$ttype == "greet"} {	
+		# -- modifying welcome greeting
+		set allow 0
+		set tvalue [lrange $tvalue 0 end]
+		# -- allow user to modify their own
+		if {[string tolower $tuser] == [string tolower $user]} { set allow 1 }
+		# -- allow user to modify someone lower than them (provided they are an admin)
+		if {$level >= 400 && $level > $tlevel} { set allow 1 }
+		if {$allow == 0} { userdb:reply $type $target "\002(\002error\002)\002 insufficient access."; return; }
+		# -- check whether to update or insert
+		set dbgreet [::armdb::db_escape $tvalue]		
+		::armdb::db_connect
+		set id [userdb:uline:get id user $tuser]
+		set query "SELECT uid FROM greets WHERE uid=$id"
+		set uid [::armdb::db_query $query]
+		if {$uid == ""} {
+			# -- insert new greeting
+			set query "INSERT INTO greets (uid,greet) VALUES ('$id','$dbgreet')"
+			set res [::armdb::db_query $query]
+		} else {
+			# -- update greeting
+			set query "UPDATE greets SET greet='$dbgreet' WHERE uid=$id"
+			set res [::armdb::db_query $query]			
+		}
+		::armdb::db_close
+	}
 
 	userdb:reply $type $target "done."
 		
@@ -1347,20 +1388,23 @@ proc userdb:cmd:set {0 1 2 3 {4 ""}  {5 ""}} {
 
 	set ttype [lindex $args 0]
 	set tvalue [lrange $args 1 end]
-
-	if {$ttype == "" || $tvalue == ""} { userdb:reply $stype $starget "\002usage:\002 set <automode|lang|email|pass> <value>"; return; }
 	
 	set user [userdb:uline:get user nick $nick]
 
 	# -- parse type
+	set xtra ""
+	if {$arm(cfg.greet.self)} { append xtra "|greet" }
 	if {[string match "e*" $ttype]} { set ttype "email" } \
 	elseif {[string match "la*" $ttype]} { set ttype "lang" } \
 	elseif {[string match "a*" $ttype] || [string match "m*" $ttype]} { set ttype "automode" } \
 	elseif {[string match "p*" $ttype]} { set ttype "pass" } \
+	elseif {[string match "g*" $ttype]} { set ttype "greet" } \
 	else {
-		userdb:reply $stype $starget "\002usage:\002 set <automode|lang|email|pass> <value>"
+		userdb:reply $stype $starget "\002usage:\002 set <automode|lang|email|pass${xtra}> <value>"
 		return;
 	}
+	
+	if {$ttype == "" || ($tvalue == "" && $ttype != "greet")} { userdb:reply $stype $starget "\002usage:\002 set <automode|lang|email|pass> <value>"; return; }
 		
 	if {$ttype == "automode"} {
 		# -- modifying automode
@@ -1421,6 +1465,28 @@ proc userdb:cmd:set {0 1 2 3 {4 ""}  {5 ""}} {
 		set langlist [string toupper $langlist]
 		# -- make the change
 		userdb:uline:set languages $langlist user $user
+	}
+	
+	if {$ttype == "greet"} {	
+		# -- modifying welcome greeting
+		set allow 0
+		set tvalue [lrange $tvalue 0 end]
+		# -- check whether to update or insert
+		set dbgreet [::armdb::db_escape $tvalue]		
+		::armdb::db_connect
+		set id [userdb:uline:get id user $user]
+		set query "SELECT uid FROM greets WHERE uid=$id"
+		set uid [::armdb::db_query $query]
+		if {$uid == ""} {
+			# -- insert new greeting
+			set query "INSERT INTO greets (uid,greet) VALUES ('$id','$dbgreet')"
+			set res [::armdb::db_query $query]
+		} else {
+			# -- update greeting
+			set query "UPDATE greets SET greet='$dbgreet' WHERE uid=$id"
+			set res [::armdb::db_query $query]			
+		}
+		::armdb::db_close
 	}
 	
 	userdb:reply $type $target "done."
@@ -2164,6 +2230,7 @@ proc userdb:join {nick uhost hand chan} {
 	global userdb botnick arm
 	
 	if {$nick == $botnick} { return; }
+	set return 0;
 	
 	# -- check mode if already logged in
 	set user [userdb:uline:get user curnick $nick]
@@ -2171,72 +2238,86 @@ proc userdb:join {nick uhost hand chan} {
 		# -- get automode
 		set automode [userdb:uline:get automode user $user]
 		switch -- $automode {
-			0	{ return; }
+			0	{ set return 1; }
 			1	{ pushmode $chan +v $nick; }
 			2	{ pushmode $chan +o $nick; }
-			default { return; }
+			default { set return 1; }
 		}
 		flushmode $chan
-		return; 
-	}
-
-		
-	# -- nick is not logged in
-	# -- check for umode +x
-	set host [lindex [split $uhost @] 1]
-	if {[regexp -- $arm(cfg.xregex) $host -> xuser]} {
-		# -- user is umode +x
-		set user [userdb:uline:get user xuser $xuser]
-		if {$user == ""} { return; }
-		
-		# -- check no-one else is logged in on this user
-		set lognick [userdb:uline:get curnick xuser $xuser]
-		if {$lognick == ""} {
-		
-			# -- begin autologin
-			putloglev d * "userdb:join: autologin begin for $user ($nick!$uhost)"
-			userdb:uline:set curnick $nick user $user
-			userdb:uline:set curhost $uhost user $user
-			userdb:uline:set lastseen [unixtime] user $user
+		set return 1; 
+	} else {
+		# -- nick is not logged in
+		# -- check for umode +x
+		set host [lindex [split $uhost @] 1]
+		if {[regexp -- $arm(cfg.xregex) $host -> xuser]} {
+			# -- user is umode +x
+			set user [userdb:uline:get user xuser $xuser]
+			if {$user == ""} { return; }
 			
-			# -- check for notes, if plugin loaded
-			if {[lsearch [info commands] "sk:cmd:note"] < 0} {
-				# -- notes not loaded
-				userdb:reply notc $nick "autologin successful.";
+			# -- check no-one else is logged in on this user
+			set lognick [userdb:uline:get curnick xuser $xuser]
+			if {$lognick == ""} {
+			
+				# -- begin autologin
+				putloglev d * "userdb:join: autologin begin for $user ($nick!$uhost)"
+				userdb:uline:set curnick $nick user $user
+				userdb:uline:set curhost $uhost user $user
+				userdb:uline:set lastseen [unixtime] user $user
 				
-			} else {
-				# -- notes loaded
-				::armdb::db_connect
-				set count [lindex [join [::armdb::db_query "SELECT count(*) FROM notes \
-					WHERE to_u='$user' AND read='N'"]] 0]
-				::armdb::db_close
-				if {$count == 1} { userdb:reply notc $nick "autologin successful. 1 unread note."; } \
-				elseif {$count > 1 || $count == 0} { userdb:reply notc $nick "autologin successful. $count unread notes."; }
-			}
-			
-			# -- tell them to use newpass if there is no password set
-			set dbpass [userdb:uline:get pass user $user]
-			if {$dbpass == "" && [info exists arm(cfg.alert.nopass)]} {
-				if {$userdb(cfg.alert.nopass)} {
-					userdb:reply notc $nick "password not set. use 'newpass' to set a password, before manual logins can work."
+				# -- check for notes, if plugin loaded
+				if {[lsearch [info commands] "sk:cmd:note"] < 0} {
+					# -- notes not loaded
+					userdb:reply notc $nick "autologin successful.";
+					
+				} else {
+					# -- notes loaded
+					::armdb::db_connect
+					set count [lindex [join [::armdb::db_query "SELECT count(*) FROM notes \
+						WHERE to_u='$user' AND read='N'"]] 0]
+					::armdb::db_close
+					if {$count == 1} { userdb:reply notc $nick "autologin successful. 1 unread note."; } \
+					elseif {$count > 1 || $count == 0} { userdb:reply notc $nick "autologin successful. $count unread notes."; }
 				}
+				
+				# -- tell them to use newpass if there is no password set
+				set dbpass [userdb:uline:get pass user $user]
+				if {$dbpass == "" && [info exists arm(cfg.alert.nopass)]} {
+					if {$userdb(cfg.alert.nopass)} {
+						userdb:reply notc $nick "password not set. use 'newpass' to set a password, before manual logins can work."
+					}
+				}
+				
+				# -- get automode
+				set automode [userdb:uline:get automode user $user]
+				switch -- $automode {
+					0	{ set return 1; }
+					1	{ pushmode $chan +v $nick; }
+					2	{ pushmode $chan +o $nick; }
+					default { set return 1; }
+				}
+				flushmode $chan
+								
+				# -- write changes to file (now a timer)
+				# userdb:db:write
 			}
-			
-			# -- get automode
-			set automode [userdb:uline:get automode user $user]
-			switch -- $automode {
-				0	{ return; }
-				1	{ pushmode $chan +v $nick; }
-				2	{ pushmode $chan +o $nick; }
-				default { return; }
-			}
-			flushmode $chan
-							
-			# -- write changes to file (now a timer)
-			# userdb:db:write
+			set return 1; 
 		}
-		return; 
 	}
+	
+	# -- greeting?	
+	::armdb::db_connect
+	set id [userdb:uline:get id nick $nick]
+	set query "SELECT uid,greet FROM greets WHERE uid=$id"
+	set row [::armdb::db_query $query]
+	lassign [lindex $row 0] uid greet
+	::armdb::db_close
+	if {$greet != ""} {
+		# -- output the greeting!
+		arm:debug 1 "arm:raw:join: sending greeting to $nick in $chan"
+		putquick "PRIVMSG $chan :\[$nick\] $greet" 
+	}
+	
+	if {$return} { return; }
 
 	# -- if Armour is in use, only do this when in secure mode
 	global arm
@@ -4002,9 +4083,8 @@ proc arm:regex:adapt {string {flags ""}} {
 		regsub -all {\*} $char {\\*} char
 		regsub -all {\#} $char {\\#} char
 		regsub -all { } $char {\\s} char
-			regsub -all {\:} $char {\\:} char	
-
-				lappend regexp $char
+		regsub -all {\:} $char {\\:} char
+		lappend regexp $char
 		}
 				
 		incr count
@@ -7877,7 +7957,7 @@ proc arm:cmd:rem {0 1 2 3 {4 ""}  {5 ""}} {
 			# -- try to remove any existing ban?
 			set mask ""; set bantype ""
 			if {[info exists idban($id)]} {
-				set mask $idban($id)
+				#set mask $idban($id); # -- don't delete the whole text blacklist, when unbanning one person!
 			} elseif {$method == "host"} {
 				set bantype " host"
 				if {[regexp -- {\*} $value]} { set mask $value } else { set mask "*!*@$value" }
@@ -8054,7 +8134,6 @@ proc arm:cmd:rem {0 1 2 3 {4 ""}  {5 ""}} {
 		return;
 	}
 	
-	
 	set noexist 0
 	set regexmatch 0
 	set textmatch 0
@@ -8181,7 +8260,7 @@ proc arm:cmd:rem {0 1 2 3 {4 ""}  {5 ""}} {
 		# -- try to remove any existing ban?
 		set mask ""; set bantype ""
 		if {[info exists idban($id)]} {
-			set mask $idban($id)
+			#set mask $idban($id); # -- don't delete the whole text blacklist, when unbanning one person!
 		} elseif {$method == "host"} {
 			set bantype " host"
 			if {[regexp -- {\*} $value]} { set mask $value } else { set mask "*!*@$value" }
@@ -8342,9 +8421,7 @@ proc arm:raw:join {nick uhost hand chan} {
 		
 	arm:debug 1 "arm:raw:join: ------------------------------------------------------------------------------------"
 	arm:debug 1 "arm:raw:join: [join $nick]!$uhost joined $chan....."
-	# arm:debug 1 "arm:raw:join: ------------------------------------------------------------------------------------" 
-
-	# ---- FLOODNET DETECTION (adaptive & positive regex scans with join limits)    
+	# arm:debug 1 "arm:raw:join: ------------------------------------------------------------------------------------"  
 	
 	# -- check adaptive regex exempts
 	set exempt($nick) 0
@@ -8365,6 +8442,12 @@ proc arm:raw:join {nick uhost hand chan} {
 				arm:debug 1 "arm:raw:join: [join $nick] returned after 'netsplit' after timeout period (split [userdb:timeago $netsplit($nick!$uhost)] ago), not exempt from scans..."
 		}
 		unset netsplit($nick!$uhost)
+	}
+	
+	# -- exempt if authenticated
+	if {[userdb:isLogin $nick]} {
+		arm:debug 1 "arm:raw:join: [join $nick]!$uhost is authenticated (exempt from floodnet detection)"
+		set exempt($nick) 1
 	}
 
 	# -- exempt if recently set umode +x (read from signoff message)
@@ -8890,7 +8973,8 @@ proc arm:raw:who {server cmd arg} {
 	# mynick type ident ip host nick xuser :rname
 	lassign $arg mynick type ident ip host nick xuser
 	set rname [lrange $arg 7 end]
-	if {$type != "102"} { return; }
+	if {$type != "102"} { return; }; 	# -- querytype 101: autologin
+										# -- querytype 101: scanner
 	# -- send it to the generic proc
 	arm:who $ident $ip $host $nick $xuser $rname
 }
@@ -9021,10 +9105,10 @@ proc arm:who {ident ip host nick xuser rname} {
 
 proc arm:raw:endofwho {server cmd text} {
 	global arm full scanlist
+	global scanning; # -- array to store nicks currently being scanned (to avoid duplicate scans)
 	# set mynick [lindex [join $text] 0]
 	set mask [lindex $text 1]
-	# -- any vars to unset?
-
+	
 	if {[info exists full(chanscan,$mask)]} {
 		# -- it was a full chanscan
 		set chan $mask
@@ -9035,9 +9119,9 @@ proc arm:raw:endofwho {server cmd text} {
 		set count $full(usercount,$mask)
 		set runtime [arm:runtime $start]
 
-		arm:reply $type $target "channel scan complete.. scanned $count users ($runtime)"
-		if {$type != "pub"} { putquick "NOTICE @$chan :Armour: channel scan complete.. scanned $count users ($runtime)"  }
-		if {$chan != $arm(cfg.chan.report)} { putquick "NOTICE $arm(cfg.chan.report) :Armour: channel scan complete.. scanned $count users ($runtime)" }
+		arm:reply $type $target "done. scanned $count users ($runtime)"
+		if {$type != "pub"} { putquick "NOTICE @$chan :Armour: channel scan complete. scanned $count users ($runtime)"  }
+		if {$chan != $arm(cfg.chan.report)} { putquick "NOTICE $arm(cfg.chan.report) :Armour: channel scan complete. scanned $count users ($runtime)" }
 	}
 
 	# -- this should never be empty.. safety net
@@ -9046,9 +9130,17 @@ proc arm:raw:endofwho {server cmd text} {
 	# -- send to arm:scan only after all client /WHO responses have returned
 	foreach i $scanlist(scanlist) {
 		lassign $i nick ident ip host xuser rname
-		set rname [list $rname]
-		arm:debug 3 "arm:raw:endofwho: sending args to arm:scan: nick: $nick -- ident: $ident -- ip: $ip -- host: $host -- xuser: $xuser -- rname: [join [join $rname]]"
-		arm:scan [list $nick] $ident $ip $host $xuser $rname
+		if {![info exists scanning($nick)]} {
+			# -- no current scan underway
+			set rname [list $rname]
+			arm:debug 3 "arm:raw:endofwho: sending args to arm:scan: nick: $nick -- ident: $ident -- ip: $ip -- host: $host -- xuser: $xuser -- rname: [join [join $rname]]"
+			arm:scan [list $nick] $ident $ip $host $xuser $rname
+		} else {
+			# -- existing scan underway
+			# -- race condition when autologin endofwho is returned for arm(cfg.chan.auto)
+			# -- are there other conditions?
+			arm:debug 0 "arm:raw:endofwho: \002(error)\002 avoiding issues from race condition: $nick is already being scanned by arm:scan!"
+		}
 	}
 }
 
@@ -9264,7 +9356,6 @@ proc arm:scan {nick ident ip host xuser rname} {
 					flushmode $i
 					userdb:reply notc $nick "autologin successful.";
 				}
-			
 			}
 		}
 		arm:debug 2 "arm:scan: scanning: $nuhr (xuser: $xuser)"
@@ -9330,10 +9421,11 @@ proc arm:scan {nick ident ip host xuser rname} {
 
 	# -- do floodnet detection
 	# - only if not chanscan & not secure mode & user not exempt
-	if {![info exists full(chanscan,$chan)] && $arm(mode) != "secure" && $exempt($nick) != "1"} {
+	if {![info exists full(chanscan,$chan)] || $arm(mode) != "secure" || $exempt($nick) == 0} {
+		arm:debug 5 "arm:scan: sending [join $nick] to arm:check:floodnet for secondary floodnet matching"
 		set hand [nick2hand $nick]
 		set hit [arm:check:floodnet $nick $uhost $hand $chan $xuser $rname]
-	}
+	} else { arm:debug 5 "arm:scan: not sending [join $nick] to arm:check:floodnet for secondary floodnet matching" }
 		
 	# -- prevent further scans if adaptive regex matched
 	if {$hit} {
@@ -9344,8 +9436,8 @@ proc arm:scan {nick ident ip host xuser rname} {
 		arm:debug 1 "arm:scan: adaptive regex matching complete... hit found! -- $runtime"
 		arm:debug 2 "arm:scan: ------------------------------------------------------------------------------------"
 		catch { unset exempt($nick) }
-                # -- cleanup vars
-                arm:scan:cleanup $nick
+        # -- cleanup vars
+        arm:scan:cleanup $nick
 		return;
 	}
 
@@ -10235,22 +10327,22 @@ proc arm:pubm:scan {nick uhost hand chan text} {
 	# -- exempt if overridden from 'exempt' command
 	if {[userdb:isLogin $nick]} {
 		arm:debug 5 "arm:pubm:scan: authenticated user exempted (cmd: exempt) from channel text and lineflood matching ($nick!$uhost)"
-		set exempt(text) 1	
+		return;
 	}
 	
 	# -- exempt if overridden from 'exempt' command
 	if {[info exists override($nick)]} {
 		arm:debug 5 "arm:pubm:scan: client manually exempted (cmd: exempt) from channel text and lineflood matching ($nick!$uhost)"
-		set exempt(text) 1	
+		return;
 	}
 	
-	# -- exempt if opped on common chan
+	# -- exempt if opped
 	if {[isop $nick $chan] && $arm(cfg.text.exempt.op)} {
 		arm:debug 5 "arm:pubm:scan: opped nick exempted from channel text matching ([join $nick]!$uhost)"
 		set exempt(text) 1
 	}
 
-	# -- exempt if voiced on common chan
+	# -- exempt if voiced
 	if {[isvoice $nick $chan] && $arm(cfg.text.exempt.voice)} {
 		arm:debug 5 "arm:pubm:scan: voiced nick exempted from channel text matching ([join $nick]!$uhost)"
 		set exempt(text) 1
@@ -10262,13 +10354,13 @@ proc arm:pubm:scan {nick uhost hand chan text} {
 		set exempt(text) 1
 	}
 
-	# -- exempt if opped on common chan
+	# -- exempt if opped
 	if {[isop $nick $chan] && $arm(cfg.lineflood.exempt.op)} {
 		arm:debug 5 "arm:pubm:scan: opped nick exempted from channel lineflood matching ([join $nick]!$uhost)"
 		set exempt(lines) 1
 	}
 
-	# -- exempt if voiced on common chan
+	# -- exempt if voiced
 	if {[isvoice $nick $chan] && $arm(cfg.lineflood.exempt.voice)} {
 		arm:debug 5 "arm:pubm:scan: voiced nick exempted from channel lineflood matching ([join $nick]!$uhost)"
 		set exempt(lines) 1
@@ -10392,7 +10484,7 @@ proc arm:pubm:scan {nick uhost hand chan text} {
 							# -- send a warning
 							if {$arm(cfg.text.warn.type) == "notc"} {
 								# -- send via /notice
-								arm:reply notc $nick $arm(cfg.text.warn.msg)
+								arm:reply notc [join $nick] $arm(cfg.text.warn.msg)
 							} elseif {$arm(cfg.text.warn.type) == "chan"} {
 								# -- send to public chan
 								arm:reply msg $chan "[join $nick]: $arm(cfg.text.warn.msg)"
@@ -10504,6 +10596,8 @@ proc arm:check:floodnet {nick uhost hand chan {xuser ""} {rname ""}} {
 	global kreason
 	# -- track a floodnet underway
 	global floodnet
+	# -- track recent bans against blacklist id; for quick removal
+	global idban
 	
 	global tslist; set tslist ""
 
@@ -10990,6 +11084,7 @@ proc arm:check:floodnet {nick uhost hand chan {xuser ""} {rname ""}} {
 	
 				# -- add the list entry
 				set id [arm:db:add $line]
+				set idban($id) "*!*@$host"; utimer $arm(cfg.idunban.time) "unset idban($id)"; # -- allow automatic unban of recently banned mask, when removing 
 			}
 			# -- end of exists
 		}
@@ -11019,7 +11114,7 @@ proc arm:flud:queue {} {
 
 	if {![info exists gblist]} { set gblist "" }
 	
-	arm:debug 5 "arm:flud:queue: global ban queue list: $gblist"
+	if {$gblist != ""} { arm:debug 5 "arm:flud:queue: global ban queue list: $gblist" }
 	
 	set chan $arm(cfg.chan.auto)
 	
@@ -11960,7 +12055,7 @@ proc arm:flud:unset {value} {
 # clear cumulative text entry tracker
 proc arm:textflud:unset {value} {
 	global textflud
-	arm:debug 3 "arm:textflud:unset: removing floodnet tracker textflud([join $value])"
+	arm:debug 3 "arm:textflud:unset: removing floodnet tracker textflud($value)"
 	catch { unset textflud($value) }
 }
 
@@ -11970,10 +12065,10 @@ proc arm:lineflud:decr {value} {
 	global lineflud
 	# -- value is a nick or a channel, depending on counter type
 	if {[info exists lineflud($value)]} {
-		arm:debug 5 "arm:lineflud:unset: decreasing lineflud tracker lineflud([join $value]) -- current: $lineflud($value)"
+		arm:debug 5 "arm:lineflud:unset: decreasing lineflud tracker lineflud($value) -- current: $lineflud($value)"
 		incr lineflud($value) -1
 		if {$lineflud($value) == 0} {
-			arm:debug 5 "arm:lineflud:unset: removing nil lineflud tracker lineflud([join $value])"
+			arm:debug 5 "arm:lineflud:unset: removing nil lineflud tracker lineflud($value)"
 			unset lineflud($value)
 		}
 	}
@@ -12269,7 +12364,10 @@ proc arm:isValidIP {ip} {
 # -- restart '/names -d' timer if this was last nick in the scan list
 proc arm:scan:cleanup {nick {leave ""}} {
 	global arm scanlist exempt
-	catch { unset exempt($nick) }
+	global scanning; # -- array to store nicks currently being scanned (to avoid duplicate scans)
+	
+	if {[info exists exempt($nick)]} { unset exempt($nick) }
+	
 	# -- remove the nick from the scanlist (created from /names -d)
 	#arm:listremove scanlist(nicklist) $nick
 
@@ -12278,28 +12376,35 @@ proc arm:scan:cleanup {nick {leave ""}} {
 	arm:clean:scanlist $nick 1
 
 	if {$leave == "" || $leave == 0} {
-			# -- don't leave nick in paranoid scanlist (they have been left for manual review)
-			arm:debug 4 "arm:scan:cleanup: removing $nick from scanlists";
-			#arm:listremove scanlist(paranoid) $nick
-			arm:clean:scanlist $nick 0
+		# -- don't leave nick in paranoid scanlist (they have been left for manual review)
+		arm:debug 4 "arm:scan:cleanup: removing $nick from scanlists";
+		#arm:listremove scanlist(paranoid) $nick
+		arm:clean:scanlist $nick 0
 	}
 
 	set flush 0
 	if {![info exists scanlist(nicklist)]} {
-			set flush 1
+		set flush 1
 	} else {
-			if {$scanlist(nicklist) == ""} { set flush 1 }
+		if {$scanlist(nicklist) == ""} { set flush 1 }
 	}
+	
 	if {$flush} {
-			# -- the nicklist to scan is now empty (all scanned)
+		# -- the nicklist to scan is now empty (all scanned)
 
-			# -- flush the scanlist(scanlist) array -- all nicks should be scanned so no longer needed
-			if {[info exists scanlist(scanlist)]} { unset scanlist(scanlist) }
-			# -- restart /names -d
-			if {$arm(mode) == "secure"} {
-					arm:debug 4 "arm:scan:cleanup: flushed scanlist(nicklist) -- all nicknames have been scanned, restarting arm:secure in 5 secs"
-					utimer 5 arm:secure;
-			}
+		# -- flush the scanlist(scanlist) array -- all nicks should be scanned so no longer needed
+		if {[info exists scanlist(scanlist)]} { unset scanlist(scanlist) }
+		# -- restart /names -d
+		if {$arm(mode) == "secure"} {
+				arm:debug 4 "arm:scan:cleanup: flushed scanlist(nicklist) -- all nicknames have been scanned, restarting arm:secure in 5 secs"
+				utimer 5 arm:secure;
+		}
+	}
+	
+	# -- remove current scan tracker for nick
+	if {[info exists scanning($nick)]} {
+		arm:debug 4 "arm:scan:cleanup: removing current scan tracker for nick: scanning([join $nick])"
+		unset scanning($nick)
 	}
 }
 
