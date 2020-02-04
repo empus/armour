@@ -56,7 +56,7 @@
 						arm(cfg.auth.hide):			renamed from arm(auth.hide)
 						arm(cfg.gnuworld.nick):		the nickname of the mod.cservice GNUWorld service
 						arm(cfg.gnuworld.host):		the authentication hostname of the mod.cservice GNUWorld service
-						arm(cfg.xhost):				the non-regex extension for umode+x users
+						arm(cfg.xhost.ext):			the non-regex extension for umode+x users
 		
 	+ Improvement:	Prevent secure mode if ircd does not support it (ie. IRCnet/EFnet)
 	

@@ -44,7 +44,9 @@ if {$quote(mode) == 1} {
 	}
 } else {
 	# -- unbind in case we changed mode during operation
-	catch { unbind pub - .quote quote:pub:quote }
+	if {[lsearch [info commands] "quote:bind:pub:quote"] != "-1"} {
+		unbind pub - .quote quote:bind:pub:quote
+	}
 	# -- load commands
 	arm:loadcmds
 }

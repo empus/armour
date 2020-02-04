@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v3.5.0 autobuild completed on: Mon Feb  3 08:28:23 PST 2020
+# armour.tcl v3.5.0 autobuild completed on: Mon Feb  3 10:14:05 PST 2020
 # ------------------------------------------------------------------------------------------------
 #
 #    _                         ___ ___ 
@@ -4815,7 +4815,7 @@ proc arm:cmd:conf {0 1 2 3 {4 ""}  {5 ""}} {
 	
 	# -- check the var
 	if {[info exists arm(cfg.$cfg)]} {
-		arm:reply $type $target "setting: arm(cfg.$cfg) -- value: $arm(cfg.$cfg)"
+		arm:reply $type $target "\002setting:\002 arm(cfg.$cfg) -- value: $arm(cfg.$cfg)"
 	} else {
 		# -- return those that do match?
 		set thelist ""
@@ -7739,7 +7739,7 @@ proc arm:cmd:add {0 1 2 3 {4 ""}  {5 ""}} {
 		if {$theaction == "kickban" && $arm(cfg.ban.auto)} {
 			set hit 0
 			set addban 0
-			if {$method == "user"} { set mask "*!*@$tvalue.$arm(cfg.xhost)"; set addban 1 }
+			if {$method == "user"} { set mask "*!*@$tvalue.$arm(cfg.xhost.ext)"; set addban 1 }
 			if {$method == "host"} {
 				if {[regexp -- {\*} $tvalue]} { set mask $tvalue } else { set mask "*!*@$tvalue" }
 				set addban 1
@@ -7883,7 +7883,7 @@ proc arm:cmd:rem {0 1 2 3 {4 ""}  {5 ""}} {
 				if {[regexp -- {\*} $value]} { set mask $value } else { set mask "*!*@$value" }
 			} elseif {$method == "user" || $method == "xuser"} {
 				set bantype " user"
-				set mask "*!*@$value.$arm(cfg.xhost)"
+				set mask "*!*@$value.$arm(cfg.xhost.ext)"
 			} 
 			
 			if {$mask != ""} {
@@ -8187,7 +8187,7 @@ proc arm:cmd:rem {0 1 2 3 {4 ""}  {5 ""}} {
 			if {[regexp -- {\*} $value]} { set mask $value } else { set mask "*!*@$value" }
 		} elseif {$method == "user" || $method == "xuser"} {
 			set bantype " user"
-			set mask "*!*@$value.$arm(cfg.xhost)"
+			set mask "*!*@$value.$arm(cfg.xhost.ext)"
 		} 
 		
 		if {$mask != ""} {
@@ -10233,44 +10233,50 @@ proc arm:pubm:scan {nick uhost hand chan text} {
 	if {[info exists newjoin($nick)]} { set newcomer 1 } else { set newcomer 0 }
 	
 	# -- exempt if overridden from 'exempt' command
+	if {[userdb:isLogin $nick]} {
+		arm:debug 5 "arm:pubm:scan: authenticated user exempted (cmd: exempt) from channel text and lineflood matching ($nick!$uhost)"
+		set exempt(text) 1	
+	}
+	
+	# -- exempt if overridden from 'exempt' command
 	if {[info exists override($nick)]} {
-		arm:debug 5 "arm:pubm:scan: client manually exempted (cmd: exempt) from channel text matching ($nick!$uhost)"
+		arm:debug 5 "arm:pubm:scan: client manually exempted (cmd: exempt) from channel text and lineflood matching ($nick!$uhost)"
 		set exempt(text) 1	
 	}
 	
 	# -- exempt if opped on common chan
 	if {[isop $nick $chan] && $arm(cfg.text.exempt.op)} {
-		arm:debug 5 "arm:pubm:scan: opped nick exempted from channel text matching ($nick!$uhost)"
+		arm:debug 5 "arm:pubm:scan: opped nick exempted from channel text matching ([join $nick]!$uhost)"
 		set exempt(text) 1
 	}
 
 	# -- exempt if voiced on common chan
 	if {[isvoice $nick $chan] && $arm(cfg.text.exempt.voice)} {
-		arm:debug 5 "arm:pubm:scan: voiced nick exempted from channel text matching ($nick!$uhost)"
+		arm:debug 5 "arm:pubm:scan: voiced nick exempted from channel text matching ([join $nick]!$uhost)"
 		set exempt(text) 1
 	}
 	
 	# -- exempt if nick has recently joined
 	if {$arm(cfg.text.newcomer) && $newcomer} {
-		arm:debug 5 "arm:pubm:scan: newcomer nick exempted from channel text matching ($nick!$uhost)"
+		arm:debug 5 "arm:pubm:scan: newcomer nick exempted from channel text matching ([join $nick]!$uhost)"
 		set exempt(text) 1
 	}
 
 	# -- exempt if opped on common chan
 	if {[isop $nick $chan] && $arm(cfg.lineflood.exempt.op)} {
-		arm:debug 5 "arm:pubm:scan: opped nick exempted from channel lineflood matching ($nick!$uhost)"
+		arm:debug 5 "arm:pubm:scan: opped nick exempted from channel lineflood matching ([join $nick]!$uhost)"
 		set exempt(lines) 1
 	}
 
 	# -- exempt if voiced on common chan
 	if {[isvoice $nick $chan] && $arm(cfg.lineflood.exempt.voice)} {
-		arm:debug 5 "arm:pubm:scan: voiced nick exempted from channel lineflood matching ($nick!$uhost)"
+		arm:debug 5 "arm:pubm:scan: voiced nick exempted from channel lineflood matching ([join $nick]!$uhost)"
 		set exempt(lines) 1
 	}
 	
 	# -- exempt if nick has newly joined
 	if {$arm(cfg.lineflood.newcomer) && $newcomer} {
-		arm:debug 5 "arm:pubm:scan: newcomer nick exempted from channel lineflood matching ($nick!$uhost)"
+		arm:debug 5 "arm:pubm:scan: newcomer nick exempted from channel lineflood matching ([join $nick]!$uhost)"
 		set exempt(lines) 1
 	}	
 	
@@ -10294,9 +10300,9 @@ proc arm:pubm:scan {nick uhost hand chan text} {
 				if {$lineflud($nick) >= $llines} {
 					# -- hit!
 					set linehit(nick) 1; set action(lines) 1
-					arm:debug 1 "arm:pubm:scan: lineflood hit! match on $lineflud($nick) lines (nick: $nick!$uhost)"
+					arm:debug 1 "arm:pubm:scan: lineflood hit! match on $lineflud($nick) lines (nick: [join $nick]!$uhost)"
 				}
-				utimer $lsecs "arm:lineflud:decr $nick";	# -- decrease the counter by 1 x line
+				utimer $lsecs "arm:lineflud:decr [split $nick]";	# -- decrease the counter by 1 x line
 			}
 		}
 
@@ -10317,9 +10323,9 @@ proc arm:pubm:scan {nick uhost hand chan text} {
 				if {$lineflud($chan) >= $llines} {
 					# -- hit!
 					set linehit(chan) 1; set action(lines) 1
-					arm:debug 1 "arm:pubm:scan: lineflood hit! match on $lineflud($chan) lines (chan: $chan)"
+					arm:debug 1 "arm:pubm:scan: lineflood hit! match on $lineflud($chan) lines (chan: [join $chan])"
 				}
-				utimer $lsecs "arm:lineflud:decr $chan";	# -- decrease the counter by 1 x line
+				utimer $lsecs "arm:lineflud:decr [split $chan]";	# -- decrease the counter by 1 x line
 			}
 		}
 	}
@@ -10344,7 +10350,7 @@ proc arm:pubm:scan {nick uhost hand chan text} {
 			if {[string match [string tolower $value] $text]} {
 				# -- wildcard hit!
 				set hit(text) 1
-				arm:debug 1 "arm:pubm:scan: wildcard hit! pattern($id) of value: $value (nick: $nick -- text: $text)"
+				arm:debug 1 "arm:pubm:scan: wildcard hit! pattern($id) of value: $value (nick: [join $nick] -- text: $text)"
 				break;
 			} else {
 				# -- try regex match
@@ -10352,7 +10358,7 @@ proc arm:pubm:scan {nick uhost hand chan text} {
 				if {$err == 1} {
 					# -- regex hit!
 					set hit(text) 1
-					arm:debug 1 "arm:pubm:scan: pattern($id) hit! match of value: $value (nick: $nick -- text: $text)"
+					arm:debug 1 "arm:pubm:scan: pattern($id) hit! match of value: $value (nick: [join $nick] -- text: $text)"
 					break;
 				} elseif {$err == 0} {
 					# -- error; probably just a wildcard
@@ -10389,7 +10395,7 @@ proc arm:pubm:scan {nick uhost hand chan text} {
 								arm:reply notc $nick $arm(cfg.text.warn.msg)
 							} elseif {$arm(cfg.text.warn.type) == "chan"} {
 								# -- send to public chan
-								arm:reply msg $chan "$nick: $arm(cfg.text.warn.msg)"
+								arm:reply msg $chan "[join $nick]: $arm(cfg.text.warn.msg)"
 							} else {
 								arm:debug 0 "arm:pubm:scan: \002(error)\002 invalid value for config setting arm(cfg.text.warn.type)"
 							}
@@ -10397,7 +10403,7 @@ proc arm:pubm:scan {nick uhost hand chan text} {
 					}
 					# -- set timer to unset after secs
 					set thevar "$nick,$value"
-					utimer $secs "arm:textflud:unset $thevar"
+					utimer $secs "arm:textflud:unset [split $thevar]"
 				}
 			} else { set action(text) 1 }; # -- this is a hit because it's a single 1:1 match
 		}; # -- end of text hit
@@ -10436,12 +10442,12 @@ proc arm:pubm:scan {nick uhost hand chan text} {
 	if {$action(text)} {
 		set reason [join [lrange [split $bline(text,$id) :] 9 end]]
 		set runtime [arm:runtime $start]
-		arm:debug 1 "arm:scan: blacklist matched $nick!$uhost: pattern($id) id: $id -- $value -- taking action! ($runtime)"
+		arm:debug 1 "arm:scan: blacklist matched [join $nick]!$uhost: pattern($id) id: $id -- $value -- taking action! ($runtime)"
 		arm:debug 2 "arm:scan: ------------------------------------------------------------------------------------"
 		set string "Armour: blacklisted text (reason: $reason) \[id: $id\]"
 		# -- truncate reason for X bans
 		if {[string tolower $arm(cfg.ban)] == "x" && [string length $string] >= 124} { set string "[string range $string 0 124]..." }
-		arm:kickban $nick $chan *!*@$host $arm(cfg.ban.time) "$string"
+		arm:kickban [join $nick] $chan *!*@$host $arm(cfg.ban.time) "$string"
 		arm:report black $chan "Armour: blacklisted text (\002id:\002 $id \002type:\002 text \002value:\002 $value \002reason:\002 $reason)"
 		# -- incr statistics
 		incr hits($id)
@@ -10450,7 +10456,7 @@ proc arm:pubm:scan {nick uhost hand chan text} {
 	} elseif {$hit(text)} {
 		# -- cumulative match not yet reached
 		set runtime [arm:runtime $start]
-		arm:debug 1 "arm:pubm:scan: cumulative match (current: $textflud($nick,$value)) not yet found (required: $matches)! (runtime: $runtime -- nick: $nick -- text: $text)"
+		arm:debug 1 "arm:pubm:scan: cumulative match (current: $textflud($nick,$value)) not yet found (required: $matches)! (runtime: $runtime -- nick: [join $nick] -- text: $text)"
 	}
 	
 	# -- line flood matching.
@@ -10468,7 +10474,7 @@ proc arm:pubm:scan {nick uhost hand chan text} {
 	}
 	if {$linehit(nick)} {
 		# -- nickname reached line threshold
-		arm:kickban $nick $chan *!*@$host $arm(cfg.ban.time) $arm(cfg.lineflood.reason)
+		arm:kickban [join $nick] $chan *!*@$host $arm(cfg.ban.time) $arm(cfg.lineflood.reason)
 	}
 }
 
@@ -11823,7 +11829,7 @@ proc arm:pubm:all {nick uhost hand chan text} {
 	if {[isvoice $nick]} { return; }
 	
 	# -- exempt if umode +x
-	if {[string match -nocase "*.$arm(cfg.xhost)" $host]} { return; }
+	if {[string match -nocase "*.$arm(cfg.xhost.ext)" $host]} { return; }
 	
 	# -- exempt if resolved ident
 	if {![string match "~*" $ident]} { return; }
@@ -11976,7 +11982,7 @@ proc arm:lineflud:decr {value} {
 # -- remove the temp channel lock after a channel line flood
 proc arm:lineflud:unmode {chan} {
 	global arm
-	regsub -all {\+} $arm(cfg.lineflood.chan.mode) unmode
+	regsub -all {\+} $arm(cfg.lineflood.chan.mode) {-} unmode
 	# -- NOTE: we don't need to make the removal dependant on the flood continuing at this time
 	#          as it can be safe to assume that the channel lock should prevent further floods
 	putnow "MODE $chan $unmode"

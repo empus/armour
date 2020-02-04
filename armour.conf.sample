@@ -135,7 +135,7 @@ set arm(cfg.xregex) {([^\.]+)\.users\.undernet\.org}
 
 # -- non-regex extension for umode +x registered users
 # -- change to suit your own network
-set arm(cfg.xhost) "users.undernet.org"
+set arm(cfg.xhost.ext) "users.undernet.org"
 
 # -- allow use of nickname (with or without nick completion char :) as control char? (0|1) - [1]
 set arm(cfg.char.nick) 1
