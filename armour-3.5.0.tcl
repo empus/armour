@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v3.5.0 autobuild completed on: Tue Feb  4 08:48:20 PST 2020
+# armour.tcl v3.5.0 autobuild completed on: Tue Feb  4 09:46:20 PST 2020
 # ------------------------------------------------------------------------------------------------
 #
 #    _                         ___ ___ 
@@ -743,26 +743,42 @@ proc userdb:cmd:whois {0 1 2 3 {4 ""}  {5 ""}} {
 	
 	if {$trglastseen != ""} { set lastseen [userdb:timeago $trglastseen] } \
 	else { set lastseen "never" }
+	if {$trgcurnick != ""} { set lastseen "now (authed $lastseen ago)" }
+	set where ""
+	if {$lastseen != "never"} {
+		if {$trgcurnick != ""} { set where "-- \002where:\002 $trgcurnick!$trgcurhost" } \
+		else { set where "-- \002last:\002 $trglastnick!$trglasthost" }
+	}	
 	if {$trgemail == ""} { set trgemail "(not set)" }
-	if {$trglang == ""} { set trglang "EN" }
+	if {$trglang == "" || $trglang == "EN"} {
+		set line1 "-- \002email:\002 $trgemail"
+		set line2 "\002lastseen:\002 $lastseen $where"
+	} else {
+		set line1 "-- \002languages:\002 $trglang"
+		set line2 "\002email:\002 $trgemail -- \002lastseen:\002 $lastseen $where"
+	}
 	
 	# -- greeting?	
 	::armdb::db_connect
-	set id [userdb:uline:get id nick $targetuser]
+	set id [userdb:uline:get id user $targetuser]
 	set query "SELECT greet FROM greets WHERE uid=$id"
 	set row [::armdb::db_query $query]
 	set greet [lindex [lindex $row 0] 0]
 	::armdb::db_close
 
+	if {$arm(cfg.ircd) == 1} {
+		# -- ircu (ie. Undernet/Quakenet) -- ACCOUNT
+		userdb:reply $type $target "\002user:\002 $targetuser -- \002level:\002 $trglevel -- \002xuser:\002 $trgxuser -- \002automode:\002 $automode $line1"
+	} else {
+		# -- no ACCOUNT (ie. EFnet/IRCnet)
+		userdb:reply $type $target "\002user:\002 $targetuser -- \002level:\002 $trglevel -- \002automode:\002 $automode $line1"
+	}
 	
-	userdb:reply $type $target "\002user:\002 $targetuser -- \002xuser:\002 $trgxuser -- \002level:\002 $trglevel "
-	userdb:reply $type $target "\002automode:\002 $automode -- \002lastseen:\002 $lastseen"
-	userdb:reply $type $target "\002email:\002 $trgemail -- \002languages:\002 $trglang"
-	if {$lastseen != "never"} {
-		if {$trgcurnick != ""} { userdb:reply $type $target "\002where:\002 $trgcurnick!$trgcurhost" } \
-		else { userdb:reply $type $target "\002last:\002 $trglastnick!$trglasthost" }
-	}	
+	# -- second line
+	userdb:reply $type $target $line2
+	
 	if {$greet != ""} {
+		# -- output the onjoin greeting!
 		userdb:reply $type $target "\002greet:\002 $greet"
 	}
 	# -- create log entry for command use
@@ -1070,6 +1086,8 @@ proc userdb:msg:login {nick uhost hand arg} {
 		userdb:reply notc $nick "login failed. please join a common channel."
 		return;
 	}
+	
+	set cmd "login"
 	
 	# -- encrypt given pass
 	set encrypt [userdb:encrypt $pass]
