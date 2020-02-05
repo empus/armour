@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v3.5.0 autobuild completed on: Tue Feb  4 18:31:25 PST 2020
+# armour.tcl v3.5.0 autobuild completed on: Tue Feb  4 19:55:40 PST 2020
 # ------------------------------------------------------------------------------------------------
 #
 #    _                         ___ ___ 
@@ -2325,14 +2325,16 @@ proc userdb:join {nick uhost hand chan} {
 	# -- greeting?	
 	::armdb::db_connect
 	set id [userdb:uline:get id nick $nick]
-	set query "SELECT uid,greet FROM greets WHERE uid=$id"
-	set row [::armdb::db_query $query]
-	lassign [lindex $row 0] uid greet
-	::armdb::db_close
-	if {$greet != ""} {
-		# -- output the greeting!
-		arm:debug 1 "arm:raw:join: sending greeting to $nick in $chan"
-		putquick "PRIVMSG $chan :\[$nick\] $greet" 
+	if {$id != ""} {
+		set query "SELECT uid,greet FROM greets WHERE uid=$id"
+		set row [::armdb::db_query $query]
+		lassign [lindex $row 0] uid greet
+		::armdb::db_close
+		if {$greet != ""} {
+			# -- output the greeting!
+			arm:debug 1 "arm:raw:join: sending greeting to $nick in $chan"
+			putquick "PRIVMSG $chan :\[$nick\] $greet" 
+		}
 	}
 	
 	if {$return} { return; }
