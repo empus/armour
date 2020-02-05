@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v3.5.0 autobuild completed on: Tue Feb  4 09:46:20 PST 2020
+# armour.tcl v3.5.0 autobuild completed on: Tue Feb  4 18:31:25 PST 2020
 # ------------------------------------------------------------------------------------------------
 #
 #    _                         ___ ___ 
@@ -3458,7 +3458,7 @@ proc x:init:server {type} {
 }
 
 proc x:activate_chans {} {
-	global loginsucceed
+	global arm loginsucceed
 	if {$loginsucceed == 0} {
 		putlog "\[@\] (xAuth) $arm(cfg.gnuworld.nick) is lagged, I'll join my channels and wait."
 		foreach chan [channels] {
@@ -3484,7 +3484,7 @@ proc x:deactivate {type} {
 }
 
 proc x:login:late:success {mnick uhost hand text {dest ""}} {
-	global loginsucceed
+	global arm loginsucceed
 	if {$mnick == $arm(cfg.gnuworld.nick)} {
 		set loginsucceed 1
 		putlog "\[@\] (xAuth) Successfully logged into $arm(cfg.gnuworld.nick). *phew*"
@@ -3494,7 +3494,7 @@ proc x:login:late:success {mnick uhost hand text {dest ""}} {
 }
 
 proc x:login:late:fail {mnick uhost hand text {dest ""}} {
-	global loginsucceed
+	global arm loginsucceed
 	if {$mnick == $arm(cfg.gnuworld.nick)} {
 		set loginsucceed 1
 		putlog "\[@\] (xAuth) After all this time, NOW $arm(cfg.gnuworld.nick) tells me authentication failed!!!"
@@ -3504,7 +3504,7 @@ proc x:login:late:fail {mnick uhost hand text {dest ""}} {
 }
 
 proc x:login:success {mnick uhost hand text {dest ""}} {
-	global loginsucceed
+	global arm loginsucceed
 	if {$mnick == $arm(cfg.gnuworld.nick)} {
 		set loginsucceed 1
 		foreach chan [channels] {
@@ -3517,7 +3517,7 @@ proc x:login:success {mnick uhost hand text {dest ""}} {
 }
 
 proc x:login:fail {mnick uhost hand text {dest ""}} {
-	global loginsucceed
+	global arm loginsucceed
 	if {$mnick == $arm(cfg.gnuworld.nick)} {
 	set loginsucceed 1
 		foreach chan [channels] {

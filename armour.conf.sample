@@ -690,7 +690,7 @@ set addcmd(conf)		{	arm		500		pub msg dcc	}
 set files {
 
 	# -- Armour
-	./armour/armour-3.4.5.tcl					# change this to match the relevant version
+	./armour/armour-3.5.0.tcl					# change this to match the relevant version
 	
 	# -- plugins (optional)
 	#./armour/plugins/smsbot.tcl				# smsglobal plugin
