@@ -1,5 +1,5 @@
 ----------------------------------------------------------------------------------------------------------------------------------------
- armour.tcl v3.5.0 - 2020.02.03
+ armour.tcl v3.5.1 - 2020.02.05
 ----------------------------------------------------------------------------------------------------------------------------------------
 
  ![Armour](./armour.png)
@@ -11,12 +11,24 @@
 ----------------------------------------------------------------------------------------------------------------------------------------
 
  This file should be monitored for feature enhancements that require consideration.
- Specifically, look for new config variables that have eventuated through new features.  Find these variables
+ Specifically, look for new config variables that have eventuated through new features.	 Find these variables
  from the armour.conf.sample file provided and paste into your own *.conf file with appropriate values.
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 
-***2019.02.03	v3.4.5***
+***2019.02.05	v3.5.1***
+
+	+ New release Armour v3.5.1
+	
+	+ Enhancement:	New feature to automatically remove blacklist entries when matching ban is recently removed.
+					Note that user must have access to 'rem' command and ban must have been placed within the
+					configured arm(cfg.idunban.time) period (default 1 hr).
+	
+		- Config var:	arm(cfg.black.unban.rem):	whether to carry out these automatic removals
+
+----------------------------------------------------------------------------------------------------------------------------------------
+	
+***2019.02.03	v3.5.0***
 
 	+ New release Armour v3.5.0
 	
@@ -78,7 +90,7 @@
 		- Config var:	arm(cfg.ircd):		1: ircu (Undernet/Quakenet)
 											2: IRCnet/EFnet
 	
-	+ Enhancement: 	New config parameter for hostname of service clients, to better support networks other 
+	+ Enhancement:	New config parameter for hostname of service clients, to better support networks other 
 					than Undernet
 	
 		- Config var:	arm(cfg.servicehost):	hostname
@@ -87,9 +99,9 @@
 	
 		- Config var:	arm(cfg.xregex):		regex pattern
 		
-	+ Enhancement:	trakka plugin:  new config parameter for umode +x hosts, to better support other networks
+	+ Enhancement:	trakka plugin:	new config parameter for umode +x hosts, to better support other networks
 	
-		- Config var:	trakka(cfg.xhost): 		regex pattern
+		- Config var:	trakka(cfg.xhost):		regex pattern
 		
 	+ Fixed bug:	Adaptive floodnet detection not working for patterns: nick!ident/rname, ident/rname, nick/rname
 	
@@ -138,7 +150,7 @@
 	+ New release Armour v3.4.2
 	
 	+ Enhancement:	adduser no longer requires temporary password
-	+ Enhancement:  tell plugin context fixes and improvements
+	+ Enhancement:	tell plugin context fixes and improvements
 	+ Enhancement:	alert users upon autologin when no password is set
 	
 		- Config var:	arm(cfg.alert.nopass): enabled or disabled
@@ -151,7 +163,7 @@
 	+ Fixed bug:	autologin not working first time for a new user
 	+ Fixed bug:	newpass not working
 	+ Enhancement:	changed userline separator from : to | to support IPv6 hosts
-	+ Enhancement:  cmdlog now logs to report channel
+	+ Enhancement:	cmdlog now logs to report channel
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -233,7 +245,7 @@
 
 	+ Added cmd:	die:		kills the bot entirely
 
-	+ Added cmd:	say:		has the bot send a message to a channel, all channels or a given nickname.  
+	+ Added cmd:	say:		has the bot send a message to a channel, all channels or a given nickname.	
 					optionally can be an action.
 
 	+ Enhancement:	cmd 'whois' can now lookup via nickname with = prefix (a la Undernet's X / 
@@ -405,7 +417,7 @@
 	+ Added script:		upgrade.sh
 					- upgrade existing DB files to allow new statistical hit field.
 
-					NOTE: 	- This *MUST* be done manually before loading new code: 
+					NOTE:	- This *MUST* be done manually before loading new code: 
 						usage: ./upgrade.sh <armour-dbfile>
 						- DB file is set in config var 'arm(cfg.db.file)' 
 						userfile requires no upgrade

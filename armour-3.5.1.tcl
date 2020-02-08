@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v3.5.0 autobuild completed on: Tue Feb  4 19:55:40 PST 2020
+# armour.tcl v3.5.1 autobuild completed on: Wed Feb  5 05:49:25 PST 2020
 # ------------------------------------------------------------------------------------------------
 #
 #    _                         ___ ___ 
@@ -31,7 +31,7 @@
 #
 
 # -- script version
-set arm(version) "v3.5.0"
+set arm(version) "v3.5.1"
 
 # -- we require Tcl 8.6 for coroutines now
 package require Tcl 8.6
@@ -8365,7 +8365,8 @@ bind mode - "* +b" { arm:coroexec arm:modeadd:b }
 # -- manage scanlist on manual voice
 bind mode - "* +v" { arm:coroexec arm:modeadd:v }
 
-
+# -- remove blacklist entries on recent unbans
+bind mode - "* -b" { arm:coroexec arm:moderem:b }
 
 # -- begin onjoin scans
 proc arm:raw:join {nick uhost hand chan} {
@@ -9263,6 +9264,43 @@ proc arm:modeadd:v {nick uhost hand chan mode target} {
 		set pos [lsearch $scanlist(nicklist) $target]
 		if {$pos != -1} {
 			set scanlist(nicklist) [lreplace $scanlist(nicklist) $pos $pos]
+		}
+	}
+}
+		
+# --- delete blacklist if ban has been removed recently?
+# - recently means within period: arm(cfg.idunban.time)
+proc arm:moderem:b {nick uhost hand chan mode target} {
+	global arm idban
+	if {!$arm(cfg.black.unban.rem)} { return; }; # -- only continue if configured
+	if {([string tolower $chan] != [string tolower $arm(cfg.chan.auto)])} { return; }
+	set mask $target
+	if {[userdb:isLogin $nick]} { return; }
+	if {$nick == ""} { return; }; # -- server mode
+	if {![userdb:isAllowed $nick rem pub]} { return; }; # -- user has no access to remove blacklists
+	
+	# -- check if there is a recent blacklist in memory
+	foreach id [array names idban] {
+		if {$mask == $idban($id)} {
+			# -- remove the blacklist
+			set line [arm:get:line $id]
+			set sline [split $line :]
+			lassign $sline type id method value ts modifby action limit hits
+			set reason [lrange $sline 9 end]
+			if {$type == "W"} {
+				set ltype "wline"
+				set list "whitelist"
+			} elseif {$type == "B"} {
+				set ltype "bline"
+				set list "blacklist"
+			}
+			
+			arm:debug 1 "arm:moderem:b: $nick unbanned $mask -- automatically removing blacklist [subst $ltype]($method,$value)"
+			unset [subst $ltype]($method,$value)
+			unset idban($id)
+			
+			if {$limit != "1-1-1"} { arm:reply pub $chan "removed $method $list entry (\002id:\002 $id \002value:\002 $value \002action:\002 $action \002limit:\002 $limit \002hits:\002 $hit \002reason:\002 $reason)" } \
+			else { arm:reply pub $chan "removed $method $list entry (\002id:\002 $id \002value:\002 $value \002action:\002 $action \002hits:\002 $hit \002reason:\002 $reason)" }
 		}
 	}
 }
@@ -11608,12 +11646,12 @@ proc arm:get:id {list method value} {
 proc arm:getarg {item} {
 	switch -- $item {
 		type		{ set arg 0 }
-		id		{ set arg 1 }
+		id			{ set arg 1 }
 		method		{ set arg 2 }
 		value		{ set arg 3 }
 		timestamp	{ set arg 4 }
 		modifby		{ set arg 5 }
-		timestamp	{ set arg 6 }
+		action		{ set arg 6 }
 		limit		{ set arg 7 }
 		hits		{ set arg 8 }
 		reason		{ set arg 9 }

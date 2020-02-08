@@ -16,7 +16,7 @@ namespace eval armdb {
 
 # -- load sqlite (or at least try)
 if {[catch {package require sqlite3} fail]} {
-	putlog "\[@\] error loading sqlite3 library.  unable to load Armour SQL DB functions."
+	putlog "\[@\] error loading sqlite3 library. error: $fail"
 	return false
 }
 
@@ -43,7 +43,7 @@ proc db_close {} { armsql close }
 
 # -- connect attempt
 if {[catch {db_connect} fail]} {
-	putlog "\[@\] unable to create sqlite database.  check directory permissions."
+	putlog "\[@\] unable to connect to sqlite database. error: $fail"
 	return false
 }
 
@@ -107,6 +107,12 @@ db_query "CREATE TABLE IF NOT EXISTS notes (\
 			to_id INTEGER NOT NULL,\
 			note TEXT NOT NULL,\
 			read TEXT NOT NULL DEFAULT 'N'\
+			)"
+			
+# -- user greetings
+db_query "CREATE TABLE IF NOT EXISTS greets (\
+			uid INTEGER UNIQUE NOT NULL,\
+			greet TEXT NOT NULL\
 			)"
 			
 # -- topics

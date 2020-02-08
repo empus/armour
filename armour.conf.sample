@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v3.4.5 - 2020.02.03
+# armour.tcl v3.5.1 - 2020.02.05
 # ------------------------------------------------------------------------------------------------
 #
 #    _                         ___ ___ 
@@ -63,7 +63,7 @@
 # ------------------------------------------------------------------------------------------------
 #
 # Code by		: 	Empus @ Undernet - empus@undernet.org
-# Last modified	:	2020.02.03
+# Last modified	:	2020.02.05
 #
 # Please contact me should you need any assistence, but I hope most config options are explanatory.
 #
@@ -318,10 +318,13 @@ set arm(cfg.time.newjoin) "60"
 # -- note: more powerful string now matching supported by 'text' type blacklist entries
 set arm(cfg.badwords) "*fuck* *shit* *cunt* *nigger*"
 
-# -- time to allow automatic removal of recent bans by specifying blacklist id (secs) - [300]
-set arm(cfg.idunban.time) 600
+# -- time to allow automatic removal of recent bans by specifying blacklist id (secs) - [3600]
+# - also provides memory used for optional blacklist removals based on unbans
+set arm(cfg.idunban.time) 3600
 
-
+# -- automatically remove blacklist entries when channel ban is removed? (0|1) - [1]
+# - user must have 'rem' access; unban must occur within arm(cfg.idunban.time) of ban
+set arm(cfg.black.unban.rem) 1
 
 
 # ------------------------------------------------------------------------------------------------
@@ -526,8 +529,8 @@ set arm(cfg.dnotc.black) 1
 # CUSTOM QUEUE SETTINGS
 # ------------------------------------------------------------------------------------------------
 
-# -- custom kick queue cycle (secs) - [5]
-set arm(cfg.queue.kick) "5"
+# -- custom kick queue cycle (secs) - [2]
+set arm(cfg.queue.kick) "2"
 
 # -- custom ban queue cycle (secs) - [1]
 set arm(cfg.queue.ban) "1"
@@ -690,7 +693,7 @@ set addcmd(conf)		{	arm		500		pub msg dcc	}
 set files {
 
 	# -- Armour
-	./armour/armour-3.5.0.tcl					# change this to match the relevant version
+	./armour/armour-3.5.1.tcl					# change this to match the relevant version
 	
 	# -- plugins (optional)
 	#./armour/plugins/smsbot.tcl				# smsglobal plugin
