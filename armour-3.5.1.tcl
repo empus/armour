@@ -9479,7 +9479,7 @@ proc arm:scan {nick ident ip host xuser rname} {
 
 	# -- do floodnet detection
 	# - only if not chanscan & not secure mode & user not exempt
-	if {![info exists full(chanscan,$chan)] || $arm(mode) != "secure" || $exempt($nick) == 0} {
+        if {![info exists full(chanscan,$chan)] && $arm(mode) != "secure" && !$exempt($nick)} {
 		arm:debug 5 "arm:scan: sending [join $nick] to arm:check:floodnet for secondary floodnet matching"
 		set hand [nick2hand $nick]
 		set hit [arm:check:floodnet $nick $uhost $hand $chan $xuser $rname]
