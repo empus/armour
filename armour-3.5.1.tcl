@@ -8522,7 +8522,7 @@ proc arm:raw:join {nick uhost hand chan} {
 	
 	# -- floodnet checks
 	set hit 0
-	if {!$exempt($nick) && $arm(mode) != "secure"} {
+	if {!$exempt($nick) && $arm(mode) != "secure" && $arm(cfg.adapt)} {
 		# -- run floodnet detection
 		set hit [arm:check:floodnet $nick $uhost $hand $chan]
 	} else { arm:debug 1 "arm:raw:join: user was exempt from primary (ie. nick, ident & nick!ident) floodnet detection" }
@@ -9479,7 +9479,7 @@ proc arm:scan {nick ident ip host xuser rname} {
 
 	# -- do floodnet detection
 	# - only if not chanscan & not secure mode & user not exempt
-        if {![info exists full(chanscan,$chan)] && $arm(mode) != "secure" && !$exempt($nick)} {
+        if {![info exists full(chanscan,$chan)] && $arm(mode) != "secure" && !$exempt($nick) && $arm(cfg.adapt)} {
 		arm:debug 5 "arm:scan: sending [join $nick] to arm:check:floodnet for secondary floodnet matching"
 		set hand [nick2hand $nick]
 		set hit [arm:check:floodnet $nick $uhost $hand $chan $xuser $rname]
