@@ -1689,6 +1689,7 @@ proc userdb:db:adduser {string} {
 	set user [lindex $list 2]
 	set xuser [lindex $list 3]
 	set level [lindex $list 4]
+	set automode [lindex $list 10]
 	set pass [lindex $list 11]
 	set email [lindex $list 12]
 	set languages [lindex $list 13]
@@ -1702,8 +1703,8 @@ proc userdb:db:adduser {string} {
 		set db_xuser [::armdb::db_escape $xuser]
 		set db_level [::armdb::db_escape $level]
 		set db_pass [::armdb::db_escape $pass]
-		::armdb::db_query "INSERT INTO users (user,xuser,level,pass,email,languages) \
-			VALUES ('$user', '$xuser', '$level', '$pass', '$email', '$languages')"
+		::armdb::db_query "INSERT INTO users (user,xuser,level,automode,pass,email,languages) \
+			VALUES ('$user', '$xuser', '$level', '$automode', '$pass', '$email', '$languages')"
 		::armdb::db_close
 	}
 
