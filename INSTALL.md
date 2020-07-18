@@ -6,11 +6,13 @@ Once the new bot is online using the bot.conf.sample template, do /msg <bot> cre
 Edit the Armour configuration file as required. Crucially, this will define your sqlite3 DB path
 Take note to set the md5 method for password security.  This will likely be md5sum for Linux machines, or md5 for others.
 
-Once your eggdrop user is created (or if existing bot), insert yourself into the sqlite3 db as defined in Armour conf file
+Once your eggdrop user is created (or if existing bot), insert yourself into the sqlite3 db as defined in Armour conf file.
 
-`sqlite3 /path/to/armour-db.db`
-`INSERT into users (user,xuser,level,pass) values('YOUR-USER','YOUR-X-ACCOUNT',500,'foo');`
-`.quit`
+>`sqlite3 /path/to/armour-db.db`
+
+>`INSERT INTO users (user,xuser,level,pass) VALUES('YOUR-USER','YOUR-X-ACCOUNT',500,'foo');`
+
+>`.quit`
 
 Once completed, uncomment the last line in the eggdrop file and rehash the bot to load Armour
 Note that the Armour TCL itself does not get loaded directly.  Load the conf file and it will load the TCL for you.
