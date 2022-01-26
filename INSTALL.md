@@ -1,7 +1,7 @@
 # Install Guide
 
 ## **Prerequisites:** 
->- >=TCL 8.6
+>- \>=TCL 8.6
 >- sqlite3
 >- TCL packages: sqlite3, tcllib
 
