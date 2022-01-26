@@ -1,8 +1,9 @@
 # Install Guide
 
-## **TCL Packages Required:** 
->- min TCL 8.6
->- sqlite3 tcllib
+## **Prerequisites:** 
+>- >=TCL 8.6
+>- sqlite3
+>- TCL packages: sqlite3, tcllib
 
 ## **Eggdrop**
 See **bot.conf.sample** for a template for the **eggdrop.conf** itself
