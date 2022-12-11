@@ -1,0 +1,3 @@
+%B%command:%B% newuser -- %B%level:%B% %LEVEL% -- %B%usage:%B% newuser <user> <xuser> [globlevel]
+registers a new user with the bot with the given network account. autologin will be attempted immediately, if they are online and authenticated to network services.
+global level is optional otherwise the configured default will be automatically applied.

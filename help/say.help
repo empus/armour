@@ -1,0 +1,2 @@
+%B%command:%B% say -- %B%level:%B% %LEVEL% -- %B%usage:%B% say [-a] <chan|*> <text>
+sends a message to a given channel, or all channels by using '*'.  adding '-a' makes the bot use an action (/me).

@@ -1,11 +1,11 @@
 <?php
 
   /*
-	Incoming HTTP-API from www.smsglobal.com
+  Incoming HTTP-API from www.smsglobal.com
         https://www.smsglobal.com/http-api/#incoming-sms
 
-	Compatible with Armour 'smsbot' plugin
-	Empus <empus@undernet.org>
+  Compatible with Armour 'smsbot' plugin
+  Empus <empus@undernet.org>
   */
 
   // file location for Armour script to read from
@@ -15,7 +15,7 @@
   // do not edit below
 
   if ($_SERVER["REQUEST_METHOD"] != "GET") {
-	echo "error.";
+  echo "error.";
         exit;
   }
   $to = $_GET['to'];
@@ -24,7 +24,7 @@
   $userfield = $_GET['userfield'];
   $date = $_GET['date'];
   if (empty($to) || empty($from) || empty($msg) || empty($userfield) || empty($date)) {
-  	echo "error.";
+    echo "error.";
         exit;
   }
   echo 'OK';

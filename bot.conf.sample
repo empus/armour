@@ -1,28 +1,55 @@
 #! /home/armour/bots/eggdrop
 
+# -- Basic eggdrop configuration file template
+#     Edit the below section and load eggdrop
+#
+#     Once online, do /msg <bot> createuser
+#     Once your eggdrop user is created, insert yourself into the sqlite3 db as defined in Armour conf file
+#
+#     sqlite3 /path/to/armour-db.db
+#     INSERT into users (user,xuser,level,pass) values('YOUR-USER','YOUR-X-ACCOUNT',500,'foo');
+#     .quit
+
+#     Once completed, uncomment the last line in this file and rehash the bot to load Armour
+#     If autologin is setup, the bot will automatically log you in.    If not, cycle the channel.
+#     Once logged into the bot (it will send you a /notice), do: /msg <bot> newpass <pass>
+#
+#     And, you're done!
+#
+#     Questions or problems? Ask in #Armour on Undernet, or post @ https://github.com/empus/armour/issues
+#
+#     - Empus <empus@undernet.org>
+#       2022-12-11
+
 # -- custom for filenames
-set uservar "EDITME"
+set uservar "EDITME";  # -- this will be used for database files
+                       #     and the $uservar.conf filename for Armour configuration file
 
-set nick "EDITME"
-set altnick "EDITME-"
-set realname "Armour -- channel protection"
-set botnet-nick "EDITME"
-set username "EDITME"
+set nick "EDITME";                            # -- bot nickname
+set altnick "EDITME-";                        # -- alternate bot nickname
+set botnet-nick "EDITME";                     # -- botnet nickname 
+set username "EDITME";                        # -- botnet ident (unused if identd is running)
+set admin "Empus <empus@undernet.org>";       # -- bot administrator info
+set network "Undernet";                       # -- network bot is connected to
+set timezone "EST";                           # -- server timezone
+set owner "YOUR-USER";                        # -- your username in the bot for admin access
+set realname "Armour -- channel protection";  # -- bot realname
 
-# server:port:password
+
+set listen-addr "172.16.164.1"    # -- listen address for bot & user telnet sessions
+set vhost4 "172.16.164.1"         # -- bot bind address
+#set vhost6 "2001:db5::c005:b07"  # -- bot IPv6 bind address
+listen 1231 all;                  # -- listen port for bot & user telnet sessions
+
+# -- server list for IRC connections
+# -- change to match your own servers!
 set servers {
-  "192.168.169.1:6667"
+  "irc.undernet.org:6667"
+  "ix.undernet.org:6667"
+  "ix2.undernet.org:6667"
 }
 
-listen 1231 all
-set vhost4 "172.16.164.1"
-#set vhost6 "2001:db8::c001:b07"
-set listen-addr "172.16.164.1"
-
-
-set admin "Empus <empus@undernet.org>"
-set network "Undernet"
-set timezone "EST"
+# -- you shouldn't need to edit much else below for default settings
 set offset "5"
 set env(TZ) "$timezone$offset"
 set prefer-ipv6 0
@@ -69,7 +96,6 @@ set ssl-capath "/etc/ssl/"
 #set ssl-verify-clients 0
 set ignore-time 15
 set hourly-updates 00
-set owner "Empus"
 set notify-newusers "$owner"
 set default-flags "hp"
 set whois-fields "url birthday"
@@ -110,23 +136,23 @@ set default-ban-time 0
 set default-exempt-time 60
 set default-invite-time 60
 set default-chanset {
-        -autoop         -autovoice
-        -bitch          +cycle
+        -autoop            -autovoice
+        -bitch            +cycle
         -dontkickops    -dynamicbans
         +dynamicexempts +dynamicinvites
         -enforcebans    -greet
-        -inactive       -nodesynch
-        -protectfriends +protectops
+        -inactive        -nodesynch
+        -protectfriends -protectops
         -revenge        -revengebot
-        -secret         -seen
-        +shared         -statuslog
-        +userbans       +userexempts
+        -secret            -seen
+        +shared            -statuslog
+        +userbans        +userexempts
         +userinvites    -protecthalfops
-        -autohalfop     -static
+        -autohalfop        -static
 }
 loadmodule server
 #set ssl-verify-server 0
-set net-type 2
+set net-type "Undernet"
 bind evnt - init-server evnt:init_server
 proc evnt:init_server {type} {
   global botnick
@@ -150,9 +176,8 @@ set exclusive-binds 0
 set double-mode 1
 set double-server 1
 set double-help 1
-# -- optimize-kicks=2 is CPU intensive
-set optimize-kicks 2
-set stack-limit 4
+set optimize-kicks 0
+set stack-limit 6
 set nick-len 9
 loadmodule ctcp
 set ctcp-mode 1
@@ -231,5 +256,5 @@ if {[info exists net-type]} {
   }
 }
 
-source armour/$uservar.conf
+#source armour/$uservar.conf
 

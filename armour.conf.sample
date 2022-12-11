@@ -1,79 +1,78 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v3.5.1 - 2020.02.05
-# ------------------------------------------------------------------------------------------------
+#     _                                    
+#    / \   _ __ _ __ ___   ___  _   _ _ __ 
+#   / _ \ | '__| '_ ` _ \ / _ \| | | | '__|
+#  / ___ \| |  | | | | | | (_) | |_| | |   
+# /_/   \_\_|  |_| |_| |_|\___/ \__,_|_|   
+#                                          
 #
-#    _                         ___ ___ 
-#   /_\  _ _ _ __  ___ _  _ _ |_ _| _ \
-#  / _ \| '_| '  \/ _ \ || | '_| ||  _/
-# /_/ \_\_| |_|_|_\___/\_,_|_||___|_|  
+# Anti abuse and channel management script for eggdrop bots on the IRC networks.
 #
-#
-# Anti abuse script for eggdrop bots on the Undernet IRC Network
-#
-# Armour be be placed in one of three modes:
-#	ON		:	Automatic scans upon client channel /join
-#	SECURE	:	Channel mode +Dm with actions post-scan
-#	OFF		:	Manual scans only
+# Armour automatic onjoin scanning be be placed in one of three modes:
+#    ON        :    Automatic scans upon client channel /join
+#    SECURE    :    Restricted channel modes (e.g., +Dm) with actions post-scan
+#    OFF       :    Manual scans only
 #
 # ------------------------------------------------------------------------------------------------
 # SUPPORTING
 # ------------------------------------------------------------------------------------------------
 #
-# 	whitelists
-#	blacklists
-#	dnsbl scans	 :	- dnswl exemptions supported
-#					- remote 'bounce' bot supported
-#	proxy scans	 :	remote 'bounce' bot supported
-#	onchan scans :	remote 'bounce' bot supported
+#    whitelists
+#    blacklists
+#    dnsbl scans  :    dnswl exemptions and remote 'bounce' bot supported
+#    proxy scans  :    remote 'bounce' bot supported
+#    onchan scans :    remote 'bounce' bot supported
 #
 # ------------------------------------------------------------------------------------------------
 # WHITELIST & BLACKLIST TYPES:
 # ------------------------------------------------------------------------------------------------
 #
-#	user	:		authenticated username
-#	host	:		hostmask, hostname, IP and CIDR notation accepted
-#	regex	:		nick!user@host/rname
-#	text	:		channel text matches
-#	country	:		geo location ip lookup
-#	asn	:			autonomous system number lookup
-#	chan	:		onchan #channel
-#	rname	:		realname
+#    user    :        authenticated username
+#    host    :        hostmask, hostname, IP and CIDR notation accepted
+#    regex   :        nick!user@host/rname
+#    text    :        channel text matches
+#    country :        geo location ip lookup
+#    asn     :        autonomous system number lookup
+#    chan    :        onchan #channel
+#    rname   :        realname
 #
 # ------------------------------------------------------------------------------------------------
 # WHITELIST ACTIONS:
 # ------------------------------------------------------------------------------------------------
 #
-#	A:	Accept User (exempt scans)
-#	O:	Op User
-#	V:	Voice User
+#    A:    Accept User (exempt scans)
+#    O:    Op User
+#    V:    Voice User
 #
 # ------------------------------------------------------------------------------------------------
 # BLACKLIST ACTIONS
 # ------------------------------------------------------------------------------------------------
 #
-#	B:	KickBan User
+#    B:    KickBan User
 #
 # ------------------------------------------------------------------------------------------------
 # LIMITATIONS:
 # ------------------------------------------------------------------------------------------------
 #
-#	Armour's automatic scan functions are currently designed to operate in only one channel.
-#	IPv6 support for client scans, is still limited.
+#    IPv6 support for client scans, is still limited.
 # 
 # ------------------------------------------------------------------------------------------------
 #
-# Code by		: 	Empus @ Undernet - empus@undernet.org
-# Last modified	:	2020.02.05
+# Code by       :  Empus @ Undernet - empus@undernet.org
+# Last modified :  2022-12-11
 #
 # Please contact me should you need any assistence, but I hope most config options are explanatory.
 #
 # Issues and feature requests can be submitted on GitHub:
 #
-# 		https://github.com/empus/armour
+#        https://github.com/empus/armour
+#
+# Or by asking in #armour on Undernet
 #
 # ------------------------------------------------------------------------------------------------
-
-
+if {[namespace exists arm]} { namespace delete arm }
+namespace eval arm {
+# ------------------------------------------------------------------------------------------------
 
 
 
@@ -81,146 +80,218 @@
 # GENERAL SETTINGS
 # ------------------------------------------------------------------------------------------------
 
+# -- bot name variable
+# -- used to automate db filename and assist script updates
+# -- ensure this *.conf file is named as BOTNAME.conf
+# -- if multiple Armour bots run from the same eggdrop directory, each MUST have a different value
+set cfg(botname) "EDITME"
 
-# -- debug level (0-4) [1]
-# output shown in partline: .console +d
-set arm(debug) "1"
-
-# -- database method (file|sqlite)
-set arm(method) "sqlite"
-
-# -- for sqlite, pathname
-set arm(sqlite) "./armour/db/sql/EDITME.db"
-
-# -- database file (for whitelists & blacklists)
-# -- note: irrelevant if using sqlite
-set arm(cfg.db.file) "./armour/db/EDITME.db"
-
-# -- database file for users
-# -- note: irrelevant if using sqlite
-set arm(cfg.db.users) "./armour/db/EDITME-userdb.db"
-
-# -- save userfile every N mins - [10]
-set arm(cfg.db.save) 10
-
-# -- md5 type (md5|md5sum) - [md5]
-# - bsd: md5
+# -- md5 type (md5|md5sum) - [md5sum]
+# -- make sure this binary suits your system, otherwise passwords will not work!!
 # - linux: md5sum
-set arm(cfg.md5) "md5"
+# - bsd: md5
+set cfg(md5) "md5sum"
 
 # -- alert users if they don't have a password set? (0|1) - [0]
-set arm(cfg.alert.nopass) 1
+set cfg(alert:nopass) 1
 
-# -- script prefix dir (without trailing /)
-set arm(cfg.dir.prefix) "/home/armour/bots/armour"
+# -- debug type? (putlog|putloglev) - [putloglev]
+# putlog will log everything to partyline (very verbose!)
+# putloglev allows debug levels to be used by enabling each level (1-5) with .console +N
+#    .console +1
+#    .console +2
+#    .console +3
+#   ... etc
+set cfg(debug:type) "putloglev"
 
-# -- command prefix [arm]
-set arm(prefix) "c"
+
+
+# ------------------------------------------------------------------------------------------------
+# UPDATE SETTINGS
+# ------------------------------------------------------------------------------------------------
+
+# -- run hourly check for new script updates? (0|1) - [1]
+set cfg(update) 0
+
+# -- send notes to global 500 users when new script versions are found? (0|1) - [1]
+set cfg(update:notes) 1
+
+# -- automatically update script when new updates are found? (0|1) - [0]
+# -- notes are sent to global level 500 users when updates are found
+set cfg(update:auto) 0
+
+# -- github branch to check and apply updates from - [master]
+set cfg(update:branch) "master"
+
+# -- automatically remove old script backups after N days - [7]
+set cfg(update:flush) 7
+
+# -- enable debug mode to download and stage new updates but do not execute (0|1) - 0
+set cfg(update:debug) 0
+
+
+
+# ------------------------------------------------------------------------------------------------
+# USER REGISTRATION SETTINGS
+# ------------------------------------------------------------------------------------------------
+
+# -- allow users to self-register bot usernames? (0|1) - [1]
+set cfg(register) 1
+
+# -- if allowed, users must be in which channels to self-register usernames?
+# space delimited; can be empty to allow in all chans
+set cfg(register:inchan) "#chan1 #chan2"
+
+# -- what global access level to give to newusers? - [1]
+set cfg(register:level) 1
+
+# -- send notes to global level 500 users when newuser is created with 'register' cmd? (0|1) - [1]
+set cfg(note:register) 1
+
+# -- random password string length
+set cfg(randpass) 10
+
+
+
+# ------------------------------------------------------------------------------------------------
+# NETWORK SETTINGS
+# ------------------------------------------------------------------------------------------------
 
 # -- ircd type [1-2] - [1]
 # 1: ircu (Undernet/Quakenet)
 # 2: IRCnet/EFnet
-set arm(cfg.ircd) 1
+set cfg(ircd) 1
 
-# -- random password string length
-# -- note: only relevant for ircd type: 2 (ie. IRCnet/EFnet)
-set arm(cfg.randpass) 10
-
-# -- hostname of services - [undernet.org]
-set arm(cfg.servicehost) "undernet.org"
-
-# -- regex to determine umode +x registered users
-# -- change with care to suit your own network
-set arm(cfg.xregex) {([^\.]+)\.users\.undernet\.org}
-
-# -- non-regex extension for umode +x registered users
-# -- change to suit your own network
-set arm(cfg.xhost.ext) "users.undernet.org"
-
-# -- allow use of nickname (with or without nick completion char :) as control char? (0|1) - [1]
-set arm(cfg.char.nick) 1
-
-# -- require table completion char ':' on nickname prefix?  (0|1) - [1]
-set arm(cfg.char.tab) 1
-
-# -- allow global prefix char '*'  (0|1) - [0]
-set arm(cfg.char.glob) 1
-
-# -- allow command shortcuts? (0|1) - [1]
-# k = kick		kb = kickban	b = black
-# a = add		v = view		r = rem
-# e = exempt	s = stats		t = topic
-# o = op		d = deop		u = userlist
-set arm(cfg.cmd.short) 1
-
-# -- host hiding regex
-set arm(cfg.xhost) "(\[^\.\]+).users.undernet.org"
-
-# -- allow use of nickname (with or without nick completion char :) as control char? (0|1) - [1]
-set arm(cfg.char.nick) 1
-
-# -- require tab completion char ':' on nickname prefix?  (0|1) - [1]
-set arm(cfg.char.tab) 0
-
-# -- allow global prefix char '*'  (0|1) - [0]
-set arm(cfg.char.glob) 1
-
-# -- allow command shortcuts? (0|1) - [1]
-# k = kick              kb = kickban            b = black
-# a = add               v = view                r = rem
-# e = exempt            s = stats               t = topic
-# o = op                d = deop                u = userlist
-set arm(cfg.cmd.short) 1
-
-# -- default mode on load? (on|off|secure) - [on]
-set arm(mode) "on"
-
-# -- send help and syntax responses from public commands via /notice? (0|1) - [0]
-set arm(cfg.help.notc) 0
-
-# -- stack voice modes when in secure mode? - [0|1]
-# -- this will slow down voicing of new users, by the time set in arm(cfg.stack.secs)
-set arm(cfg.stackvoice) 1
-
-# -- stackvoice timer (secs) - [5]
-set arm(cfg.stack.secs) 5
-
-# -- default whitelist reason - [regular]
-set arm(cfg.def.wreason) "regular"
-
-# -- default blacklist reason - [abuse]
-set arm(cfg.def.breason) "abuse"
-
-# -- auto add blacklist entries on floodnet?
-set arm(cfg.auto.black) 1
-
-# -- netsplit memory timeout (mins) - [60]
-set arm(cfg.split.mem) 60
+# -- connected via ZNC bouncer? (0|1) - [0]
+# this changes 'jump' command behaviour
+set cfg(znc) 0
 
 # -- add automatic blacklist host entry upon g-line? (0|1) - [1]
-set arm(cfg.gline.auto) 1
+set cfg(gline:auto) 1
 
-# -- required G-Line reason mask for above to apply (wildcards) - [*]
-set arm(cfg.gline.mask) "*"
+# -- required G-Line reason mask for above to apply (wildcards) - [G-Lined *]
+set cfg(gline:mask) "G-Lined *"
 
 # -- mask for which G-Lines do NOT add blacklist entry (wildcard) - [AUTO *]
-set arm(cfg.gline.nomask) "G-lined (AUTO *"
+set cfg(gline:nomask) "G-lined (AUTO *"
 
 # -- realname
-set realname "Armour - https://github.com/empus/armour"
+set realname "Armour - www.armour.bot"
+
+# -- hostname of services - [undernet.org]
+set cfg(servicehost) "undernet.org"
+
+
+
+# ------------------------------------------------------------------------------------------------
+# BOT SETTINGS
+# ------------------------------------------------------------------------------------------------
+
+# -- command prefix [c]
+# If prefix is a letter, command follows (i.e. c op <chan> <nick>)
+# If prefix is a control char, command is embedded (i.e. !op <chan> <nick>)
+# prefix cannot be *
+set cfg(prefix) "c"
+
+# -- allow use of nickname (with or without nick completion char :) as control char? (0|1) - [1]
+set cfg(char:nick) 1
+
+# -- require tab completion char ':' on nickname prefix?    (0|1) - [1]
+set cfg(char:tab) 1
+
+# -- allow global prefix char '*'  (0|1) - [0]
+set cfg(char:glob) 1
+
+# -- allow command shortcuts? (0|1) - [1]
+# k = kick      kb = kickban    b = black
+# a = add       v = view        r = rem
+# e = exempt    s = stats       t = topic
+# o = op        d = deop        u = userlist
+set cfg(cmd:short) 1
+
+# -- allow use of nickname (with or without nick completion char :) as control char? (0|1) - [1]
+set cfg(char:nick) 1
+
+# -- require tab completion char ':' on nickname prefix?  (0|1) - [1]
+set cfg(char:tab) 0
+
+# -- allow global prefix char '*'  (0|1) - [0]
+set cfg(char:glob) 1
+
+# -- allow command shortcuts? (0|1) - [1]
+# k = kick              kb = kickban      b = black
+# a = add               v = view          r = rem
+# e = exempt            s = search        t = topic
+# o = op                d = deop          u = userlist
+set cfg(cmd:short) 1
+
+# -- default mode on load? (on|off|secure) - [on]
+set cfg(mode) "on"
+
+# -- automatically change mode based on changing of mode +D and -D? (0|1) - [1]
+set cfg(mode:auto) 1
+
+# -- allow jump command to specify server? (0|1) - [1]
+set cfg(jump) 1
+
+# -- send help and syntax responses from public commands via /notice? (0|1) - [0]
+set cfg(help:notc) 0
+
+# -- stack voice modes when in secure mode? - [0|1]
+# -- this will slow down voicing of new users, by the time set in cfg(stack:secs)
+set cfg(stackvoice) 1
+
+# -- stackvoice timer (secs) - [5]
+set cfg(stack:secs) 5
+
+# -- default whitelist reason - [regular]
+set cfg(def:wreason) "regular"
+
+# -- default blacklist reason - [abuse]
+set cfg(def:breason) "abuse"
+
+# -- auto add blacklist entries on floodnet?
+set cfg(auto:black) 1
+
+# -- netsplit memory timeout (mins) - [60]
+set cfg(split:mem) 60
 
 # -- lockdown eggdrop dcc commands? (0|1) - [1]
-set arm(cfg.lockegg) 1
+set cfg(lockegg) 1
 
 # -- if locked egg, what flag is required for all commands? - [n]
-set arm(cfg.lockegg.flag) "n"
+set cfg(lockegg:flag) "n"
 
 # -- default temporary exemptions last for how long? (mins) - [5]
 # - via 'exempt' command, time can be overriden
-set arm(cfg.exempt.time) 5
+set cfg(exempt:time) 5
 
 # -- allow users to set their own channel greetings? (0|1) - [1]
-set arm(cfg.greet.self) 1
+set cfg(greet:self) 1
+
+
+
+# ------------------------------------------------------------------------------------------------
+# NOTE SETTINGS
+# ------------------------------------------------------------------------------------------------
+
+# -- allow user notes? (0|1) - [1]
+set cfg(note) 1
+
+# -- global command level to send notes to all users? - [450]
+set cfg(note:glob) 450
+
+# -- send users note read receipts? (0|1) - [1]
+set cfg(note:receipt) 1
+
+# -- send users notes when added to channels? (0|1) - [1]
+set cfg(note:adduser) 1
+
+# -- send users notes when removed from channels? (0|1) - [1]
+set cfg(note:remuser) 1
+
+# -- send users notes when channel level is modified? (0|1) - [1]
+set cfg(note:level) 1
 
 
 
@@ -228,44 +299,94 @@ set arm(cfg.greet.self) 1
 # CHANNEL SETTINGS
 # ------------------------------------------------------------------------------------------------
 
-
-# -- auto onjoin scan chan (only one chan)
-set arm(cfg.chan.auto) "EDITMECHAN"
-
-# --- channels to operate on. comma separated
-# -- command chan (comma delimited)
-set arm(cfg.chan.valid) "EDITMECHAN,#armour"
+# --- channels to NOT operate on. comma separated
+# -- command chans (comma delimited)
+set cfg(chan:nocmd) "#foo"
 
 # -- autologin chan list
 # - for periodic /who check of channel (leave blank to disable)
 #
-# - If the below channel list (comma delimited) includes the primary arm(cfg.chan.auto) channel,
+# - If the below channel list (comma delimited) includes the primary cfg(chan:def) channel,
 # - there is a risk of a race condition.  This can occur if autologin returns endofwho before an
 # - existing scan is complete on a nick.  The scenario results in a false positive joinflood.
 # - The risk is increased on networks like IRCnet/EFnet who do not support extended /WHO (such as
-# - Undernet or other ircu-derived ircds).  For safety, use a chanlist below which excludes the
+# - Undernet or other ircu-derived ircds).    For safety, use a chanlist below which excludes the
 # - primary channel. Use only backchannele, or even leave this option empty.  Autologin will still
 # - occur when a user joins a channel (even if not umode +x).
-set arm(cfg.chan.login) ""
+set cfg(chan:login) ""
 
 # -- autologin /who cycle (secs) - [60]
 # -- how frequently to check the channel list for people who authenticated to X after joining
 # - only if enabled above
-set arm(cfg.autologin.cycle) 60
+set cfg(autologin:cycle) 60
 
 # -- default command chan (for applicable privmsg & dcc commands)
-set arm(cfg.chan.def) $arm(cfg.chan.auto)
+set cfg(chan:def) "EDITCHAN"
 
 # -- reporting channel (backchan)
-set arm(cfg.chan.report) "#armour"
+set cfg(chan:report) ""
 
 # -- how long to disable floodnet detection after chanmode '+d' (secs) - [60]
 # - will be automatically re-enabled on chanmode '-d' anyway
-set arm(cfg.time.moded) 60
+set cfg(time:moded) 60
 
-# -- how many recently joined hostnames to track? (num) - [20]
+# -- how many recently joined hostnames to track? (num) - [600]
 # - for fast blacklists using type 'last'
-set arm(cfg.lasthosts) 20
+set cfg(lasthosts) 600
+
+# -- append the username that set a topic, when set via bot? (0|1) - [1]
+set cfg(topic:who) 0
+
+
+
+# ------------------------------------------------------------------------------------------------
+# SERVICE AUTHENTICATION SETTINGS
+# ------------------------------------------------------------------------------------------------
+
+# -- authentication username
+# leave blank if login not used or handled in another script
+# leave blank if using NickServ auth mechanism below
+set cfg(auth:user) ""
+
+# -- authentication password
+# leave blank if login not used or handled in another script
+set cfg(auth:pass) ""
+
+# -- TOTP (2FA) secret base32 key
+# leave blank to disable 2FA authentication
+# note that this currently requires 'oathtool' to be installed on the server
+set cfg(auth:totp) ""
+
+# -- mechanism for authentication (gnuworld|nickserv) - [gnuworld]
+# set to "gnuworld" for Undernet
+# set to "nickserv" for networks with NickServ
+set cfg(auth:mech) "gnuworld"
+
+# -- auth service nickname - [X]
+# set to "X" for Undernet
+# set to "NickServ" for networks with NickServ
+set cfg(auth:serv:nick) "X"
+
+# -- auth service host - [channels.undernet.org]
+# -- ie. /msg x@channels.undernet.org login <user> <pass>
+# leave blank if using NickServ auth mechanism
+set cfg(auth:serv:host) "channels.undernet.org"
+
+# -- non-regex extension for umode +x registered users - [users.undernet.org]
+# -- change with care to suit your own network
+set cfg(xhost:ext) "users.undernet.org"
+
+# -- use umode +x? (host hiding) (0|1) - [1]
+set cfg(auth:hide) 1
+
+# -- frequency for authentication retries (mins) - [5]
+set cfg(auth:retry) 5
+
+# -- use a random nickname until authenticated? (0|1) - 0
+set cfg(auth:rand) 0
+
+# -- wait to join channels until authenticated? (0|1) - 0
+set cfg(auth:wait) 0
 
 
 
@@ -273,38 +394,33 @@ set arm(cfg.lasthosts) 20
 # KICKBAN SETTINGS
 # ------------------------------------------------------------------------------------------------
 
-# -- how to set channel bans? (chan|x) - [x]
-set arm(cfg.ban) "chan"
-
-# -- authentication username
-# leave blank if login not used or handled in another script
-set arm(cfg.auth.user) ""
-
-# -- authentication password
-# leave blank if login not used or handled in another script
-set arm(cfg.auth.pass) ""
-
-# -- gnuworld nickname - [X]
-set arm(cfg.gnuworld.nick) "X"
-
-# -- gnuworld auth host - [channels.undernet.org]
-# -- ie. /msg x@channels.undernet.org login <user> <pass>
-set arm(cfg.gnuworld.host) "channels.undernet.org"
-
-# -- use umode +x? (host hiding) (0|1) - [1]
-set arm(cfg.auth.hide) 1
-
-# -- how long to set temp bans? - [3d]
-set arm(cfg.ban.time) "3d"
-
-# -- autoban on blacklist entry addition? (0|1) - [1]
-set arm(cfg.ban.auto) 1
+# -- how to set channel kickbans? (chan|x) - [x]
+# use "x" to set bans via GNUWorld's mod.cservice service (ie. Undernet's X)
+# otherwise, use 'chan' to set channel kicks and bans
+set cfg(ban) "chan"
 
 # -- X ban level (if using X) - [100]
-set arm(cfg.ban.level) "100"
+set cfg(ban:level) "100"
+
+# -- how long to set temp bans? - [3d]
+# units supported:
+#    s = seconds
+#    m = minutes
+#    h = hours
+#    d = days
+set cfg(ban:time) "3d"
+
+# -- autoban on blacklist entry addition? (0|1) - [1]
+set cfg(ban:auto) 1
+
+# -- include 'userid' in banmask where ~ not present in ident and user not authed to services? (0|1) - [1]
+# -- note that idents with ~ will still always ban as *!~*@host
+# 0: *!*@host
+# 1: *!user@host
+set cfg(ban:idents) 1
 
 # -- how long to set temp adaptive regex bans? - [7d]
-set arm(cfg.ban.time.adapt) "7d"
+set cfg(ban:time:adapt) "7d"
 
 # -- how long (secs) to remember 'newcomers' for (for stringent public chatter rules) - [60]
 # -- stringent rules apply to newcomers after first joining channel:
@@ -312,52 +428,63 @@ set arm(cfg.ban.time.adapt) "7d"
 # - profanity (badwords)
 # - spam (channels / website)
 # - coloured text
-set arm(cfg.time.newjoin) "60"
+set cfg(time:newjoin) "60"
 
 # -- badword masks for public chatter (space delimited with wildcards)
 # -- note: more powerful string now matching supported by 'text' type blacklist entries
-set arm(cfg.badwords) "*fuck* *shit* *cunt* *nigger*"
+set cfg(badwords) "*fuck* *shit*"
 
 # -- time to allow automatic removal of recent bans by specifying blacklist id (secs) - [3600]
 # - also provides memory used for optional blacklist removals based on unbans
-set arm(cfg.idunban.time) 3600
+set cfg(id:unban:time) 3600
 
 # -- automatically remove blacklist entries when channel ban is removed? (0|1) - [1]
-# - user must have 'rem' access; unban must occur within arm(cfg.idunban.time) of ban
-set arm(cfg.black.unban.rem) 1
+# - user must have 'rem' access; unban must occur within cfg(id:unban:time) of ban
+set cfg(black:unban:rem) 1
+
 
 
 # ------------------------------------------------------------------------------------------------
 # SCANNER SETTINGS
 # ------------------------------------------------------------------------------------------------
 
+# -- include blacklist entry value in kick messages? (0|1) - [0]
+set cfg(black:kick:value) 0
+
+# -- include blacklist reason in kick messages? (0|1) - [1]
+set cfg(black:kick:reason) 1
+
 # -- run blacklist scans on type 'country' when user has resolved ident? - [0]
 # -- whitelist scans will always run
-set arm(cfg.country.ident) 0
+set cfg(country:ident) 0
 
 # -- enable dnsbl scans? (0|1) - [1]
-set arm(cfg.dnsbl) 1
+set cfg(dnsbl) 1
 
 # -- enable botnet (remote) dnsbl scans? (0|1) - [1]
-set arm(cfg.dnsbl.remote) 0
+set cfg(dnsbl:remote) 0
 
 # -- dnsbl, description and score
+# last parameter (0|1) determines if RBL is only used for manual scans (scanrbl cmd) or not
+# <rbl> {<desc> <score> <onlymanual>}
 # - score must be + or - with a score of >0 constituting a hit
-array set rbls {
-  dnsbl.dronebl.org {{DroneBL} +1.0}
+# - if 'onlymanual' is set, RBL is only checked when 'scanrbl' command is used but not in auto scans
+array set scan:rbls {
+  dnsbl.dronebl.org { {DroneBL}  +1.0 1 }
+  rbl.ircbl.org     { {IRCBL}    +1.0 0 }
 }
 
 # -- enable port scanner? (0|1) [1]
-set arm(cfg.portscan) 1
+set cfg(portscan) 1
 
 # -- port scan kick reason
-set arm(cfg.portscan.reason) "Armour: possible insecure host unintended for IRC -- please install identd"
+set cfg(portscan:reason) "Armour: possible insecure host unintended for IRC -- please install identd"
 
 # -- enable botnet (remote) port scans? (0|1) - [1]
-set arm(cfg.portscan.remote) 0
+set cfg(portscan:remote) 0
 
 # -- scanports and description
-array set scanports {
+array set scan:ports {
   21    {ftp}
   22    {ssh}
   23    {telnet}
@@ -370,27 +497,142 @@ array set scanports {
 }
 
 # -- minimum port match before action - [1]
-set arm(cfg.portscan.min) 1 
+set cfg(portscan:min) 2
 
 # -- enable /whois lookups? (0|1) - [1]
 # - note: required for 'chan' list entries
-set arm(cfg.whois) 1
-
-# -- show channel name in badchan kick reasons? (0|1) - [1]
-set arm(cfg.bchan.reason) 1
+set cfg(whois) 1
 
 # -- enable botnet (remote) /whois lookups? (0|1) - [0]
 # - not required, but lowers server queue to improve response time on busy channels
-set arm(cfg.whois.remote) 0
+# - if enabled, remote bot mut be connected via botnet and have remotescan.tcl (only) loaded
+set cfg(whois:remote) 0
 
 # -- if any scanner enabled, scan all? (1) or only unresolved idents? (0) - [0]
-set arm(cfg.scans.all) 0
+set cfg(scans:all) 0
 
 # -- botnet nick of remote bots, if enabled above
 # -- ensure this bot is connected to botnet
-set arm(cfg.bot.remote.dnsbl) "remote-bot"
-set arm(cfg.bot.remote.port) "remote-bot"
-set arm(cfg.bot.remote.whois) "remote-bot"
+set cfg(bot:remote:dnsbl) "remote-bot"
+set cfg(bot:remote:port) "remote-bot"
+set cfg(bot:remote:whois) "remote-bot"
+
+
+
+# ------------------------------------------------------------------------------------------------
+# TEXT CAPTCHA SETTINGS
+# ------------------------------------------------------------------------------------------------
+# Text CAPTCHA used to help validate suspicious joining clients
+
+# -- enable text CAPTCHA for suspicious clients? (0|1) - [1]
+set cfg(captcha) 0
+
+# -- www.textcaptcha.com ID
+set cfg(captcha:id) "your@emailaddress.com"
+
+# -- www.textcaptcha.com API URL
+set cfg(captcha:url) "http://api.textcaptcha.com/${cfg(captcha:id)}.json"
+
+# -- send an opnotice when a question is sent to a user? (0|1) - [1]
+set cfg(captcha:opnotc) 1
+
+# -- how long to wait (in secs) for CAPTCHA responses? - [300]
+set cfg(captcha:time) 180
+
+# -- action to take for expired responses (manual|kick|kickban) - [kickban]
+set cfg(captcha:expired) "kickban"
+
+# -- bantime duration for expired responses - [1h]
+set cfg(captcha:expired:bantime) "1h"
+
+# -- kick message for expired responses
+set cfg(captcha:expired:kick) "Armour: your lack of response is disturbing."
+
+# -- send notice to channel operators when a captcha expectation expires? (0|1) - 1
+set cfg(captcha:expired:ops) 1
+
+# -- how many incorrect attempts are allowed before action? - 1
+set cfg(captcha:wrong:attempts) 1
+
+# -- action to take for incorrect responses (manual|kick|kickban) - [kickban]
+# -- manual: send opnotice to ask ops for manual review
+set cfg(captcha:wrong) "kickban"
+
+# -- bantime duration for expired responses? - [10m]
+set cfg(captcha:wrong:bantime) "10m"
+
+# -- bantime duration for expired responses - [1h]
+set cfg(captcha:expired:bantime) "10m"
+
+# -- kick message for incorrect responses
+set cfg(captcha:wrong:kick) "Incorrect response! Please give it some more thought next time."
+
+# -- send acknowledgement for correct answers? (0|1) - [1]
+set cfg(captcha:ack) 1
+
+# -- what acknwledgement message to send?
+set cfg(captcha:ack:msg) "Correct! You can now speak in the channel."
+
+# -- send acknowledgement to channel ops from correct answers? (0|1) - [1]
+set cfg(captcha:ack:ops) 1
+
+
+# ------------------------------------------------------------------------------------------------
+# IP QUALITY SCORE SETTINGS
+# ------------------------------------------------------------------------------------------------
+# This section relates to the use of ipqualityscore.com lookups for potentially malicious clients
+
+# -- IPQS enable? (0|1) - [0]
+set cfg(ipqs) 0;
+
+# -- IPQS addition API endpoint
+set cfg(ipqs:url) "https://www.ipqualityscore.com/api/json/ip";
+
+# -- IPQS API key
+set cfg(ipqs:key) "you-key-here";
+
+# -- IPQS only match clients with ~ in ident? (0|1) - [1]
+set cfg(ipqs:onlynoident) 1;
+
+# -- IPQS minimum fraud score required before action is taken (0-100) - [85]
+set cfg(ipqs:minscore) 85;
+
+# -- IPQS action (in mode=secure) -- kick|kickban|warn - [kick]
+set cfg(ipqs:action:secure) "kick";
+
+# -- IPQS action (in mode=on) -- kick|kickban|warn - [kickban]
+set cfg(ipqs:action:on) "kickban";
+
+# -- IPQS ban duration (secs) - [3600]
+set cfg(ipqs:duration) 3600;
+
+
+# ------------------------------------------------------------------------------------------------
+# IRBL INTEGRATION SETTINGS
+# ------------------------------------------------------------------------------------------------
+# This section relates to the use of IRCBL integration for for insertion & deletion
+
+# -- ircbl.org enable
+set cfg(ircbl) 0;
+
+# -- ircbl.org addition address
+set cfg(ircbl:url:add) "https://ircbl.org/addrbl";
+
+# -- ircbl.org removal address
+set cfg(ircbl:url:del) "https://ircbl.org/delrbl";
+
+# -- ircbl.org key
+set cfg(ircbl:key) "your-key-here";
+
+# -- ircbl.org default addition type - [11]
+set cfg(ircbl:type) 11;
+
+# -- ircbl.org generic comment
+set cfg(ircbl:add:comment) "IRC drone detected";
+
+# -- ircbl.org manual addition global level required
+set cfg(ircbl:lvl) 500;
+
 
 
 # ------------------------------------------------------------------------------------------------
@@ -399,29 +641,36 @@ set arm(cfg.bot.remote.whois) "remote-bot"
 # This section relates to blacklist entries matching channel text (wildcard or regex)
 
 # -- exempt from matching if they are opped? (0|1) - [1]
-set arm(cfg.text.exempt.op) 1
+set cfg(text:exempt:op) 1
 
 # -- exempt from matching if they are voiced? (0|1) - [0]
-set arm(cfg.text.exempt.voice) 0
+set cfg(text:exempt:voice) 0
 
 # -- only match clients who have recently joined the channel? (0|1) - [0]
-#    this relates to above variable arm(cfg.time.newjoin)
-set arm(cfg.text.newcomer) 0
+#     this relates to above variable cfg(time:newjoin)
+set cfg(text:newcomer) 0
 
 # -- add automatic blacklist entries for users who trigger text matches? (0|1) - [0]
-set arm(cfg.text.autoblack) 0
+set cfg(text:autoblack) 0
 
 # -- if automatic blacklist entries are enabled, what reason to use?
-set arm(cfg.text.autoblack.reason) "(auto) blacklisted from text match violation"
+set cfg(text:autoblack:reason) "(auto) blacklisted from text match violation"
 
 # -- if threshold is >1, display warning to user on first occurrence? (0|1) - [0]
-set arm(cfg.text.warn) 1
+set cfg(text:warn) 1
 
 # -- if warning is enabled, send via channel (chan) or /notice (notc)? (chan|notc) - [notc]
-set arm(cfg.text.warn.type) "notc"
+set cfg(text:warn:type) "notc"
 
 # -- if warning is enabled, what should the message say?
-set arm(cfg.text.warn.msg) "Please avoid using such language in #channel.  Consider this a warning."
+set cfg(text:warn:msg) "Please avoid using such language in #channel.  Consider this a warning."
+
+# -- if sending report to ops/debugchan, what should it say?
+#     substitution:
+#        %N%        nickname
+#        %I%        ID of entry
+set cfg(text:warn:report) "Armour: %N% has been warned about use of language. \[id: %I%\]"
+
 
 
 # ------------------------------------------------------------------------------------------------
@@ -431,37 +680,38 @@ set arm(cfg.text.warn.msg) "Please avoid using such language in #channel.  Consi
 
 # -- how many lines to allow from a single client in how many seconds before acting? (lines:secs) - [5:2]
 # -- leave config value blank to disable nickname based line flood tracking
-set arm(cfg.lineflood.nicks) "5:2"
+set cfg(flood:line:nicks) "5:2"
 
 # -- how many lines to allow from the whole channel in how many seconds before acting? (lines:secs) - [10:2]
 # -- NOTE: this should be set based on the expected activity of the channel (to avoid false positives)
 # -- leave config value blank to disable channel based line flood tracking
-set arm(cfg.lineflood.chan) "10:2"
+set cfg(flood:line:chan) "10:2"
 
 # -- modes to temporarily lockdown channel with, during entire channel lineflood - [+mr]
-set arm(cfg.lineflood.chan.mode) "+mr"
+set cfg(flood:line:chan:mode) "+mr"
 
 # -- temporary lockdown time when whole channel encounters lineflood (secs) - [60]
-set arm(cfg.lineflood.chan.lock) 60
+set cfg(flood:line:chan:lock) 60
 
 # -- exempt from matching if they are opped? (0|1) - [1]
-set arm(cfg.lineflood.exempt.op) 1
+set cfg(flood:line:exempt:op) 1
 
 # -- exempt from matching if they are voiced? (0|1) - [1]
-set arm(cfg.lineflood.exempt.voice) 1
+set cfg(flood:line:exempt:voice) 1
 
 # -- only match clients who have recently joined the channel? (0|1) - [1]
-#    this relates to above variable arm(cfg.time.newjoin)
-set arm(cfg.lineflood.newcomer) 1
+#     this relates to above variable cfg(time:newjoin)
+set cfg(flood:line:newcomer) 1
 
 # -- kickban reason when user reaches line limit
-set arm(cfg.lineflood.reason) "Armour: flood detected"
+set cfg(flood:line:reason) "Armour: flood detected"
 
 # -- add automatic blacklist entries for users who trigger text matches? (0|1) - [0]
-set arm(cfg.lineflood.autoblack) 0
+set cfg(flood:line:autoblack) 0
 
 # -- if automatic blacklist entries are enabled, what reason to use?
-set arm(cfg.lineflood.autoblack.reason) "(auto) blacklisted from line flood"
+set cfg(flood:line:autoblack:reason) "(auto) blacklisted from line flood"
+
 
 
 # ------------------------------------------------------------------------------------------------
@@ -469,74 +719,98 @@ set arm(cfg.lineflood.autoblack.reason) "(auto) blacklisted from line flood"
 # ------------------------------------------------------------------------------------------------
 
 # -- enable adaptive regex onjoin? - [1]
-set arm(cfg.adapt) 1
+set cfg(adapt) 1
 
 # -- adaptive regex types on join? (space delimited) - [n i]
-# n	: nickname
-# ni	: nick!ident
-# i	: ident
-set arm(cfg.adapt.types.join) "n i ni"
+# n  : nickname
+# ni : nick!ident
+# i  : ident
+set cfg(adapt:types:join) "n i ni"
 
 # -- adaptive regex types after /who (space delimited) - [r]
 # -- used in secure mode or once rname known
-# n	: nickname
-# ni	: nick!ident
-# nir	: nick!ident/rname
-# nr	: nick/rname
-# i	: ident
-# ir	: ident/rname
-# r	: rname
+# n    : nickname
+# ni   : nick!ident
+# nir  : nick!ident/rname
+# nr   : nick/rname
+# i    : ident
+# ir   : ident/rname
+# r    : rname
 #
-# use types involving rname and do not duplicate those done above in arm(cfg.adapt.types.join)
+# use types involving rname and do not duplicate those done above in cfg(adapt:types:join)
 # this will prevent double handling for a given pattern (ie. false positives)
-set arm(cfg.adapt.types.who) "nir nr r"
+set cfg(adapt:types:who) "nir nr r"
 
 # -- match explicit rname in adaptive regex? (0|1) - [1]
-# -- ie. match only common realnames? (1) -- or likeness patterns? (0) - [1]
-set arm(cfg.adapt.explicit) 1
+# -- ie. match only common realnames? (1) -- or likeness patterns? (0) - [0]
+set cfg(adapt:explicit) 0
 
 # -- adaptive regex max join rate (clients:seconds:retain) - [2:3:15]
 # clients: client joins
 # seconds: .. in N seconds
 # retain: & retain common pattern for N seconds (for further joins)
-set arm(cfg.adapt.rate) "2:2:5"
+set cfg(adapt:rate) "2:2:5"
+
 
 
 # ------------------------------------------------------------------------------------------------
 # REPORT SETTINGS
 # ------------------------------------------------------------------------------------------------
 
+# -- include blacklist entry value in kick messages? (0|1) - [0]
+set cfg(report:value) 0
+
+# -- include blacklist entry reason in kick messages? (0|1) - [1]
+set cfg(report:reason) 1
+
 # -- send user notices for whitelist entries? (0|1) - [0]
-set arm(cfg.notc.white) 0
+set cfg(notc:white) 0
 
 # -- send user notices for blacklist entries? (0|1) - [0]
-set arm(cfg.notc.black) 0
+set cfg(notc:black) 0
 
 # -- send op notices for whitelist entries? (0|1) - [1]
-set arm(cfg.opnotc.white) 0
+set cfg(opnotc:white) 0
 
 # -- send op notices for blacklist entries? (0|1) - [1]
-set arm(cfg.opnotc.black) 1
+set cfg(opnotc:black) 1
+
+# -- send op notices for IRC Operator autoops using channel operop setting? (0|1) - [1]
+set cfg(opnotc:operop) 1
+
+# -- send op notices for blacklist text warnings? (0|1) - [1]
+set cfg(opnotc:text) 1
 
 # -- send debug chan notices for whitelist entries? (0|1) - [1]
-set arm(cfg.dnotc.white) 1
+set cfg(dnotc:white) 1
 
 # -- send debug chan notices for blacklist entries? (0|1) - [1]
-set arm(cfg.dnotc.black) 1
+set cfg(dnotc:black) 1
+
+# -- send debug chan notices for blacklist text warnings? (0|1) - [1]
+set cfg(dnotc:text) 1
+
+# -- send debug chan notices for IRC Operator autoops using channel operop setting? (0|1) - [1]
+set cfg(dnotc:operop) 1
+
 
 
 # ------------------------------------------------------------------------------------------------
 # CUSTOM QUEUE SETTINGS
 # ------------------------------------------------------------------------------------------------
 
+# -- frequency (in secs) to find hidden users when in secure mode (chanmode +Dm) - [5]
+set cfg(queue:secure) 5
+
 # -- custom kick queue cycle (secs) - [2]
-set arm(cfg.queue.kick) "2"
+set cfg(queue:kick) 2
 
 # -- custom ban queue cycle (secs) - [1]
-set arm(cfg.queue.ban) "1"
+set cfg(queue:ban) 1
 
 # -- custom flood queue (miliseconds) - [500]
-set arm(cfg.queue.flud) 500
+set cfg(queue:flud) 500
+
 
 
 # ------------------------------------------------------------------------------------------------
@@ -544,11 +818,52 @@ set arm(cfg.queue.flud) 500
 # ------------------------------------------------------------------------------------------------
 
 # -- channel lock modes during floodnet - [+mr]
-set arm(cfg.chanlock.mode) "+mr"
+set cfg(chanlock:mode) "+mr"
 
 # -- channel lock time expiry (secs) - [5]
 # -- note: lock will still only be removed after server queue is cleared (ie. kicks)
-set arm(cfg.chanlock.time) "60"
+set cfg(chanlock:time) "60"
+
+
+
+# ------------------------------------------------------------------------------------------------
+# TRAKKA SETTINGS
+# ------------------------------------------------------------------------------------------------ 
+
+# -- channel to send trakka alerts to? prefix with @ for opnotice
+# -- defaults to channel the client joined, if empty
+set cfg(trakka:alertchan) ""
+
+# -- routinely add points every how many mins? - [360]
+# - every 6 hours (4 points per day)
+set cfg(trakka:routine) 360
+
+# -- routinely save trakka scores to db every N minutes? - [60]
+set cfg(trakka:autosave) 60
+
+# -- remove how many points daily from those not in the channel? - [1]
+set cfg(trakka:subtract) 1
+
+# -- initial newcomer score gain after how many seconds in chan? - [3600]
+set cfg(trakka:init) 3600
+
+# -- kickban user if user still has no score, is not opped, or voiced after a wait period (0|1) - [1]
+# -- voice will not be factored if channel is in secure mode
+set cfg(trakka:kb:enable) 1
+
+# -- if kickban is enabled, how long should the bot wait before removing? (secs) - [300]
+# -- NOTE: this needs to be less than trakka:init value above
+set cfg(trakka:kb:wait) 1800
+
+# -- if kickban is enabled, what kick reason to use? 
+set cfg(trakka:kb:reason) "Armour: you appear to be unknown and have therefore been removed (trakka)"
+
+# -- reason for kick message when nudge command is used
+set cfg(trakka:nudge:reason) "Armour: you appear to be unknown and have therefore been removed (trakka)"
+
+# -- duration for kickban when nudge command is used - [1h]
+set cfg(trakka:nudge:time) "1h"
+
 
 
 # ------------------------------------------------------------------------------------------------
@@ -556,8 +871,10 @@ set arm(cfg.chanlock.time) "60"
 # ------------------------------------------------------------------------------------------------
 
 # -- pass user data after negative scans to external scripts with args: nick uhost hand chan
+# -- use this so that other scripts can process joining users but only after Armour clears them
 # - space delimited
-set arm(cfg.integrate.procs) ""
+set cfg(integrate:procs) ""
+
 
 
 # ------------------------------------------------------------------------------------------------
@@ -567,20 +884,40 @@ set arm(cfg.integrate.procs) ""
 # -- list of /silence masks
 # - provides server level flood protection
 # - leave empty for no /SILENCE
-set arm(cfg.silence) "+*!*@* +~*!*@*.users.undernet.org +~*!*@undernet.org +~*!*@172.16.4.0/24"
+# -- WARNING: if CAPTCHA is being used, SILENCE should be disabled (to allow captcha responses)
+set cfg(silence) "+*!*@* +~*!*@*.users.undernet.org +~*!*@undernet.org +~*!*@172.16.4.0/24"
+
 
 
 # ------------------------------------------------------------------------------------------------
-# SECURE SETTINGS
+# SECURE MODE (PARANOIA) SETTINGS
 # ------------------------------------------------------------------------------------------------
 
 # -- when in mode 'secure'
 # - number of clones to mark for manual review (no autovoice) [2]
-set arm(cfg.paranoid.clone) 2
+set cfg(paranoid:clone) 2
 
 # -- when in mode 'secure'
 # - server connection time must be older than N seconds for autovoice [10]
-set arm(cfg.paranoid.signon) 10
+set cfg(paranoid:signon) 10
+
+# -- send CTCP VERSION to clients to help validate when in 'secure' mode? (0|1) - 1
+set cfg(paranoid:ctcp) 1
+
+# -- if enabled, how long to wait for CTCP version response? (secs) - 3
+set cfg(paranoid:ctcp:wait) 3
+
+# -- if CTCP reply not received, what action to take? (manual|captcha|kick|kickban) - manual
+set cfg(paranoid:ctcp:action) "manual"
+
+# -- if action is set to kick or kickban, what kick message should be used?
+set cfg(paranoid:ctcp:kickmsg) "Armour: your presence in this channel is suspicious."
+
+# -- how many times can a client be kicked in what period (secs), before being kickbanned?    - [1:330]
+# this will prevent a client from continuously auto-rejoining when actions only kick
+# the next time a kick is attempted, it will instead revert to kickban
+# ideally this should be longer than double both cfg(queue:secure) and cfg(captcha:time) combined (if captcha is used)
+set cfg(paranoid:klimit) "1:670"
 
 
 # ------------------------------------------------------------------------------------------------
@@ -591,14 +928,15 @@ set arm(cfg.paranoid.signon) 10
 # - caution: you are responsible for DroneBL submissions with this key
 # - allocate access with care 
 namespace eval dronebl {
-	set rpckey ""
+    set rpckey ""
 }
 
 # -- level required for DroneBL submission [500]
-set arm(cfg.dronebl.lvl) 500
+set cfg(dronebl:lvl) 500
 
 # -- default submission type [17]
-set arm(cfg.dronebl.type) 17
+set cfg(dronebl:type) 17
+
 
 
 # ------------------------------------------------------------------------------------------------
@@ -609,134 +947,123 @@ set arm(cfg.dronebl.type) 17
 
 # -- standard command structure
 # - to disable a command, comment out line
+# - to change the required level, update the level per command
+# - to modify whether a command is accepted via public chan, privmsg, or dcc, update the binds
+#
 # - binds:
-#	pub:	public channel command
-#	msg:	privmsg command
-#	dcc:	dcc command
-# -------------------------------------------------------------------------------
-# command			plugin		level req.	binds
-# -------------------------------------------------------------------------------
-set addcmd(cmds)		{	arm		1		pub msg dcc	}
-set addcmd(help)		{	arm		1		pub msg dcc	}
-set addcmd(whois)		{	userdb	1		pub msg dcc	}
-set addcmd(verify)		{	userdb	1		pub msg dcc	}
-set addcmd(version)		{	arm		1		pub msg dcc	}
-set addcmd(view)		{	arm		1		pub msg dcc	}
-# -- shortcut
-set addcmd(v)			{	arm		1		pub msg dcc	}
-set addcmd(stats)		{	arm		1		pub msg dcc	}
-set addcmd(status)		{	arm		1		pub msg dcc	}
-set addcmd(scan)		{	arm		1		pub msg dcc	}
-# -- shortcut
-set addcmd(s)			{	arm		1		pub msg dcc	}
-set addcmd(search)		{	arm		1		pub msg dcc	}
-set addcmd(scanrbl)		{	arm		1		pub msg dcc	}
-set addcmd(scanport)	{	arm		1		pub msg dcc	}
-set addcmd(set)			{	userdb	1		pub msg dcc	}
-set addcmd(asn)			{	arm		1		pub msg dcc	}
-set addcmd(country)		{	arm		1		pub msg dcc	}
-set addcmd(exempt)		{	arm		1		pub msg dcc	}
-# -- shortcut
-set addcmd(e)			{	arm		1		pub msg dcc	}
-
-set addcmd(mode)		{	arm		100		pub msg dcc	}
-set addcmd(add)			{	arm		100		pub msg dcc	}
-# -- shortcut
-set addcmd(a)			{	arm		100		pub msg dcc	}
-
-set addcmd(rem)			{	arm		100		pub msg dcc	}
-# -- shortcut
-set addcmd(r)			{	arm		100		pub msg dcc	}
-
-set addcmd(black)		{	arm		100		pub msg dcc	}
-# -- shortcut
-set addcmd(b)			{	arm		100		pub msg dcc	}
-
-set addcmd(op)			{	arm		100		pub msg dcc	}
-set addcmd(deop)		{	arm		100		pub msg dcc	}
-set addcmd(voice)		{	arm		100		pub msg dcc	}
-set addcmd(devoice)		{	arm		100		pub msg dcc	}
-set addcmd(kick)		{	arm		100		pub msg dcc	}
-# -- shortcut
-set addcmd(k)			{	arm		100		pub msg dcc	}
-
-set addcmd(ban)			{	arm		100		pub msg dcc	}
-# -- shortcut
-set addcmd(kb)			{	arm		100		pub msg dcc	}
-
-set addcmd(topic)		{	arm		100		pub msg dcc	}
-set addcmd(invite)		{	arm		100		pub msg dcc	}
-set addcmd(chanscan)	{	arm		200		pub msg dcc	}
-set addcmd(adduser)		{	userdb	400		pub msg dcc	}
-set addcmd(remuser)		{	userdb	400		pub msg dcc	}
-set addcmd(userlist)	{	userdb	400		pub msg dcc	}
-set addcmd(moduser)		{	userdb	400		pub msg dcc	}
-set addcmd(say)			{	arm		400		pub msg dcc	}
-set addcmd(jump)		{	arm		400		pub msg dcc	}
-set addcmd(save)		{	arm		450		pub msg dcc	}
-set addcmd(load)		{	arm		450		pub msg dcc	}
-set addcmd(reload)		{	arm		450		pub msg dcc	}
-set addcmd(restart)		{	arm		450		pub msg dcc	}
-set addcmd(rehash)		{	arm		450		pub msg dcc	}
-set addcmd(do)			{	userdb	500		pub msg dcc	}
-set addcmd(die)			{	userdb	500		pub msg dcc	}
-set addcmd(conf)		{	arm		500		pub msg dcc	}
+#    pub:    public channel command
+#    msg:    privmsg command
+#    dcc:    dcc command
+# ------------------------------------------------------------------------------------------------
+# command                  plugin   level req.  binds
+# ------------------------------------------------------------------------------------------------
+set addcmd(register)    {  userdb    0          pub msg dcc  }; # -- only if configured
+set addcmd(access)      {  userdb    1          pub msg dcc  }
+set addcmd(cmds)        {  arm       1          pub msg dcc  }
+set addcmd(help)        {  arm       1          pub msg dcc  }
+set addcmd(whois)       {  userdb    1          pub msg dcc  }; # -- shortcut: info
+set addcmd(info)        {  userdb    1          pub msg dcc  }
+set addcmd(i)           {  userdb    1          pub msg dcc  }; # -- shortcut: info
+set addcmd(verify)      {  userdb    1          pub msg dcc  }
+set addcmd(lang)        {  userdb    1          pub msg dcc  }
+set addcmd(set)         {  userdb    1          pub msg dcc  }
+set addcmd(version)     {  arm       1          pub msg dcc  }
+set addcmd(view)        {  arm       1          pub msg dcc  }
+set addcmd(v)           {  arm       1          pub msg dcc  }; # -- shortcut: view
+set addcmd(stats)       {  arm       1          pub msg dcc  }
+set addcmd(status)      {  arm       1          pub msg dcc  }
+set addcmd(scan)        {  arm       1          pub msg dcc  }
+set addcmd(s)           {  arm       1          pub msg dcc  }; # -- shorcut: search
+set addcmd(search)      {  arm       1          pub msg dcc  }
+set addcmd(scanrbl)     {  arm       1          pub msg dcc  }
+set addcmd(scanport)    {  arm       1          pub msg dcc  }
+set addcmd(asn)         {  arm       1          pub msg dcc  }
+set addcmd(country)     {  arm       1          pub msg dcc  }
+set addcmd(note)        {  arm       1          pub msg dcc  }
+set addcmd(exempt)      {  arm       1          pub msg dcc  }
+set addcmd(e)           {  arm       1          pub msg dcc  }; # -- shorcut: exempt
+set addcmd(queue)       {  arm       1          pub msg dcc  }
+set addcmd(ack)         {  trakka    1          pub msg dcc  }
+set addcmd(score)       {  trakka    1          pub msg dcc  }
+set addcmd(nudge)       {  trakka    1          pub msg dcc  }
+set addcmd(idle)        {  arm       1          pub msg dcc  }
+set addcmd(mode)        {  arm       100        pub msg dcc  }
+set addcmd(add)         {  arm       100        pub msg dcc  }
+set addcmd(a)           {  arm       100        pub msg dcc  }; # -- shortcut: add
+set addcmd(mod)         {  arm       100        pub msg dcc  }
+set addcmd(m)           {  arm       100        pub msg dcc  }; # -- shortcut: mod
+set addcmd(rem)         {  arm       100        pub msg dcc  }
+set addcmd(r)           {  arm       100        pub msg dcc  }; # -- shortcut: rem
+set addcmd(black)       {  arm       100        pub msg dcc  }
+set addcmd(b)           {  arm       100        pub msg dcc  }; # -- shortcut: black
+set addcmd(op)          {  arm       100        pub msg dcc  }
+set addcmd(deop)        {  arm       100        pub msg dcc  }
+set addcmd(voice)       {  arm       100        pub msg dcc  }
+set addcmd(devoice)     {  arm       100        pub msg dcc  }
+set addcmd(kick)        {  arm       100        pub msg dcc  }
+set addcmd(k)           {  arm       100        pub msg dcc  }; # -- shortcut: kick
+set addcmd(ban)         {  arm       100        pub msg dcc  }
+set addcmd(kb)          {  arm       100        pub msg dcc  }; # -- shortcut: kickban
+set addcmd(unban)       {  arm       100        pub msg dcc  }
+set addcmd(topic)       {  arm       100        pub msg dcc  }
+set addcmd(invite)      {  arm       100        pub msg dcc  }
+set addcmd(chanscan)    {  arm       200        pub msg dcc  }
+set addcmd(newuser)     {  userdb    400        pub msg dcc  }
+set addcmd(deluser)     {  userdb    400        pub mdg dcc  }
+set addcmd(adduser)     {  userdb    400        pub msg dcc  }
+set addcmd(remuser)     {  userdb    400        pub msg dcc  }
+set addcmd(userlist)    {  userdb    400        pub msg dcc  }
+set addcmd(usearch)     {  userdb    400        pub msg dcc  }
+set addcmd(chanlist)    {  userdb    400        pub msg dcc  }
+set addcmd(moduser)     {  userdb    400        pub msg dcc  }
+set addcmd(say)         {  arm       400        pub msg dcc  }
+set addcmd(jump)        {  arm       400        pub msg dcc  }
+set addcmd(load)        {  arm       450        pub msg dcc  }
+set addcmd(reload)      {  arm       450        pub msg dcc  }
+set addcmd(restart)     {  arm       450        pub msg dcc  }
+set addcmd(rehash)      {  arm       450        pub msg dcc  }
+set addcmd(addchan)     {  userdb    450        pub msg dcc  }
+set addcmd(remchan)     {  userdb    450        pub msg dcc  }
+set addcmd(modchan)     {  userdb    450        pub msg dcc  }
+set addcmd(do)          {  userdb    500        pub msg dcc  }
+set addcmd(die)         {  userdb    500        pub msg dcc  }
+set addcmd(conf)        {  arm       500        pub msg dcc  }
+set addcmd(showlog)     {  arm       500        pub msg dcc  }
+set addcmd(update)      {  arm       500        pub msg dcc  }
+set addcmd(twitter)     {  arm       500        pub msg dcc  }
 
 
 # ------------------------------------------------------------------------------------------------
 # end of command levels
 # ------------------------------------------------------------------------------------------------
 
-# -- script files to load
-# -- Armour is required and should match the script version
+# -- optional plugins to load
 # -- to load plugins, uncomment their line after editing the config parameters in each file
 set files {
-
-	# -- Armour
-	./armour/armour-3.5.1.tcl					# change this to match the relevant version
-	
-	# -- plugins (optional)
-	#./armour/plugins/smsbot.tcl				# smsglobal plugin
-	#./armour/plugins/trakka.tcl				# trakka plugin
-	#./armour/plugins/tell.tcl					# tell plugin
-	#./armour/plugins/push.tcl					# pushover plugin
-	#./armour/plugins/ext/libdronebl.tcl		# dronebl plugin
-	#./armour/plugins/email.tcl					# email plugin
-	#./armour/plugins/quote.tcl					# quote plugin
-	
-	# -- private plugins
-	#./armour/plugins/sk/usernames.tcl			# usernames plugin
-	#./armour/plugins/apprelay.tcl				# cservice application relay
-	#./armour/plugins/ipr.tcl					# cservice ipr match
-	#./armour/plugins/totp.tcl					# cservice TOTP match
-	#./armour/plugins/lastlog.tcl				# cservice username lastlog
-	#./armour/plugins/brute.tcl					# cservice bruteforce attempts
-	#./armour/plugins/usernames/sitestatus.tcl	# cservice sitestatus
-	#./armour/plugins/csclive.tcl				# cservice live data
-	
+    # -- plugins (optional)
+    #./armour/plugins/smsbot.tcl       # -- smsglobal plugin
+    #./armour/plugins/trakka.tcl       # -- trakka plugin
+    #./armour/plugins/tell.tcl         # -- tell plugin
+    #./armour/plugins/push.tcl         # -- pushover plugin
+    #./armour/plugins/email.tcl        # -- email plugin
+    #./armour/plugins/quote/quote.tcl  # -- quote plugin
 }
-
-
-# -- load the scripts
-set data [split $files \n]
-foreach script $data {
-	# -- only load wanted scripts
-	set i [lindex $script 0]
-	if {[regexp -- {.tcl$} $i] && [string index $i 0] != "#"} {
-			# -- capture any errors to not crash the bot (safety)
-			putlog "\[@\] Armour: loading $i ..."
-			catch {source $i} error
-			if {$error != ""} {
-					putloglev d * "\002(Armour load error)\002:$i\: $::errorInfo"
-			}
-	}
-}
-
-
 # ------------------------------------------------------------------------------------------------
 # end of configuration
 # ------------------------------------------------------------------------------------------------
 
 
-putlog "\[@\] Armour $arm(version) Loaded (empus@undernet.org)"
+
+
+
+# ------------------------------------------------------------------------------------------------
+}
+# end of namespace; scripts must be loaded afterwards, to avoid nested namespaces 
+# ------------------------------------------------------------------------------------------------
+source ./armour/armour.tcl
+# ------------------------------------------------------------------------------------------------
+putlog "\[@\] Armour $arm::cfg(version) Loaded (empus@undernet.org)"
+# ------------------------------------------------------------------------------------------------
+
+
 

@@ -1,0 +1,2 @@
+%B%command:%B% addchan -- %B%level:%B% %LEVEL% -- %B%usage:%B% addchan <chan> [user]
+registers a new channel with the bot, optionally adding the given user as a level 500 manager.

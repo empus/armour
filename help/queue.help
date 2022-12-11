@@ -1,0 +1,2 @@
+%B%command:%B% queue -- %B%level:%B% %LEVEL% -- %B%usage:%B% queue
+checks the current scan queue when in mode=secure.
