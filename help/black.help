@@ -1,2 +1,2 @@
-%B%command:%B% black -- %B%level:%B% %LEVEL% -- %B%usage:%B% black <nick> [reason]
+%B%command:%B% black -- %B%level:%B% %LEVEL% -- %B%usage:%B% black ?chan? <nick> [reason]
 creates a blacklist entry and executes kickban on nick. entry type will be host or username depending on whether or not target is authenticated.

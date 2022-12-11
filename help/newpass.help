@@ -1,0 +1,2 @@
+%B%command:%B% newpass -- %B%level:%B% 0 -- %B%usage:%B% newpass [passphrase]
+changes bot password.  password phrases are accepted.

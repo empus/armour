@@ -1,0 +1,3 @@
+%B%command:%B% lang -- %B%level:%B% %LEVEL% -- %B%usage:%B% lang <language> [-all]
+finds users who speak a given language.  languages can be specified in full form or with two digit codes.
+defaults to only showing online users.  when '-all' is used it shows all user matches, with any authenticated users shown in bold.

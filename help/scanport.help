@@ -1,0 +1,2 @@
+%B%command:%B% scanport -- %B%level:%B% %LEVEL% -- %B%usage:%B% scanports <host|ip> [port1,port2,port3...]
+scans for open ports on nominated hostname or IP. will scan configured ports, or those provided with option parameter.

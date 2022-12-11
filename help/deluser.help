@@ -1,0 +1,2 @@
+%B%command:%B% deluser -- %B%level:%B% %LEVEL% -- %B%usage:%B% deluser <user> -force
+deletes a user from the bot entirely (removing access from any channels)

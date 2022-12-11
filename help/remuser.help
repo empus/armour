@@ -1,2 +1,2 @@
-%B%command:%B% remuser -- %B%level:%B% %LEVEL% -- %B%usage:%B% remuser <user>
-removes a user from userlist. cannot remove a user with a level equal to or above your own.
+%B%command:%B% remuser -- %B%level:%B% %LEVEL% -- %B%usage:%B% remuser ?chan? <user>
+removes a user from channel's userlist. cannot remove a user with a level equal to or above your own.

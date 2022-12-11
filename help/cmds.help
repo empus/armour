@@ -1,0 +1,3 @@
+%B%command:%B% help -- %B%level:%B% 0 -- %B%usage:%B% cmds [<level>|levels]
+displays lsit of commands available to a user.  if a level is specified it will show only commands available to users with that level and below.
+if 'levels' is specified, a list of each available command will be displayed against its corresponding level (summary view).

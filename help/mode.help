@@ -1,4 +1,6 @@
-%B%command:%B% mode -- %B%level:%B% %LEVEL% -- %B%usage:%B% mode <on|off|secure>
-on: clients will be scanned upon channel join
-off: clients will not be scanned upon chnnel join. manual scans still permitted.
-secure: channel will enter +Dm mode -- scans will be done on hidden users (-d) prior to being voiced.  failures will result in kickban.
+%B%command:%B% mode -- %B%level:%B% %LEVEL% -- %B%usage:%B% mode ?chan? <on|off|secure> [-nomode]
+controls the channel join scanner:
+  - on: clients will be scanned upon channel join
+  - off: clients will not be scanned upon channel join. manual scans still permitted.
+  - secure: channel will enter +Dm mode -- scans will be done on hidden users (-d) prior to being voiced.  failures will result in kickban.
+adding '-nomode' will not voice/devoice clients when moving to or from 'secure' mode.

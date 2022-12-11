@@ -36,7 +36,7 @@ make for many config variables but I hope you'll welcome this approach.
 
 To download the entire git repository use: ***git clone https://github.com/empus/armour***
 
-Or alternatively visit ***http://code.empus.net/armour/*** to download the source.
+Or alternatively visit ***http://code.empus.net/armour/*** to download an archive.
 
 If you have any bugs to report or enhancement suggestions, please post them on the '***Issues***' page or email me. 
 
@@ -52,6 +52,11 @@ Regards,
 - Empus <mail@empus.net>
 
 
+----------------------------------------------------------------------------------------------------------------
+ INSTALL
+----------------------------------------------------------------------------------------------------------------
+
+See [INSTALL.md](INSTALL.md) for installation and setup instructions
 
 ----------------------------------------------------------------------------------------------------------------
  FOREWARD
@@ -81,15 +86,6 @@ So here it is.  A public release of Armour, for all to use.
 
 I very much so welcome suggestions for improvement.  I welcome bug reports.  Help me find them, and I'll try to
 fix them :>
-
-
-
-----------------------------------------------------------------------------------------------------------------
- INITIAL SETUP
-----------------------------------------------------------------------------------------------------------------
-
-Please refer to the separate file '***INSTALL.md***' for instructions on initial setup.
-
 
 
 ----------------------------------------------------------------------------------------------------------------
@@ -221,7 +217,7 @@ ex. 2		Add a hostname blacklist entry for a spammer
 
 ex. 3		Add all Chinese IP space to blacklist
 
-			add black country cn ban compromised host***
+			add black country cn ban compromised host
 
 
 ex. 4		Add some RFC1918 IP space to the whitelist, and autoop all
@@ -485,7 +481,7 @@ Manual login is always allowed, but a client must be in a common channel with th
 When in mode '***secure***', the channel will be in mode +Dm and voice joining users when they have passed all scans,
 effectively making them visible to the rest of the channel.
 
-The cycle at which the '/NAMES -d' cycle is done, is configurable.  More frequent means a shorter wait, but can
+The cycle at which the '/WHO' cycle is done, is configurable.  More frequent means a shorter wait, but can
 potentially create bot lag.
 
 The bot can stack modes on a timer also so several users can be voiced together.  This is much cleaner than

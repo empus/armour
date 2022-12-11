@@ -1,3 +1,2 @@
-%B%command:%B% conf -- %B%level:%B% %LEVEL% -- %B%usage:%B% conf <setting|mask>
-displays configuration setting values with cfg.* prefix, as set in configuration file.
-specify vars without the cfg.* prefix either in dotted or space delimited form.  wildcards supported.
+%B%command:%B% conf -- %B%level:%B% %LEVEL% -- %B%usage:%B% conf <setting|mask> [-out]
+searches configuration settings (wildcards supported). adding '-out' will also output the setting values when multiple settings are found.

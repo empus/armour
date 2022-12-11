@@ -1,0 +1,5 @@
+%B%command:%B% mod -- %B%level:%B% %LEVEL% -- %B%usage:%B% mod ?chan? <id> <value|action|limit|depends|reason|nochans|onlykick|noident|manual|captcha|disabled|onlysecure|notsecure|silent> <value>
+modifies an attribute of a whitelist or blacklist entry of the given ID.
+attributes can be value (the match), action (accept, kickban, op, voice), limit (cumulative match via num:secs:hold), depends (match dependencies on other entry IDs), reason (entry reason)
+additional on/off flags make entries only match under certain conditions: nochans (client is in no other chans), onolykick (kick, do not ban), noident (only match when ~ is in ident), manual (await manual action from op), captcha (send CAPTCHA request), onlysecure (only active when in 'secure' mode), notsecure (only active when not in secure mode), silent (do not send op or report chan notices)
+entries can be disabled by enabling the 'disabled' flag.

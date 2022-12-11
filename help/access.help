@@ -1,0 +1,2 @@
+%B%command:%B% access -- %B%level:%B% %LEVEL% -- %B%usage:%B% access ?chan? <chan>
+checks access information for a user in a given channel, including when added and last modified (if different timestamps).
