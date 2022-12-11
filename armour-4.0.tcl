@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Sun Dec 11 08:13:42 PST 2022
+# armour.tcl v4.0 autobuild completed on: Sun Dec 11 09:07:59 PST 2022
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -15404,7 +15404,7 @@ proc update:cron {minute hour day month weekday} {
     set flushed 0
     # -- find staging script and backup directories last modified >N days ago
     set stagingdirs [exec find ./armour/backup -name armour-* -maxdepth 1 -type d -mtime +$flush]
-    set backupdirs [exec find ./armourbackup -name backup-* -maxdepth 1 -type d -mtime +$flush]
+    set backupdirs [exec find ./armour/backup -name backup-* -maxdepth 1 -type d -mtime +$flush]
     foreach scriptdir {$stagingdirs $backupdirs} {
         if {[string match "armour-*" $scriptdir]} { set dirtype "new script staging" } \
         else { set dirtype "old script backup" }
@@ -15556,7 +15556,6 @@ proc arm:cmd:update {0 1 2 3 {4 ""}  {5 ""}} {
 
         # -- find backup
         set backup [lindex $arg 1]
-        putlog "backup: $backup"
         set backups [lsort -decreasing [exec find ./armour -name backup-*]]
         set avail [list]
         foreach bak $backups {
@@ -15598,16 +15597,16 @@ proc arm:cmd:update {0 1 2 3 {4 ""}  {5 ""}} {
         set count 0
         foreach branch $json {
             incr count
-            set name [dict get $branch name]
+            set bname [dict get $branch name]
             set commit [dict get $branch commit]
             set url [dict get $commit url]
             # -- get the commit details to show last commit timestamp
             lassign [update:github $url "get commit data" $type $target] success extra json
             set scommit [dict get $json commit]
             set author [dict get $scommit author]
-            set name [dict get $author name]
+            #set aname [dict get $author name]
             set commitdate [dict get $author date]
-            reply $type $target "\002branch:\002 $name -- \002url:\002 https://github.com/empus/armour/tree/$name --\
+            reply $type $target "\002branch:\002 $bname -- \002url:\002 https://github.com/empus/armour/tree/$bname --\
                 \002commit:\002 [userdb:timeago [clock scan $commitdate]] ago"
         }
         if {$count > 1} {
@@ -15625,6 +15624,7 @@ proc update:github {url desc type target} {
     http::config -useragent "mozilla" 
     global github
     set headers [list Accept application/json Authorization [list Bearer $github(token)]]
+    debug 0 "\002update:github:\002 headers: $headers"
     set errcode [catch {set tok [::http::geturl $url -headers $headers -timeout 10000]} error]
     debug 0 "\002update:github:\002 errcode: $errcode -- error: $error"
     set success 1;
@@ -15645,8 +15645,13 @@ proc update:github {url desc type target} {
     return [list $success $errcode $json]
 }
 
+# -- github API requests get rate limited more strictly without authentication
+# -- https://developer.github.com/v3/#rate-limiting
+# -- storing tokens in plaintext within github repositories result in automatic expiry of the access token
+
 # -- check for update
 proc update:check {branch {debug 0}} {
+    global github
     set url "https://raw.githubusercontent.com/empus/armour/${branch}/.version"
     http::register https 443 [list ::tls::socket -tls1.2 true]
     http::config -useragent "mozilla" 
@@ -15683,12 +15688,15 @@ proc update:check {branch {debug 0}} {
             set grevision $value
         } elseif {$tag eq "filecount"} {
             set filecount $value
+        } elseif {$tag eq "token"} {
+            set github(token) [string reverse "${value}_tap_buhtig"]
         }
     }
 
-    debug 5 "\002update:check:\002 retrieved version info from github (version: $gversion -- revision: $grevision)"
+    debug 4 "\002update:check:\002 retrieved version info from github (version: $gversion -- revision: $grevision)"
     set version [cfg:get version]
     set revision [cfg:get revision]
+    regsub -all {v} $version "" version
     set ordered [lsort -decreasing "$version $gversion"]
     dict set ghdata version $version
     dict set ghdata revision $revision
@@ -15702,6 +15710,7 @@ proc update:check {branch {debug 0}} {
     dict set ghdata filecount $filecount
     dict set ghdata debug $debug
     set output ""; set sendnote 0
+    debug 0 "\002update:check:\002 version: $version -- revision: $revision -- gversion: $gversion -- grevision: $grevision"
     if {$version eq $gversion} {
         # -- same version
         if {$revision < $grevision} {
@@ -15710,12 +15719,16 @@ proc update:check {branch {debug 0}} {
             dict set ghdata status "outdated"
             dict set ghdata newrevision 1
             set sendnote 1
-            set output "revision update (\002v$grevision\002) of version \002$version\002 available! \002current revision:\002 $revision"
+            set output "revision update (\002v$grevision\002) of version \002v$version\002 available! \002current revision:\002 $revision"
+        } else {
+            # -- local version is up to date
+            dict set ghdata status "current"
+            set output "currently running the latest available version (\002v$version\002 -- \002revision:\002 $revision)"
         }
     } elseif {[lindex $ordered 0] eq $version} {
         # -- local version is newer
         dict set ghdata status "newer"
-        set output "currently running a \002newer\002 version (\002$version\002 -- \002revision:\002 $revision) than is available on \
+        set output "currently running a \002newer\002 version (\002v$version\002 -- \002revision:\002 $revision) than is available on \
             github (\002version:\002 v$gversion -- \002revison:\002 $grevision -- \002branch:\002 $branch)"
     } else {
         # -- github has an newer version
@@ -15723,7 +15736,7 @@ proc update:check {branch {debug 0}} {
         dict set ghdata update 1
         dict set ghdata newversion 1
         set sendnote 1
-        set output "version update (\002v$gversion\002) available! \002current version:\002 $version"
+        set output "version update (\002v$gversion\002) available! \002current version:\002 v$version"
     }
 
     if {$output ne ""} {

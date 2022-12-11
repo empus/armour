@@ -6,9 +6,6 @@
 
 # -- updated by Empus (mail@empus.net) to support custom branches & github API token
 
-# -- TODO: share outside the script so token expiries are not a problem (max of 12 months)
-# note: token cannot appear in any github repos or will get automatcally disabled
-set github(token) "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"
 
 # chicken and egg problem we need non-standard packages tls and json ...
 package require tls
