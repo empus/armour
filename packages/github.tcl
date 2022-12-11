@@ -38,8 +38,7 @@ proc ::github::download {url folder {debug true}} {
     }
     set sfiles ""
     set dfiles ""
-    global github
-    set headers [list Authorization [list Bearer $github(token)]]
+    set headers [list Authorization [list Bearer $arm::github(token)]]
     set data [http::data [http::geturl $url -headers $headers]]
     set d [json::json2dict $data]
     #putlog "\002::github:download:\002 json: $d"
@@ -88,8 +87,7 @@ proc ::github::files {files dir num dirs} {
     set fname [file join $dir $fname]
     set f [open $fname w]
     fconfigure $f -translation 
-    global github
-    set headers [list Authorization [list Bearer $github(token)]]
+    set headers [list Authorization [list Bearer $arm::github(token)]]
     set tok [http::geturl $file -headers $headers -channel $f]
     set Stat [::http::status $tok]
     flush $f
