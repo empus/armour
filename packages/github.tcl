@@ -25,20 +25,20 @@ package provide github::github 0.2
 package provide github 0.2
 
 # Tcl package download
-proc ::github::github {cmd owner repo folder {branch "master"}} {
+proc ::github::github {cmd owner repo folder token {branch "master"}} {
     variable libdir
     set url https://api.github.com/repos/$owner/$repo/contents/?ref=$branch
-    download $url $folder
+    download $url $folder $token
 }
 
 # Folder download
-proc ::github::download {url folder {debug true}} {
+proc ::github::download {url folder token {debug true}} {
     if {![file exists $folder]} {
         file mkdir $folder
     }
     set sfiles ""
     set dfiles ""
-    set headers [list Authorization [list Bearer $arm::github(token)]]
+    set headers [list Authorization [list Bearer $token]]
     set data [http::data [http::geturl $url -headers $headers]]
     set d [json::json2dict $data]
     #putlog "\002::github:download:\002 json: $d"
@@ -59,35 +59,35 @@ proc ::github::download {url folder {debug true}} {
         }
     }
     if {$sfiles != ""} {
-        files $sfiles $folder 0 $dfiles
+        files $sfiles $folder 0 $dfiles $token
         return
     }
     if {$dfiles != ""} {
-        dirs $dfiles $folder 0
+        dirs $dfiles $folder 0 $token
     }
 }
 
 # Folders make
-proc ::github::dirs {dirs dir num} {
+proc ::github::dirs {dirs dir num {token ""}} {
     set file [lindex $dirs $num]
     set nfolder [file join $dir [file tail $file]]
-    download $file $nfolder
+    download $file $nfolder $token
     set counter [expr $num + 1]
     if {[lindex $dirs $counter] != ""} {
         #after 500 [list ::github::dirs $dirs $dir $counter]
-        ::github::dirs $dirs $dir $counter
+        ::github::dirs $dirs $dir $counter $token
     }
 }
 
 # Files make
-proc ::github::files {files dir num dirs} {
+proc ::github::files {files dir num dirs {token ""}} {
     set item [lindex $files $num]
     set file [lindex $item 0]
     set fname [file tail $file]
     set fname [file join $dir $fname]
     set f [open $fname w]
     fconfigure $f -translation 
-    set headers [list Authorization [list Bearer $arm::github(token)]]
+    set headers [list Authorization [list Bearer $token]]
     set tok [http::geturl $file -headers $headers -channel $f]
     set Stat [::http::status $tok]
     flush $f
@@ -96,10 +96,10 @@ proc ::github::files {files dir num dirs} {
     set counter [expr $num + 1]
     if {[lindex $files $counter] != ""} {
         #after 100 [list ::github::files $files $dir $counter $dirs]
-        ::github::files $files $dir $counter $dirs
+        ::github::files $files $dir $counter $dirs $token
     } else {
         if {$dirs != ""} {
-            dirs $dirs $dir 0
+            dirs $dirs $dir 0 $token
         }
     }
 }
