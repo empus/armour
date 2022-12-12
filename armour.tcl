@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Sun Dec 11 09:07:59 PST 2022
+# armour.tcl v4.0 autobuild completed on: Sun Dec 11 17:29:34 PST 2022
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -52,6 +52,7 @@ foreach script $data {
 		}
 	}
 }
+
 # ------------------------------------------------------------------------------------------------
 namespace eval arm {
 # ------------------------------------------------------------------------------------------------
@@ -1314,9 +1315,9 @@ proc db:upgrade {} {
     if {$revision < "2022121100" && $dbfresh eq 0} {
         if {!$upgrade} { debug 0 "\[@\] Armour: beginning db migration from $revision to $confrev" }
         set upgrade 1;
-        exec rm ./armour/plugins/ext/libdronebl.tcl;   # -- moved to packages/
-        exec rm ./armour/plugins/ext/github.tcl;       # -- moved to packages/
-        #exec rm -rf ./armour/plugins/ext;             # -- delete later, when onetimepass.tcl is removed
+        catch { exec rm ./armour/plugins/ext/libdronebl.tcl };   # -- moved to packages/
+        catch { exec rm ./armour/plugins/ext/github.tcl };       # -- moved to packages/
+        #catch { exec rm -rf ./armour/plugins/ext };             # -- delete later, when onetimepass.tcl is removed
     }
 
     # -- remove unique constraint on 'curnick' and 'xuser' columns
@@ -1324,7 +1325,7 @@ proc db:upgrade {} {
         if {!$upgrade} { debug 0 "\[@\] Armour: beginning db migration from $revision to $confrev" }
         set upgrade 1;
         db:connect
-        debug 0 "db:upgrade: creating new temporary entries_new table (users_new)"
+        debug 0 "db:upgrade: creating new temporary users_new table (removing unique constraint on curnick and xuser)"
         db:query "CREATE TABLE users_new (\
             id INTEGER PRIMARY KEY AUTOINCREMENT,\
             user TEXT UNIQUE NOT NULL,\
@@ -11727,7 +11728,7 @@ proc userdb:cmd:newuser {0 1 2 3 {4 ""}  {5 ""}} {
     debug 1 "userdb:cmd:newuser: created user: $trguser (id: $userid -- xuser: $trgxuser -- level: $globlvl)"
     
     if {$trgxuser ne ""} {
-        reply $type $target "created user $trguser \002(uid:\002 $userid \002account:\002 $trgxuser -- \002global level:\002 $globlvl)\002"
+        reply $type $target "created user $trguser \002(uid:\002 $userid -- \002account:\002 $trgxuser -- \002global level:\002 $globlvl)\002"
     } else {
         reply $type $target "created user $trguser \002(uid:\002 $userid -- \002global level:\002 $globlvl)\002 -- temporary password sent via /notice."
         reply $stype $starget "note: temporary password for user $trguser is: $genpass"
@@ -15405,7 +15406,7 @@ proc update:cron {minute hour day month weekday} {
     # -- find staging script and backup directories last modified >N days ago
     set stagingdirs [exec find ./armour/backup -name armour-* -maxdepth 1 -type d -mtime +$flush]
     set backupdirs [exec find ./armour/backup -name backup-* -maxdepth 1 -type d -mtime +$flush]
-    foreach scriptdir {$stagingdirs $backupdirs} {
+    foreach scriptdir "$stagingdirs $backupdirs" {
         if {[string match "armour-*" $scriptdir]} { set dirtype "new script staging" } \
         else { set dirtype "old script backup" }
         if {!$debug} {
@@ -15475,7 +15476,7 @@ proc update:cron {minute hour day month weekday} {
 # install: install update, with optional github branch
 # restore: restore last script backup
 # branches: show available github branches
-proc arm:cmd:update {0 1 2 3 {4 ""}  {5 ""}} {
+proc arm:cmd:update {0 1 2 3 {4 ""} {5 ""}} {
     variable ghdata
     lassign [proc:setvars $0 $1 $2 $3 $4 $5] type stype target starget nick uh hand source chan arg
     set cmd "update"
@@ -15610,7 +15611,7 @@ proc arm:cmd:update {0 1 2 3 {4 ""}  {5 ""}} {
                 \002commit:\002 [userdb:timeago [clock scan $commitdate]] ago"
         }
         if {$count > 1} {
-            reply $type $target "total branches: $count"
+            reply $type $target "found \002$count\002 branches."
         } 
     } 
 
@@ -15622,7 +15623,7 @@ proc arm:cmd:update {0 1 2 3 {4 ""}  {5 ""}} {
 proc update:github {url desc type target} {
     http::register https 443 [list ::tls::socket -tls1.2 true]
     http::config -useragent "mozilla" 
-    global github
+    variable github
     set headers [list Accept application/json Authorization [list Bearer $github(token)]]
     debug 0 "\002update:github:\002 headers: $headers"
     set errcode [catch {set tok [::http::geturl $url -headers $headers -timeout 10000]} error]
@@ -15651,7 +15652,7 @@ proc update:github {url desc type target} {
 
 # -- check for update
 proc update:check {branch {debug 0}} {
-    global github
+    variable github
     set url "https://raw.githubusercontent.com/empus/armour/${branch}/.version"
     http::register https 443 [list ::tls::socket -tls1.2 true]
     http::config -useragent "mozilla" 
@@ -15723,7 +15724,7 @@ proc update:check {branch {debug 0}} {
         } else {
             # -- local version is up to date
             dict set ghdata status "current"
-            set output "currently running the latest available version (\002v$version\002 -- \002revision:\002 $revision)"
+            set output "currently running the \002latest\002 available version (\002v$version\002 -- \002revision:\002 $revision)"
         }
     } elseif {[lindex $ordered 0] eq $version} {
         # -- local version is newer
@@ -15806,6 +15807,7 @@ proc update:note {note ghdata} {
 
 # -- download the updated script from github
 proc update:download {ghdata} {
+    variable github
     set branch [dict get $ghdata branch]
     set filecount [dict get $ghdata filecount]
     set gversion [dict get $ghdata gversion]
@@ -15821,7 +15823,7 @@ proc update:download {ghdata} {
     exec echo $start > ./armour/backup/.lock
 
     # -- download the script from github
-    ::github::github update empus armour ./armour/backup/armour-$start $branch
+    ::github::github update empus armour ./armour/backup/armour-$start $arm::github(token) $branch
 
     # -- wait for the download to complete
     # TODO: consider doing this with total bytes instead of number of files (see: update:dirsize proc)
