@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Sun Dec 11 21:15:19 PST 2022
+# armour.tcl v4.0 autobuild completed on: Sun Dec 11 21:27:01 PST 2022
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -179,8 +179,8 @@ set scan(cfg:ban:time) [cfg:get ban:time *]; # -- config variable fixes
 if {![info exists uservar]} { set uservar ${botnet-nick} }; # -- set var if not used in eggdrop config
 
 # -- handle script config file in case user keeps as armour.conf
-set botname [cfg:get botname]
-if {$botname eq ""} {
+set armname [cfg:get botname]
+if {$armname eq ""} {
     # -- handle config
     debug 0 "\002warning\002: cfg(botname) not set in \002armour.conf\002, defaulting to \002armour\002"
     set confname "armour"
@@ -195,15 +195,15 @@ if {$botname eq ""} {
         set dbname "armour"
     }
 } else {
-    if {![file isfile ./armour/$botname.conf]} {
-        debug 0 "\002warning\002: ./armour/$botname.conf does not exist. defaulting to \002armour.conf\002"
+    if {![file isfile ./armour/$armname.conf]} {
+        debug 0 "\002warning\002: ./armour/$armname.conf does not exist. defaulting to \002armour.conf\002"
         set confname "armour"
-    } else { set confname $botname }
+    } else { set confname $armname }
 
-    if {![file isfile ./armour/db/$botname.db]} {
-        debug 0 "\002warning\002: ./armour/db/$botname.db does not exist. defaulting to \002./armour/db/armour.db\002"
+    if {![file isfile ./armour/db/$armname.db]} {
+        debug 0 "\002warning\002: ./armour/db/$armname.db does not exist. defaulting to \002./armour/db/armour.db\002"
         set dbname "armour"
-    } else { set dbname $botname }
+    } else { set dbname $armname }
 }
 
 
