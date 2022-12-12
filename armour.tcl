@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Sun Dec 11 20:27:05 PST 2022
+# armour.tcl v4.0 autobuild completed on: Sun Dec 11 20:36:31 PST 2022
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -15994,9 +15994,10 @@ proc update:install {update} {
 
     # -- rename most recent version specific script file, or use armour.tcl
     set file [lindex [lsort -decreasing [exec find ./armour/backup/armour-$start -maxdepth 1 -name armour-*.tcl]] 0]
-    if {$file eq ""} { set file "./armour/backup/armour-$start/armour.tcl" }
-    debug 0 "\002update:install:\002 renaming version specific script file: $file -> ./armour/backup/armour-$start/armour.tcl"
-    exec mv $file ./armour/backup/armour-$start/armour.tcl
+    if {$file ne ""} {
+        debug 0 "\002update:install:\002 renaming version specific script file: $file -> ./armour/backup/armour-$start/armour.tcl"
+        exec mv $file ./armour/backup/armour-$start/armour.tcl
+    }
  
     # -- copy new files into place
     # note that removed or renamed files should be handled during migrations (db:upgrade proc)
