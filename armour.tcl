@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Sun Dec 11 18:21:59 PST 2022
+# armour.tcl v4.0 autobuild completed on: Sun Dec 11 18:41:11 PST 2022
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -15992,8 +15992,10 @@ proc update:install {update} {
     # -- do the backup file copies
     update:copy ./armour ./armour/backup/backup-$backupts $debug
 
-    # -- rename most recent version specific script file
-    set file [lindex [lsort -decreasing [exec find ./armour/backup/armour-$start -maxdepth 1 -name armour-*.tcl]] 0]
+    # -- rename most recent version specific script file, or use armour.tcl
+    #set file [lindex [lsort -decreasing [exec find ./armour/backup/armour-$start -maxdepth 1 -name armour-*.tcl]] 0]
+    set file ""; # -- just use armour.tcl
+    if {$file eq ""} { set file "./armour/backup/armour-$start/armour.tcl" }
     debug 0 "\002update:install:\002 renaming version specific script file: $file -> ./armour/backup/armour-$start/armour.tcl"
     exec mv $file ./armour/backup/armour-$start/armour.tcl
  
@@ -16011,6 +16013,12 @@ proc update:install {update} {
         reply $type $target "script \002[cfg:get version]\002 (\002revision:\002 [cfg:get revision])\
             installation $mode (\002runtime:\002 $runtime secs -- \002new config settings:\002 $new)"
     }
+
+    # -- remove the lock file
+    debug 0 "\002update:install:\002 removing lock file"
+    catch { exec rm ./armour/backup/.lock }
+    catch { exec rm ./armour/backup/.install }
+
     if {!$debug} {
         reply $type $target "restarting..."
         putnow "QUIT :Loading Armour v[cfg:get version] (revision [cfg:get revision])"
@@ -16018,11 +16026,6 @@ proc update:install {update} {
     } else {
         reply $type $target "\002info:\002 debug mode enabled, update not actually applied."
     }
-
-    # -- remove the lock file
-    debug 0 "\002update:install:\002 removing lock file"
-    catch { exec rm ./armour/backup/.lock }
-    catch { exec rm ./armour/backup/.install }
 }
 
 # -- copy files from one directory to another

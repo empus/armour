@@ -28,11 +28,11 @@ package provide github 0.2
 proc ::github::github {cmd owner repo folder token {branch "master"}} {
     variable libdir
     set url https://api.github.com/repos/$owner/$repo/contents/?ref=$branch
-    download $url $folder $token
+    download $url $folder $token $branch
 }
 
 # Folder download
-proc ::github::download {url folder token {debug true}} {
+proc ::github::download {url folder token branch {debug true}} {
     if {![file exists $folder]} {
         file mkdir $folder
     }
@@ -50,7 +50,7 @@ proc ::github::download {url folder token {debug true}} {
         set type [dict get $dic type]
         if {$file eq "null" &&  $type eq "dir"} {
             set file [dict get $dic url]
-            set file [regsub {.ref=master} $file ""]
+            set file [regsub ".ref=$branch" $file ""]
         }
         if {$type eq "file"} {
             lappend sfiles $file
