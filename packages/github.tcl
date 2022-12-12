@@ -52,9 +52,11 @@ proc ::github::download {url folder token branch {debug true}} {
     }
     set data [http::data $tok]
     set d [json::json2dict $data]
-    if {[dict get $d message] eq "Bad credentials"} {
-        putlog 0 "\002::github:download:\002 Github download error: \002Bad credentials\002"
-        return;
+    if {[dict exists $d message]} {
+        if {[dict get $d message] eq "Bad credentials"} {
+            putlog 0 "\002::github:download:\002 Github download error: \002Bad credentials\002"
+            return;
+        }
     }
     #putlog "\002::github:download:\002 json: $d"
     set l [llength $d]
