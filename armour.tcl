@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Sun Dec 11 22:19:36 PST 2022
+# armour.tcl v4.0 autobuild completed on: Sun Dec 11 22:36:55 PST 2022
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -3534,7 +3534,7 @@ if {[info commands "arm::debug"] eq ""} {
         variable cfg
         if {$level eq 0 || [cfg:get debug:type *] eq "putlog"} { 
             putlog "\002\[A\]\002 $string"; 
-        } elseif {$level <= [cfg:get debug *]} { 
+        } else { 
             putloglev $level * "\002\[A\]\002 $string";
         }
     }
@@ -16053,8 +16053,8 @@ proc update:install {update} {
     catch { exec rm ./armour/backup/.install }
 
     if {!$debug} {
-        reply $type $target "restarting..."
-        putnow "QUIT :Loading Armour v[cfg:get version] (revision [cfg:get revision])"
+        #reply $type $target "restarting..."
+        putnow "QUIT :Loading Armour \002[cfg:get version] (revision: \002[cfg:get revision]\002)"
         restart; # -- restart eggdrop to ensure full script load
     } else {
         reply $type $target "\002info:\002 debug mode enabled, update not actually applied."
