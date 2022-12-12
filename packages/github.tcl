@@ -6,9 +6,6 @@
 
 # -- updated by Empus (mail@empus.net) to support custom branches, github API token, and error handling
 
-# -- debug level (0-3)
-set ::github::debug 2
-
 # chicken and egg problem we need non-standard packages tls and json ...
 package require tls
 package require http
@@ -20,6 +17,9 @@ namespace eval ::github {
         lappend auto_path $libdir
     }
 } 
+
+# -- debug level (0-3)
+set ::github::debug 2
 
 # I already placed the json folder below of the github folder
 package require json

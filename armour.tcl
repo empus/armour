@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Sun Dec 11 21:27:01 PST 2022
+# armour.tcl v4.0 autobuild completed on: Sun Dec 11 22:19:36 PST 2022
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -15942,6 +15942,13 @@ proc update:install {update} {
     # -- loop over the lines in the sample config file
     foreach line $lines {
         incr linecount
+
+        # -- escape brackets in set commands
+        if {[regexp {^set} $line]} {
+            regsub -all {\[} $line {\\[} line
+            regsub -all {\]} $line {\\]} line
+        }
+
         if {[regexp {^#} $line] || $line eq "" || $line eq "\r" || [regexp {^\s*$} $line]} {
             # -- output comments and blank lines 'as is'
             #debug 0 "\002update:install:\002 repeat line: $line"
@@ -15961,6 +15968,8 @@ proc update:install {update} {
             } else {
                 incr changed
                 debug 0 "\002update:install:\002 using existing config value: $var = $val -> $curval"
+                regsub -all {\[} $curval {\\[} curval
+                regsub -all {\]} $curval {\\]} curval
                 puts $fd "set cfg($var) \"$curval\""
             }
             continue
