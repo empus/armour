@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Sun Dec 11 22:36:55 PST 2022
+# armour.tcl v4.0 autobuild completed on: Mon Dec 12 07:42:03 PST 2022
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -35,24 +35,6 @@
 #
 # script dependencies
 #
-# ------------------------------------------------------------------------------------------------
-# script loader
-# ------------------------------------------------------------------------------------------------
-
-set data [split $arm::files \n]
-foreach script $data {
-    # -- only load wanted scripts
-    set i [lindex $script 0]
-    if {[regexp -- {.tcl$} $i] && [string index $i 0] != "#"} {
-        # -- capture any errors to not crash the bot (safety)
-        putlog "\002\[A\]\002 \[@\] Armour: loading $i ..."
-        catch {source $i} error
-        if {$error ne ""} {
-            putloglev d * "\002(Armour load error)\002:$i\: $::errorInfo"
-        }
-    }
-}
-
 # ------------------------------------------------------------------------------------------------
 namespace eval arm {
 # ------------------------------------------------------------------------------------------------
@@ -179,29 +161,35 @@ set scan(cfg:ban:time) [cfg:get ban:time *]; # -- config variable fixes
 if {![info exists uservar]} { set uservar ${botnet-nick} }; # -- set var if not used in eggdrop config
 
 # -- handle script config file in case user keeps as armour.conf
+# -- the below will help make script 3.x to 4.x migrations easier for users, and for those that don't rename armour.conf
 set armname [cfg:get botname]
 if {$armname eq ""} {
     # -- handle config
     debug 0 "\002warning\002: cfg(botname) not set in \002armour.conf\002, defaulting to \002armour\002"
+    report debug "" "Armour \002warning\002: cfg(botname) not set in \002armour.conf\002, defaulting to \002armour\002"
     set confname "armour"
     # -- check for old db entry
     set sqlitedb [cfg:get sqlite]
     if {$sqlitedb ne ""} {
         debug 0 "\002warning\002: cfg(sqlite) in \002armour.conf\002 is \002deprecated!\002 please remove."
+        report debug "" "Armour \002warning\002: cfg(sqlite) in \002armour.conf\002 is \002deprecated!\002 please remove."
         set dbname [file tail $sqlitedb]
         string trimright $dbname .db
     } else {
         debug 0 "\002warning\002: cfg(botname) not set in \002armour.conf\002, defaulting database to \002./armour/db/armour.db\002"
+        report debug "" "Armour \002warning\002: cfg(botname) not set in \002armour.conf\002, defaulting database to \002./armour/db/armour.db\002"
         set dbname "armour"
     }
 } else {
     if {![file isfile ./armour/$armname.conf]} {
         debug 0 "\002warning\002: ./armour/$armname.conf does not exist. defaulting to \002armour.conf\002"
+        report debug "" "Armour \002warning\002: ./armour/$armname.conf does not exist. defaulting to \002armour.conf\002" 
         set confname "armour"
     } else { set confname $armname }
 
     if {![file isfile ./armour/db/$armname.db]} {
         debug 0 "\002warning\002: ./armour/db/$armname.db does not exist. defaulting to \002./armour/db/armour.db\002"
+        report debug "" "Armour \002warning\002: ./armour/db/$armname.db does not exist. defaulting to \002./armour/db/armour.db\002"
         set dbname "armour"
     } else { set dbname $armname }
 }
@@ -763,7 +751,7 @@ namespace eval arm {
 # ------------------------------------------------------------------------------------------------
 
 # -- this revision is used to match the DB revision for use in upgrades and migrations
-set cfg(revision) "2022121200"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
+set cfg(revision) "2022121300"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
 set cfg(version) "v4.0";        # -- script version
 
 # -- load sqlite (or at least try)
@@ -3531,7 +3519,6 @@ set scan(cfg:ban:time) [cfg:get ban:time *]
 if {[info commands "arm::debug"] eq ""} {
     # -- only create if not already loaded
     proc debug {level string} {
-        variable cfg
         if {$level eq 0 || [cfg:get debug:type *] eq "putlog"} { 
             putlog "\002\[A\]\002 $string"; 
         } else { 
@@ -3544,7 +3531,6 @@ if {[info commands "arm::debug"] eq ""} {
 if {[info commands "arm::report"] eq ""} {
     # -- only create if not already loaded
     proc report {type target string {chan ""} {chanops "1"}} {
-        variable cfg
         variable scan:full; # -- stores data when channel scan in progress (arrays: chan,<chan> and count,<chan>)
         
         set prichan [db:get id channels id 2]; # -- channel id 2 (1 = global)
@@ -3576,6 +3562,8 @@ if {[info commands "arm::report"] eq ""} {
         } elseif {$type eq "operop"} {
             if {[cfg:get opnotc:operop $chan]} { putquick "NOTICE @$chan :$string" }
             if {[cfg:get dnotc:operop $chan] && $rchan ne ""} { putquick "NOTICE $rchan :$string" }
+        } elseif {$type eq "debug"} {
+            if {$rchan ne ""} { putquick "NOTICE $rchan :$string" }
         }
     }
 }
@@ -3613,8 +3601,9 @@ proc arm:cmd:conf {0 1 2 3 {4 ""}  {5 ""}} {
     lassign [db:get id,user users curnick $nick] uid user
     # -- end default proc template
     
-    if {$arg eq "" || [llength $arg] < 2} { reply $stype $starget "usage: conf <chan> <setting|mask> \[-out\]"; return; }
+    if {$arg eq "" || [llength $arg] < 2} { reply $stype $starget "usage: conf ?chan? <setting|mask> \[-out\]"; return; }
     set chan [lindex $arg 0]
+    if {[string index $chan 0] ne "#" && $chan eq "*"} { set chan "*" }; # -- default to global if not given
     set cid [db:get id channels chan $chan]
     if {$cid eq ""} { reply $type $target "\002error:\002 channel $chan is not registered."; return; }
     set rest [lrange $arg 1 end]
@@ -5563,26 +5552,29 @@ proc arm:cmd:version {0 1 2 3 {4 ""}  {5 ""}} {
 
     set branch [cfg:get update:branch]
     lassign [update:check $branch] success ghdata output
+    set status [dict get $ghdata status]
     set version [cfg:get version]
-    if {$success eq 1} {
-        if {[dict get $ghdata update]} {
-            # -- update available
-            if {[dict get $ghdata newversion]} {
-                # -- new version available
-                reply $type $target "\002version\002 update available! \002version:\002 v[dict get $ghdata gversion]\
-                    -- \002branch:\002 [dict get $ghdata branch]"
 
-            } elseif {[dict get $ghdata newrevision]} {
-                # -- new revision on existing version
-                reply $type $target "\002revision\002 update available! \002revision:\002 [dict get $ghdata grevision]\
-                    -- \002version:\002 $version -- \002branch:\002 [dict get $ghdata branch]"
-            }
-        } else {
-            # -- no update available
-            reply $type $target "\002version:\002 Armour $version (\002revision:\002 [cfg:get revision *]\
-                -- \002status:\002 [dict get $ghdata status] -- \002branch:\002 $branch)"
-        }
-        set branch "unknown"
+    if {$success eq 1} {
+
+        if {$status eq "current"} {
+            set out "current vs \002$branch\002 branch"
+        } elseif {$status eq "newer"} {
+            set out "newer than \002$branch\002 branch"
+        } elseif {$status eq "outdated"} {
+            set out "older than \002$branch\002 branch"
+        } else { set out "unknown" }
+
+        if {[dict get $ghdata update]} { set extra "-- update \002available:\002 update install" } else { set extra "" }
+        append extra ")"
+
+        reply $type $target "\002version:\002 Armour $version (\002revision:\002 [cfg:get revision *]\
+                        -- \002status:\002 $out$extra"
+
+    } else {
+        # -- github check failed
+        reply $type $target "\002version:\002 Armour $version (\002revision:\002 [cfg:get revision *]\
+            -- \002github:\002 unavailable"       
     }
     # -- create log entry for command use
     log:cmdlog BOT * 1 $user $uid [string toupper $cmd] [join $arg] $source "" "" ""
@@ -8143,18 +8135,21 @@ proc mode:add:D {nick uhost hand chan mode target} {
     variable chan:mode; # -- stores the operational mode of a channel (by chan)
     set lchan [string tolower $chan]
     if {![info exists chan:mode($lchan)] || $nick eq $botnick} { return; }
-    debug 0 "mode:add:D: mode: $mode in $chan, enabled mode 'secure'"
-    set chan:mode($lchan) "secure"
-    reply pub $chan "changed mode to: secure"
-    # -- start '/names -d' timer
-    # -- kill any existing mode:secure timers
-    foreach utimer [utimers] {
-        set thetimer [lindex $utimer 1]
-        if {$thetimer eq "arm::mode:secure"} { continue; }
-        debug 1 "mode:add:D: killing arm:secure utimer: $utimer"
-        killutimer [lindex $utimer 2] 
+    # -- only react if configured to do so
+    if {[cfg:get mode:auto]} {
+        debug 0 "mode:add:D: mode: $mode in $chan, enabled mode 'secure'"
+        set chan:mode($lchan) "secure"
+        reply pub $chan "changed mode to: secure"
+        # -- start '/names -d' timer
+        # -- kill any existing mode:secure timers
+        foreach utimer [utimers] {
+            set thetimer [lindex $utimer 1]
+            if {$thetimer eq "arm::mode:secure"} { continue; }
+            debug 1 "mode:add:D: killing arm:secure utimer: $utimer"
+            killutimer [lindex $utimer 2] 
+        }
+        mode:secure
     }
-    mode:secure
 }
 
 # -- manual set of -D
@@ -8163,15 +8158,18 @@ proc mode:rem:D {nick uhost hand chan mode target} {
     variable chan:mode;  # -- stores the operational mode of a channel (by chan)
     set lchan [string tolower $chan]
     if {![info exists chan:mode($lchan)] || $nick eq $botnick} { return; }
-    debug 0 "mode:rem:D: mode: $mode in $chan, disabled mode 'secure' (enabled mode 'on')"
-    set chan:mode($lchan) "on"
-    reply pub $chan "changed mode to: on"
-    # -- kill any existing arm:secure timers
-    foreach utimer [utimers] {
-        set thetimer [lindex $utimer 1]
-        if {$thetimer ne "arm::mode:secure"} { continue; }
-        debug 1 "mode:rem:D: killing arm:secure utimer: $utimer"
-        killutimer [lindex $utimer 2] 
+    # -- only react if configured to do so
+    if {[cfg:get mode:auto]} {
+        debug 0 "mode:rem:D: mode: $mode in $chan, disabled mode 'secure' (enabled mode 'on')"
+        set chan:mode($lchan) "on"
+        reply pub $chan "changed mode to: on"
+        # -- kill any existing arm:secure timers
+        foreach utimer [utimers] {
+            set thetimer [lindex $utimer 1]
+            if {$thetimer ne "arm::mode:secure"} { continue; }
+            debug 1 "mode:rem:D: killing arm:secure utimer: $utimer"
+            killutimer [lindex $utimer 2] 
+        }
     }
 }
 
@@ -14929,6 +14927,8 @@ proc report {type target string {chan ""} {chanops "1"}} {
     } elseif {$type eq "operop"} {
         if {[cfg:get opnotc:operop $chan]} { putquick "NOTICE @$chan :$string" }
         if {[cfg:get dnotc:operop $chan] && $rchan ne ""} { putquick "NOTICE $rchan :$string" }
+    } elseif {$type eq "debug"} {
+        if {$rchan ne ""} { putquick "NOTICE $rchan :$string" }
     }
 }
 
@@ -16299,6 +16299,9 @@ foreach var $vars {
 }
 unset vars
 
+# -- create empty to stop complaining untli a user is seen
+if {![info exists nickdata]} { set nickdata "" };
+
 # -- kill existing eggdrop timers (utimers and timers)
 kill:timers
 
@@ -16321,10 +16324,30 @@ if {[cfg:get dronebl] eq 1} { source ./armour/packages/libdronebl.tcl }
 init:autologin
 
 
-debug 0 "\[@\] Armour: initialised"
-debug 0 "\[@\] Armour: loaded [cfg:get version *] loaded (empus@undernet.org)"
+# ------------------------------------------------------------------------------------------------
+}; # -- end namespace
+# ------------------------------------------------------------------------------------------------
 
+
+# ------------------------------------------------------------------------------------------------
+# script loader
+# ------------------------------------------------------------------------------------------------
+set data [split $arm::files \n]
+foreach script $data {
+    # -- only load wanted scripts
+    set i [lindex $script 0]
+    if {[regexp -- {.tcl$} $i] && [string index $i 0] != "#"} {
+        # -- capture any errors to not crash the bot (safety)
+        putlog "\002\[A\]\002 \[@\] Armour: loading $i ..."
+        catch {source $i} error
+        if {$error ne ""} {
+            putloglev d * "\002(Armour load error)\002:$i\: $::errorInfo"
+        }
+    }
 }
-# -- end namespace
+# ------------------------------------------------------------------------------------------------
+arm::loadcmds; # -- load all commands (incl. plugins)
+# ------------------------------------------------------------------------------------------------
 
+arm::debug 0 "\[@\] Armour: loaded [cfg:get version *] (empus@undernet.org)"
 
