@@ -698,7 +698,7 @@ if {[catch {package require sqlite3} fail]} {
 
 
 # -- db connect
-proc quote:db:connect {} { sqlite3 quotesql "./armour/db/[arm::cfg:get botname]" }
+proc quote:db:connect {} { sqlite3 quotesql "./armour/db/$::arm::dbname.db" }
 # -- escape chars
 proc quote:db:escape {what} { return [string map {' ''} $what] }
 proc quote:db:last:rowid {} { quotesql last_insert_rowid }

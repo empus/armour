@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Sun Dec 11 20:53:30 PST 2022
+# armour.tcl v4.0 autobuild completed on: Sun Dec 11 21:15:19 PST 2022
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -180,10 +180,34 @@ if {![info exists uservar]} { set uservar ${botnet-nick} }; # -- set var if not 
 
 # -- handle script config file in case user keeps as armour.conf
 set botname [cfg:get botname]
-if {![file isfile ./armour/$botname.conf]} {
-    debug 0 "\002warning\002: ./armour/$botname.conf does not exist. defaulting to \002armour.conf\002"
-    set cfg(config) "armour"
-} else { set cfg(config) $botname }
+if {$botname eq ""} {
+    # -- handle config
+    debug 0 "\002warning\002: cfg(botname) not set in \002armour.conf\002, defaulting to \002armour\002"
+    set confname "armour"
+    # -- check for old db entry
+    set sqlitedb [cfg:get sqlite]
+    if {$sqlitedb ne ""} {
+        debug 0 "\002warning\002: cfg(sqlite) in \002armour.conf\002 is \002deprecated!\002 please remove."
+        set dbname [file tail $sqlitedb]
+        string trimright $dbname .db
+    } else {
+        debug 0 "\002warning\002: cfg(botname) not set in \002armour.conf\002, defaulting database to \002./armour/db/armour.db\002"
+        set dbname "armour"
+    }
+} else {
+    if {![file isfile ./armour/$botname.conf]} {
+        debug 0 "\002warning\002: ./armour/$botname.conf does not exist. defaulting to \002armour.conf\002"
+        set confname "armour"
+    } else { set confname $botname }
+
+    if {![file isfile ./armour/db/$botname.db]} {
+        debug 0 "\002warning\002: ./armour/db/$botname.db does not exist. defaulting to \002./armour/db/armour.db\002"
+        set dbname "armour"
+    } else { set dbname $botname }
+}
+
+
+
 
 debug 0 "\[@\] Armour: loaded script configuration."
 
@@ -749,11 +773,11 @@ if {[catch {package require sqlite3} fail]} {
 }
 
 # -- create db directories if they don't already exist
-if {![file isdirectory "./db"]} { exec mkdir "./db" }
-if {![file isdirectory "./armour/db"]} { exec mkdir "./armour/db" }
+if {![file isdirectory "./db"]} { exec mkdir "./db" };                # -- eggdrop db files
+if {![file isdirectory "./armour/db"]} { exec mkdir "./armour/db" };  # -- armour db files
 
 # -- db connect
-proc db:connect {} { sqlite3 armsql "./armour/db/$::arm::botname.db" }
+proc db:connect {} { sqlite3 armsql "./armour/db/$::arm::dbname.db" }
 # -- escape chars
 proc db:escape {what} { return [string map {' ''} $what] }
 proc db:last:rowid {} { armsql last_insert_rowid }
@@ -15876,21 +15900,22 @@ proc update:install {update} {
     debug 0 "\002update:install:\002 begin script installation"
     set response [dict get $update response]
 
-    # -- use botname var if exists, else use sqlite db name if still exists, else use 'armour'
-    set botname $::arm::botname;
-    
+    # -- grab names set in arm-01_depends.tcl
+    set dbname $::arm::dbname;
+    set confname $::arm::confname;
+
     # -- TODO: remove after dev testing
     if {[file isfile ./armour/armour.conf.sample.TEMP]} { 
         exec cp ./armour/armour.conf.sample.TEMP ./armour/backup/armour-$start/armour.conf.sample
     }
 
     # -- backup current db
-    set dbfile "./armour/db/${botname}.db"
+    set dbfile "./armour/db/${dbname}.db"
     debug 0 "\002update:install:\002 backing up sqlite db: $dbfile -> ${dbfile}.bak.$start"
     if {!$debug} { exec cp $dbfile ${dbfile}.bak.$start }
 
     # -- backup current config file
-    set conffile "./armour/${botname}.conf"
+    set conffile "./armour/${confname}.conf"
     debug 0 "\002update:install:\002 backing up config file: $conffile -> ${conffile}.bak.$start"
     if {!$debug} { exec cp $conffile ${conffile}.bak.$start }
 
@@ -15902,7 +15927,7 @@ proc update:install {update} {
     set lines [split $confdata \n]
     close $fd
     # -- new conf file
-    set newconf "./armour/backup/armour-$start/${botname}.conf"
+    set newconf "./armour/backup/armour-$start/${confname}.conf"
     set fd [open $newconf w]
 
     set linecount 0; set unchanged 0; set changed 0; set new 0;
