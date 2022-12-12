@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Sun Dec 11 17:29:34 PST 2022
+# armour.tcl v4.0 autobuild completed on: Sun Dec 11 18:01:26 PST 2022
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -41,16 +41,16 @@
 
 set data [split $arm::files \n]
 foreach script $data {
-	# -- only load wanted scripts
-	set i [lindex $script 0]
-	if {[regexp -- {.tcl$} $i] && [string index $i 0] != "#"} {
-		# -- capture any errors to not crash the bot (safety)
-		putlog "\002\[A\]\002 \[@\] Armour: loading $i ..."
-		catch {source $i} error
-		if {$error ne ""} {
-			putloglev d * "\002(Armour load error)\002:$i\: $::errorInfo"
-		}
-	}
+    # -- only load wanted scripts
+    set i [lindex $script 0]
+    if {[regexp -- {.tcl$} $i] && [string index $i 0] != "#"} {
+        # -- capture any errors to not crash the bot (safety)
+        putlog "\002\[A\]\002 \[@\] Armour: loading $i ..."
+        catch {source $i} error
+        if {$error ne ""} {
+            putloglev d * "\002(Armour load error)\002:$i\: $::errorInfo"
+        }
+    }
 }
 
 # ------------------------------------------------------------------------------------------------
@@ -60,30 +60,14 @@ namespace eval arm {
 # -- we require min Tcl 8.6 for coroutines
 package require Tcl 8.6
 
-
-# -- redirect tcl
-# -- this will be verbose from unsafe unsets (might need to disable)
-# -- note: this may negate ::bgerror above
-#if {![info exists ::errortracer]} { set ::errortracer 1; trace add variable ::errorInfo write ::redirecterror }
-#proc ::redirecterror {n1 n2 op} {
-#    set ::olddblvalue ${::double-help}
-#    set ::double-help 0
-#    foreach line [split $::errorInfo \n] {
-#        putlog "\002(errorInfo)\002: $line"
-#    }
-#   putlog "-"
-#    set ::double-help $::olddblvalue
-#}
-
-
 # -- provide some extra detail in TCL errors
 proc ::bgerror {message} { 
-    putloglev d * "\002(bgError)\002: \"$message\":" 
+    putloglev 1 * "\002(bgError)\002: \"$message\":" 
     foreach line [split $::errorInfo "\n"] { 
-        putloglev d * "  $line" 
+        putloglev 1 * "  $line" 
     } 
-    putloglev d * "\002(bgError)\002: errorCode: $::errorCode" 
-    putloglev d * "-"
+    putloglev 1 * "\002(bgError)\002: errorCode: $::errorCode" 
+    putloglev 1 * "-"
 }
 
 # -- override some eggdrop settings based on ircd type
@@ -110,10 +94,10 @@ proc cfg:get {setting {chan ""}} {
     switch -- $setting {
         botname                 { set avoid 1; }
         debug                   { set avoid 1; }
-		debug:type				{ set avoid 1; }
+        debug:type              { set avoid 1; }
         chan:login              { set avoid 1; }
         autologin:cycle         { set avoid 1; }
-		prefix					{ set avoid 1; }
+        prefix                  { set avoid 1; }
         queue:flud              { set avoid 1; }
         stack:secs              { set avoid 1; }
         ircd                    { set avoid 1; }
@@ -145,13 +129,13 @@ proc cfg:get {setting {chan ""}} {
     if {!$avoid} { debug 4 "\002cfg:get:\002 retrieving config setting: \002cfg($setting)\002" }
     
     # -- output the config file value for now
-	if {[info exists cfg($setting)]} {
-		return $cfg($setting)
-	} else {
-		debug 0 "\002cfg:get: (!CONFIG ERROR!)\002 -- setting not found: \002cfg($setting)\002"
-		putnotc $cfg(chan:report) "Armour: \002config error\002 -- setting not found: \002cfg($setting)\002"
-		return "";
-	}
+    if {[info exists cfg($setting)]} {
+        return $cfg($setting)
+    } else {
+        debug 0 "\002cfg:get: (!CONFIG ERROR!)\002 -- setting not found: \002cfg($setting)\002"
+        putnotc $cfg(chan:report) "Armour: \002config error\002 -- setting not found: \002cfg($setting)\002"
+        return "";
+    }
 
     # -- when switching to DB:
     #      - ensure DB entries that must only be set globally, are marked as such
@@ -15404,8 +15388,8 @@ proc update:cron {minute hour day month weekday} {
     set flush [cfg:get update:flush]
     set flushed 0
     # -- find staging script and backup directories last modified >N days ago
-    set stagingdirs [exec find ./armour/backup -name armour-* -maxdepth 1 -type d -mtime +$flush]
-    set backupdirs [exec find ./armour/backup -name backup-* -maxdepth 1 -type d -mtime +$flush]
+    set stagingdirs [exec find ./armour/backup -name armour-* -depth 1 -type d -mtime +$flush]
+    set backupdirs [exec find ./armour/backup -name backup-* -depth 1 -type d -mtime +$flush]
     foreach scriptdir "$stagingdirs $backupdirs" {
         if {[string match "armour-*" $scriptdir]} { set dirtype "new script staging" } \
         else { set dirtype "old script backup" }
@@ -16009,7 +15993,7 @@ proc update:install {update} {
     update:copy ./armour ./armour/backup/backup-$backupts $debug
 
     # -- rename most recent version specific script file
-    set file [lindex [lsort -decreasing [exec find ./armour/backup/armour-$start -name armour-*.tcl -d 1]] 0]
+    set file [lindex [lsort -decreasing [exec find ./armour/backup/armour-$start -name armour-*.tcl -depth 1]] 0]
     debug 0 "\002update:install:\002 renaming version specific script file: $file -> ./armour/backup/armour-$start/armour.tcl"
     exec mv $file ./armour/backup/armour-$start/armour.tcl
  
@@ -16049,11 +16033,11 @@ proc update:copy {from to {debug 0}} {
     if {[string match *backup* $to]} { set isbackup 1 } else { set isbackup 0 }
     if {[string match *backup* $from]} { set isrestore 1 } else { set isrestore 0 }
     if {!$debug || $isbackup} {
-        foreach file [exec find $from -name *.tcl -d 1] { exec cp $file $to }
-        foreach file [exec find $from -name *.sh -d 1] { exec cp $file $to }
-        foreach file [exec find $from -name *.conf -d 1] { exec cp $file $to }
-        foreach file [exec find $from -name *.md -d 1] { exec cp $file $to }
-        foreach file [exec find $from -name *.sample -d 1] { exec cp $file $to }
+        foreach file [exec find $from -name *.tcl -depth 1] { exec cp $file $to }
+        foreach file [exec find $from -name *.sh -depth 1] { exec cp $file $to }
+        foreach file [exec find $from -name *.conf -depth 1] { exec cp $file $to }
+        foreach file [exec find $from -name *.md -depth 1] { exec cp $file $to }
+        foreach file [exec find $from -name *.sample -depth 1] { exec cp $file $to }
     }
     debug 0 "\002update:copy:\002 copying directories from $from to $to"
     if {!$debug || $isbackup} {
