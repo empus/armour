@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Sun Dec 11 20:36:31 PST 2022
+# armour.tcl v4.0 autobuild completed on: Sun Dec 11 20:53:30 PST 2022
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -175,7 +175,15 @@ proc debug {level string} {
 }
 
 set scan(cfg:ban:time) [cfg:get ban:time *]; # -- config variable fixes
+
 if {![info exists uservar]} { set uservar ${botnet-nick} }; # -- set var if not used in eggdrop config
+
+# -- handle script config file in case user keeps as armour.conf
+set botname [cfg:get botname]
+if {![file isfile ./armour/$botname.conf]} {
+    debug 0 "\002warning\002: ./armour/$botname.conf does not exist. defaulting to \002armour.conf\002"
+    set cfg(config) "armour"
+} else { set cfg(config) $botname }
 
 debug 0 "\[@\] Armour: loaded script configuration."
 
@@ -745,7 +753,7 @@ if {![file isdirectory "./db"]} { exec mkdir "./db" }
 if {![file isdirectory "./armour/db"]} { exec mkdir "./armour/db" }
 
 # -- db connect
-proc db:connect {} { sqlite3 armsql "./armour/db/[cfg:get botname].db" }
+proc db:connect {} { sqlite3 armsql "./armour/db/$::arm::botname.db" }
 # -- escape chars
 proc db:escape {what} { return [string map {' ''} $what] }
 proc db:last:rowid {} { armsql last_insert_rowid }
@@ -15869,16 +15877,7 @@ proc update:install {update} {
     set response [dict get $update response]
 
     # -- use botname var if exists, else use sqlite db name if still exists, else use 'armour'
-    set botname [cfg:get botname];
-    if {$botname eq ""} {
-        set sqlitedb [cfg:get sqlite]
-        if {$sqlitedb ne ""} {
-            set botname [file tail $sqlitedb]
-            string trimright $botname .db
-        } else {
-            set botname "armour"
-        }
-    }
+    set botname $::arm::botname;
     
     # -- TODO: remove after dev testing
     if {[file isfile ./armour/armour.conf.sample.TEMP]} { 
