@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Sun Dec 11 19:15:05 PST 2022
+# armour.tcl v4.0 autobuild completed on: Sun Dec 11 20:27:05 PST 2022
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -15932,7 +15932,7 @@ proc update:install {update} {
             if {$curval eq $val} {
                 # -- value is unchanged
                 incr unchanged
-                debug 0 "\002update:install:\002 unchanged config value: $var = $val"
+                debug 1 "\002update:install:\002 unchanged config value: $var = $val"
                 puts $fd $line
             } else {
                 incr changed
@@ -15963,21 +15963,21 @@ proc update:install {update} {
                 if {!$usenew} {
                     # -- use existing config
                     set bindlist [join $bindlist " "]
-                    debug 0 "\002update:install:\002 existing command config: $cmd (types: $bindlist -- level: $req)"
+                    debug 1 "\002update:install:\002 existing command config: $cmd (types: $bindlist -- level: $req)"
                     puts $fd "set addcmd($cmd)		\{	$plugin		$req		$bindlist \}$rest"
                 } else {
                     # -- use new config
-                    debug 0 "\002update:install:\002 new command config: $cmd (type: $bind -- level: $lvl)"
+                    debug 1 "\002update:install:\002 new command config: $cmd (type: $bind -- level: $lvl)"
                     puts $fd $line
                 }
             } else {
-                debug 0 "\002update:install:\002 WARNING: unknown command config: $line"
+                debug 4 "\002update:install:\002 unknown command config: $line"
                 puts $fd $line
             }
 
         } else {
             puts $fd $line
-            debug 0 "\002update:install:\002 WARNING: unknown line in sample config: $line -- not comment or blank line"
+            debug 4 "\002update:install:\002 WARNING: unknown line in sample config: $line -- not comment or blank line"
         }
     }; # -- end of foreach line
     close $fd
@@ -15993,8 +15993,7 @@ proc update:install {update} {
     update:copy ./armour ./armour/backup/backup-$backupts $debug
 
     # -- rename most recent version specific script file, or use armour.tcl
-    #set file [lindex [lsort -decreasing [exec find ./armour/backup/armour-$start -maxdepth 1 -name armour-*.tcl]] 0]
-    set file ""; # -- just use armour.tcl
+    set file [lindex [lsort -decreasing [exec find ./armour/backup/armour-$start -maxdepth 1 -name armour-*.tcl]] 0]
     if {$file eq ""} { set file "./armour/backup/armour-$start/armour.tcl" }
     debug 0 "\002update:install:\002 renaming version specific script file: $file -> ./armour/backup/armour-$start/armour.tcl"
     exec mv $file ./armour/backup/armour-$start/armour.tcl
