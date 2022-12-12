@@ -38,7 +38,9 @@ proc ::github::download {url folder token branch {debug true}} {
     }
     set sfiles ""
     set dfiles ""
-    set headers [list Authorization [list Bearer $token]]
+    if {$token eq ""} {
+        set headers [list]
+    } else { set set headers [list Authorization [list Bearer $token]] }
     set data [http::data [http::geturl $url -headers $headers]]
     set d [json::json2dict $data]
     #putlog "\002::github:download:\002 json: $d"
@@ -59,35 +61,37 @@ proc ::github::download {url folder token branch {debug true}} {
         }
     }
     if {$sfiles != ""} {
-        files $sfiles $folder 0 $dfiles $token
+        files $sfiles $folder 0 $dfiles $branch $token
         return
     }
     if {$dfiles != ""} {
-        dirs $dfiles $folder 0 $token
+        dirs $dfiles $folder 0 $branch $token
     }
 }
 
 # Folders make
-proc ::github::dirs {dirs dir num {token ""}} {
+proc ::github::dirs {dirs dir num branch {token ""}} {
     set file [lindex $dirs $num]
     set nfolder [file join $dir [file tail $file]]
-    download $file $nfolder $token
+    download $file $nfolder $token $branch
     set counter [expr $num + 1]
     if {[lindex $dirs $counter] != ""} {
         #after 500 [list ::github::dirs $dirs $dir $counter]
-        ::github::dirs $dirs $dir $counter $token
+        ::github::dirs $dirs $dir $counter $branch $token
     }
 }
 
 # Files make
-proc ::github::files {files dir num dirs {token ""}} {
+proc ::github::files {files dir num dirs branch {token ""}} {
     set item [lindex $files $num]
     set file [lindex $item 0]
     set fname [file tail $file]
     set fname [file join $dir $fname]
     set f [open $fname w]
     fconfigure $f -translation 
-    set headers [list Authorization [list Bearer $token]]
+    if {$token eq ""} {
+        set headers [list]
+    } else { set set headers [list Authorization [list Bearer $token]] }
     set tok [http::geturl $file -headers $headers -channel $f]
     set Stat [::http::status $tok]
     flush $f
@@ -96,10 +100,10 @@ proc ::github::files {files dir num dirs {token ""}} {
     set counter [expr $num + 1]
     if {[lindex $files $counter] != ""} {
         #after 100 [list ::github::files $files $dir $counter $dirs]
-        ::github::files $files $dir $counter $dirs $token
+        ::github::files $files $dir $counter $dirs $branch $token
     } else {
         if {$dirs != ""} {
-            dirs $dirs $dir 0 $token
+            dirs $dirs $dir 0 $branch $token
         }
     }
 }
