@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Sun Dec 11 18:01:26 PST 2022
+# armour.tcl v4.0 autobuild completed on: Sun Dec 11 18:21:59 PST 2022
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -15388,8 +15388,8 @@ proc update:cron {minute hour day month weekday} {
     set flush [cfg:get update:flush]
     set flushed 0
     # -- find staging script and backup directories last modified >N days ago
-    set stagingdirs [exec find ./armour/backup -name armour-* -depth 1 -type d -mtime +$flush]
-    set backupdirs [exec find ./armour/backup -name backup-* -depth 1 -type d -mtime +$flush]
+    set stagingdirs [exec find ./armour/backup -maxdepth 1 -name armour-* -type d -mtime +$flush]
+    set backupdirs [exec find ./armour/backup -maxdepth 1 -name backup-* -type d -mtime +$flush]
     foreach scriptdir "$stagingdirs $backupdirs" {
         if {[string match "armour-*" $scriptdir]} { set dirtype "new script staging" } \
         else { set dirtype "old script backup" }
@@ -15993,7 +15993,7 @@ proc update:install {update} {
     update:copy ./armour ./armour/backup/backup-$backupts $debug
 
     # -- rename most recent version specific script file
-    set file [lindex [lsort -decreasing [exec find ./armour/backup/armour-$start -name armour-*.tcl -depth 1]] 0]
+    set file [lindex [lsort -decreasing [exec find ./armour/backup/armour-$start -maxdepth 1 -name armour-*.tcl]] 0]
     debug 0 "\002update:install:\002 renaming version specific script file: $file -> ./armour/backup/armour-$start/armour.tcl"
     exec mv $file ./armour/backup/armour-$start/armour.tcl
  
@@ -16033,11 +16033,11 @@ proc update:copy {from to {debug 0}} {
     if {[string match *backup* $to]} { set isbackup 1 } else { set isbackup 0 }
     if {[string match *backup* $from]} { set isrestore 1 } else { set isrestore 0 }
     if {!$debug || $isbackup} {
-        foreach file [exec find $from -name *.tcl -depth 1] { exec cp $file $to }
-        foreach file [exec find $from -name *.sh -depth 1] { exec cp $file $to }
-        foreach file [exec find $from -name *.conf -depth 1] { exec cp $file $to }
-        foreach file [exec find $from -name *.md -depth 1] { exec cp $file $to }
-        foreach file [exec find $from -name *.sample -depth 1] { exec cp $file $to }
+        foreach file [exec find $from -maxdepth 1 -name *.tcl] { exec cp $file $to }
+        foreach file [exec find $from -maxdepth 1 -name *.sh] { exec cp $file $to }
+        foreach file [exec find $from -maxdepth 1 -name *.conf] { exec cp $file $to }
+        foreach file [exec find $from -maxdepth 1 -name *.md] { exec cp $file $to }
+        foreach file [exec find $from -maxdepth 1 -name *.sample] { exec cp $file $to }
     }
     debug 0 "\002update:copy:\002 copying directories from $from to $to"
     if {!$debug || $isbackup} {
