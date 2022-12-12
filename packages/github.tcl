@@ -4,7 +4,7 @@
 #
 #Version 1.1 - added a timer in seconds between files & folders
 
-# -- updated by Empus (mail@empus.net) to support custom branches & github API token
+# -- updated by Empus (mail@empus.net) to support custom branches, github API token, and error handling
 
 
 # chicken and egg problem we need non-standard packages tls and json ...
@@ -40,9 +40,22 @@ proc ::github::download {url folder token branch {debug true}} {
     set dfiles ""
     if {$token eq ""} {
         set headers [list]
-    } else { set set headers [list Authorization [list Bearer $token]] }
-    set data [http::data [http::geturl $url -headers $headers]]
+    } else { set headers [list Authorization [list Bearer $token]] }
+    set success 1
+    set errcode [catch {set tok [::http::geturl $url -headers $headers -timeout 10000]} error]
+    if {$errcode} { set success 0; set errout "error: $error" }
+    set status [::http::status $tok]
+    if {$status ne "ok"} { set success 0; set errout "status: $status" }
+    if {!$success} {
+        putlog 0 "\002::github:download:\002 Github download error: $errout"
+        return;
+    }
+    set data [http::data $tok]
     set d [json::json2dict $data]
+    if {[dict get $d message] eq "Bad credentials"} {
+        putlog 0 "\002::github:download:\002 Github download error: \002Bad credentials\002"
+        return;
+    }
     #putlog "\002::github:download:\002 json: $d"
     set l [llength $d]
     set files [list]
@@ -91,7 +104,7 @@ proc ::github::files {files dir num dirs branch {token ""}} {
     fconfigure $f -translation 
     if {$token eq ""} {
         set headers [list]
-    } else { set set headers [list Authorization [list Bearer $token]] }
+    } else { set headers [list Authorization [list Bearer $token]] }
     set tok [http::geturl $file -headers $headers -channel $f]
     set Stat [::http::status $tok]
     flush $f
