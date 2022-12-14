@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Wed Dec 14 00:04:34 PST 2022
+# armour.tcl v4.0 autobuild completed on: Wed Dec 14 06:13:23 PST 2022
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -167,30 +167,30 @@ set armname [cfg:get botname]
 if {$armname eq ""} {
     # -- handle config
     debug 0 "\002warning\002: cfg(botname) not set in \002armour.conf\002, defaulting to \002armour\002"
-    report debug "" "Armour \002warning\002: cfg(botname) not set in \002armour.conf\002, defaulting to \002armour\002"
+    if {[info commands report] ne ""} { report debug "" "Armour \002warning\002: cfg(botname) not set in \002armour.conf\002, defaulting to \002armour\002" }
     set confname "armour"
     # -- check for old db entry
     set sqlitedb [cfg:get sqlite]
     if {$sqlitedb ne ""} {
         debug 0 "\002warning\002: cfg(sqlite) in \002armour.conf\002 is \002deprecated!\002 please remove."
-        report debug "" "Armour \002warning\002: cfg(sqlite) in \002armour.conf\002 is \002deprecated!\002 please remove."
+        if {[info commands report] ne ""} { report debug "" "Armour \002warning\002: cfg(sqlite) in \002armour.conf\002 is \002deprecated!\002 please remove." }
         set dbname [file tail $sqlitedb]
         string trimright $dbname .db
     } else {
         debug 0 "\002warning\002: cfg(botname) not set in \002armour.conf\002, defaulting database to \002./armour/db/armour.db\002"
-        report debug "" "Armour \002warning\002: cfg(botname) not set in \002armour.conf\002, defaulting database to \002./armour/db/armour.db\002"
+        if {[info commands report] ne ""} { report debug "" "Armour \002warning\002: cfg(botname) not set in \002armour.conf\002, defaulting database to \002./armour/db/armour.db\002" }
         set dbname "armour"
     }
 } else {
     if {![file isfile ./armour/$armname.conf]} {
         debug 0 "\002warning\002: ./armour/$armname.conf does not exist. defaulting to \002armour.conf\002"
-        report debug "" "Armour \002warning\002: ./armour/$armname.conf does not exist. defaulting to \002armour.conf\002" 
+        if {[info commands report] ne ""} { report debug "" "Armour \002warning\002: ./armour/$armname.conf does not exist. defaulting to \002armour.conf\002" }
         set confname "armour"
     } else { set confname $armname }
 
     if {![file isfile ./armour/db/$armname.db]} {
         debug 0 "\002warning\002: ./armour/db/$armname.db does not exist. defaulting to \002./armour/db/armour.db\002"
-        report debug "" "Armour \002warning\002: ./armour/db/$armname.db does not exist. defaulting to \002./armour/db/armour.db\002"
+        if {[info commands report] ne ""} { report debug "" "Armour \002warning\002: ./armour/db/$armname.db does not exist. defaulting to \002./armour/db/armour.db\002" }
         set dbname "armour"
     } else { set dbname $armname }
 }
@@ -592,7 +592,7 @@ proc loadcmds {} {
             } elseif {regexp -- {^\*$} $cmdprefix]} {
                 # -- command prefix * is illegal! (clashes with multi-bot prefix response)
                 debug 0 "\002loadcmds\002: shutting down bot -- illegal configuration 'prefix' of *"
-                die "Armour: illegal configuration 'prefix' of *"
+                die "Armour: illegal configuration 'prefix' of * in cfg(prefix)"
             } else {
                 # -- command prefix is some sort of control char (i.e. '!' or '.')
                 bind pub - ${cmdprefix}$cmd arm::userdb:pub:cmd:$cmd; # -- bind the command prefix for generic proc
@@ -752,7 +752,7 @@ namespace eval arm {
 # ------------------------------------------------------------------------------------------------
 
 # -- this revision is used to match the DB revision for use in upgrades and migrations
-set cfg(revision) "2022121300"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
+set cfg(revision) "2022121400"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
 set cfg(version) "v4.0";        # -- script version
 
 # -- load sqlite (or at least try)
@@ -1356,6 +1356,31 @@ proc db:upgrade {} {
         
         debug 0 "db:upgrade: renaming users_new table to users"
         db:query "ALTER TABLE users_new RENAME TO users;"
+        db:close
+    }
+
+    # -- remove unique constraint on 'curnick' and 'xuser' columns
+    if {$revision < "2022121400" && $dbfresh eq 0} {
+        if {!$upgrade} { debug 0 "\[@\] Armour: beginning db migration from $revision to $confrev" }
+        set upgrade 1;
+        db:connect
+        db:query "CREATE TABLE channels_new (\
+        id INTEGER PRIMARY KEY AUTOINCREMENT,\
+        chan TEXT UNIQUE NOT NULL,\
+        reg_uid INTEGER,\
+        reg_bywho TEXT,\
+        reg_ts INTEGER,\    
+        mode TEXT DEFAULT 'on'\
+        )"
+
+        debug 0 "db:upgrade: copying channels into temporary channels_new table"
+        db:query "INSERT INTO channels_new (id,chan,mode) SELECT id,chan,mode FROM channels"
+
+        debug 0 "db:upgrade: dropping old channels table"
+        db:query "DROP TABLE channels";  # -- drop the old channels table
+        
+        debug 0 "db:upgrade: renaming channels_new table to channels"
+        db:query "ALTER TABLE channels_new RENAME TO channels;"
         db:close
     }
 
@@ -11239,9 +11264,9 @@ proc userdb:cmd:addchan {0 1 2 3 {4 ""}  {5 ""}} {
         set res [db:query "INSERT INTO levels (cid,uid,level,added_ts,added_bywho,modif_ts,modif_bywho) \
             VALUES ($tcid, $tuid, 500, $regts, '$db_bywho', $regts, '$db_bywho')"]
         db:close
-        reply $type $target "done. registered $achan (user: $tuser)."
+        reply $type $target "done. registered $achan (user: $tuser)"
     } else {
-        reply $type $target "done. registered $achan."
+        reply $type $target "done. registered $achan"
     }
  
     # -- create log entry for command use
