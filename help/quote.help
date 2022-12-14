@@ -1,0 +1,5 @@
+%B%command:%B% quote -- %B%level:%B% %LEVEL% -- %B%usage:%B% quote <add|del|rand|search|stats|view|+|top> <quote|id|pattern|last|num> [-more|nick] [lines]
+used to manage the quote database.  '%B%add <quote>%B%' adds a new quote. '%B%del <id>%B%' deletes an existing quote.  '%B%view <id> [-more]%B%' views an existing quote (with additional detail if '%B%-more%B%' is added).
+when adding a quote, '%B%add last <nick> [lines]%B%' will add the last line(s) spoken by a nick.  linecount is optional and defaults to the last line spoken outside a small recent window (to avoid race conditions).
+'%B%search <pattern>%B%' searches the quote database for existing quotes (wildcards accepted). '%B%stats%B%' will call some basic quote statistics and chan name or %B%*%B% for global stats, is optional.
+using '%B%+ <id>%B%' will vote for a quote, with '%B%top [num]%B%' then displaying the top N voted quotes.

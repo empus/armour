@@ -1,2 +1,2 @@
-%B%command:%B% ack -- %B%level:%B% %LEVEL% -- %B%usage:%B% ack ?chan? <nick>
-acknowledges a nick and bumps their score, avoiding a kickban for unknown users.  required trakka setting to be enabled on channel.
+%B%command:%B% ack %B%level:%B% %LEVEL% %B%usage:%B% ack <nick>
+acknowledges client as a legitimate channel user. bumps up trakka score.

@@ -1,0 +1,3 @@
+%B%command:%B% sms %B%level:%B% %LEVEL% %B%usage:%B% sms <to> <message>
+sends a sms (short message service) message to the given person.  destination can be a name (phone book entry) or raw phone number (international format, no + or leading zero)
+phonebook acl is supported whereby it can be controlled who can send messages to whom (via access level, chanop, chanvoice or open access)

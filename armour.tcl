@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Mon Dec 12 07:42:03 PST 2022
+# armour.tcl v4.0 autobuild completed on: Wed Dec 14 00:04:34 PST 2022
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -81,6 +81,7 @@ proc cfg:get {setting {chan ""}} {
         autologin:cycle         { set avoid 1; }
         prefix                  { set avoid 1; }
         queue:flud              { set avoid 1; }
+        chanlock:time           { set avoid 1; }
         stack:secs              { set avoid 1; }
         ircd                    { set avoid 1; }
         queue:secure            { set avoid 1; }
@@ -900,12 +901,13 @@ proc db:init {} {
     set dbfresh 0
     
     db:connect
-    catch { db:query "SELECT count(*) FROM users" } err
-    if {$err eq "no such table: users"} {
+    set count [db:query "SELECT count(*) FROM users"]
+    if {$count eq 0} {
         # -- this indicates a fresh bot install; capture it for db:upgrade
         debug 0 "db:init: \002fresh Armour install detected!\002"
         debug 0 "db:init:"
         debug 0 "db:init: \002INITIALISATION:\002"
+        debug 0 "db:init:"
         debug 0 "db:init: \002    /msg $botnick inituser <user> \[account\]\002"
         debug 0 "db:init:"
         debug 0 "db:init: \002    Use your desired bot username as <user>\002"
@@ -1435,7 +1437,7 @@ proc db:load {} {
             dict set entries $id $flag $val; # -- set a dict entry for each flag
         }
                 
-        debug 5 "db:load: type: $type -- id: $id -- chan: $chan -- chanid: $cid -- method: $method -- value: $value"
+        debug 3 "db:load: type: $type -- id: $id -- chan: $chan -- chanid: $cid -- method: $method -- value: $value"
         
         # -- track the ids of cumulative patterns
         if {$limit != "1:1:1" && $limit != ""} { set flud:id($method,$value) $id; set flud:hits($id) $hitnum };
@@ -1575,7 +1577,7 @@ proc db:load:chan {} {
             dict set dbchans $id $set [db:get value settings setting $set cid $id]; # -- intelligently set all channel settings
         }
         
-        debug 4 "db:load:chan: id: $id -- chan: $chan -- mode: $mode"
+        debug 3 "db:load:chan: id: $id -- chan: $chan -- mode: $mode"
         incr count
     }
     
@@ -1587,8 +1589,6 @@ proc db:load:chan {} {
 # use a case insensitive fetch to be safe
 proc get:val {var val} {
     variable $var
-    # -- safety net for global chan (wildcard breaks array searches)
-    if {$var ne "data:bans"} { debug 6 "get:val: started: var: $var -- val: $val" }
 
     # -- handle special regexp chars
     set valexp $val
@@ -1597,11 +1597,21 @@ proc get:val {var val} {
     regsub -all {\?} $valexp "\\?" valexp;
     regsub -all {\$} $valexp "\\$" valexp;
     regsub -all {\^} $valexp "\\^" valexp;
-    set v [join [array names $var -regexp "(?i)^$valexp$"]]
+    regsub -all {\[} $valexp {\\[} valexp;
+    regsub -all {\]} $valexp {\\]} valexp;
+    regsub -all {\#} $valexp {\\#} valexp;
+    #regsub -all {\{} $valexp {\\{} valexp;
+    #regsub -all {\}} $valexp {\\}} valexp;
 
-    if {$v eq ""} { return "" }
-    set res [lindex [array get $var $v] 1]
-    if {$var ne "data:bans"} { debug 6 "get:val: started: var: $var -- val: $val -- result: $res" }
+    set exp "(?i)^\\{?$valexp\\}?$"
+    set v [join [array names $var -regexp $exp]]
+    set v [lindex $v 0]
+    if {![info exists [subst $var]($v)] || $v eq ""} { return "" }
+    set res [set [subst $var]($v)]
+
+    if {$var ne "data:bans" && $var ne "data:kicks" && $var ne "scan:list"} { 
+        debug 5 "get:val: returned: var: $var -- val: $val -- result: $res" 
+    }
     return $res
 }
 
@@ -1650,19 +1660,20 @@ proc getFlag {flag} {
     #     256  : ircbl
     #     512  : notsecure
     switch -- $flag {
-      none       { return int 0   }
-      noident    { return int 1   }
-      onlykick   { return int 2   }
-      nochans    { return int 4   }
-      manual     { return int 8   }
-      captcha    { return int 16  }
-      disabled   { return int 32  }
-      onlysecure { return int 64  }
-      silent     { return int 128 }
-      ircbl      { return int 256 }
-      notsecure  { return int 512 }
-      default    { return 0       }
+      none       { set int 0   }
+      noident    { set int 1   }
+      onlykick   { set int 2   }
+      nochans    { set int 4   }
+      manual     { set int 8   }
+      captcha    { set int 16  }
+      disabled   { set int 32  }
+      onlysecure { set int 64  }
+      silent     { set int 128 }
+      ircbl      { set int 256 }
+      notsecure  { set int 512 }
+      default    { set 0       }
     }
+    return $int
 }
 
 # -- close sqlite connection        
@@ -3360,6 +3371,7 @@ proc kickban {nick ident host chan duration reason {id ""}} {
     variable data:banmask;   # -- tracking banmasks banned recently by a blacklist (by id)
     variable data:kicknicks; # -- tracking nicknames recently kicked from chan (by 'chan,nick')
     variable entries;        # -- dict: blacklist and whitelist entries  
+    variable data:idban;     # -- tracks the most recently banned ban for a given entry ID (chan,id)
     variable nickdata;       # -- dict: stores data against a nickname
                              #           nick
                              #            ident
@@ -3396,7 +3408,12 @@ proc kickban {nick ident host chan duration reason {id ""}} {
             incr data:kicknicks($chan,$nick)
         }
     }
-    
+
+    # -- store the most recently banned mask for this entry ID
+    if {$id ne ""} {
+        set idban($chan,$id) $mask
+    }
+
     if {![info exists data:chanban($chan,$mask)]} {
         # -- mask not banned already, do the ban
         set data:chanban($chan,$mask) 1
@@ -6316,8 +6333,9 @@ proc arm:cmd:add {0 1 2 3 {4 ""}  {5 ""}} {
                 set addban 1
             }
             if {$addban} {
-                if {[info exists data:hostnicks($tvalue)]} {
-                    foreach i [get:val data:hostnicks $tvalue] {
+                set lchan [string tolower $chan]
+                if {[info exists data:hostnicks($tvalue,$lchan)]} {
+                    foreach i [get:val data:hostnicks $tvalue,$lchan] {
                         incr hit
                         lassign [split [getchanhost $i] @] ident host
                         kickban $i $ident $host $chan [cfg:get ban:time $chan] "Armour: blacklisted -- $value (reason: [join $reason]) \[id: $id\]" $id
@@ -6343,7 +6361,8 @@ proc arm:cmd:add {0 1 2 3 {4 ""}  {5 ""}} {
 # remove a whitelist or blacklist entry
 proc arm:cmd:rem {0 1 2 3 {4 ""}  {5 ""}} {
     variable cfg;
-    variable entries;   # -- dict: blacklist and whitelist entries
+    variable entries;     # -- dict: blacklist and whitelist entries
+    variable data:idban;  # -- tracks the most recently banned ban for a given entry ID (chan,id)
     
     lassign [proc:setvars $0 $1 $2 $3 $4 $5]  type stype target starget nick uh hand source chan arg 
     
@@ -6379,7 +6398,7 @@ proc arm:cmd:rem {0 1 2 3 {4 ""}  {5 ""}} {
 
             set ltype [dict get $entries $id type]
             set method [dict get $entries $id method]
-             set value [dict get $entries $id value]
+            set value [dict get $entries $id value]
             set limit [dict get $entries $id limit]
             set action [dict get $entries $id action]
             set hitnum [dict get $entries $id hits]             
@@ -6395,8 +6414,9 @@ proc arm:cmd:rem {0 1 2 3 {4 ""}  {5 ""}} {
             # -- try to remove any existing blacklist ban?
             if {$ltype eq "white"} {
                 set mask ""; set bantype ""
-                if {[info exists idban($id)]} {
-                    #set mask $idban($id); # -- don't delete the whole text blacklist, when unbanning one person!
+                if {[info exists data:idban($chan,$id)]} {
+                    set bantype " host"
+                    set mask $idban($chan,$id); # -- banmask of user last banned with this ID
                 } elseif {$method eq "host"} {
                     set bantype " host"
                     if {[regexp -- {\*} $value]} { set mask $value } else { set mask "*!*@$value" }
@@ -7200,7 +7220,7 @@ proc raw:join {nick uhost hand chan} {
     variable nick:override;   # -- state: tracks that a nick has a manual exemption in place (by chan,nick)
     variable nick:exempt;     # -- state: stores whether a nick is exempt from secondary floodnet scans (by chan,nick)
     
-    variable nick:newjoin;    # -- state: tracks that a nick has recently joined a channel (by chan,nick)
+    variable nick:newjoin;    # -- stores uhost for nicks that have recently joined a channel (by chan,nick)
     variable nick:jointime;   # -- stores the timestamp a nick joined a channel (by chan,nick)
     variable jointime:nick;   # -- stores the nick that joined a channel (by chan,timestamp)
     
@@ -7274,8 +7294,6 @@ proc raw:join {nick uhost hand chan} {
     # -- only do scans if Armour is on.  If 'secure', scans were already done.
     set mode [get:val chan:mode $lchan]
     
-    #putlog "\002raw:join: chan: $chan -- mode: $mode"
-    
     # -- prevent scanning if off, or if channel is secure (to prevent double scans)
     if {$mode eq "off" || $mode eq "secure"} {
         debug 3 "raw:join: autologin (2) WHO $nick"
@@ -7287,7 +7305,7 @@ proc raw:join {nick uhost hand chan} {
     if {![info exists data:kicks($lchan)]} { set data:kicks($lchan) "" }
     
     # -- set newjoin tracker for nick (identify 'newcomers')
-    set nick:newjoin($lchan,$snick) 1
+    set nick:newjoin($lchan,$snick) $uhost
     
     # -- store timestamp of newcomer for ordered sorting with floodnets
     set jtime [clock clicks]
@@ -7301,8 +7319,6 @@ proc raw:join {nick uhost hand chan} {
     debug 1 "\002raw:join: ------------------------------------------------------------------------------------\002"
     debug 1 "\002raw:join: [join $nick]!$uhost joined $chan.....\002"
     
-    # -- track adaptive regex exempts
-    set nick:exempt($lchan,$snick) 0
         
     # -- track nicknames on a host
     if {![info exists data:hostnicks($host,$lchan)]} { set data:hostnicks($host,$lchan) $nick } else {
@@ -7310,77 +7326,84 @@ proc raw:join {nick uhost hand chan} {
         if {$nick ni [get:val data:hostnicks $host,$lchan]} { lappend data:hostnicks($host,$lchan) $nick }
     }
     
+    # -- start floodnet scan exemptions
+    set nick:exempt($lchan,$snick) 0; set exempt 0;
+
     # -- check if returning from netsplit?
-    if {[info exists data:netsplit([split $nick!$uhost])]} {
+    set splitval [get:val data:netsplit $nick!$uhost]
+    if {$splitval ne ""} {
         # -- check if timeago is not more than netsplit memory timeout
-        if {[expr ([clock seconds] - [get:val data:netsplit [split $nick!$uhost]]) * 60] >= [cfg:get split:mem *]} {
-            debug 1 "raw:join: $nick returned from netsplit (split [userdb:timeago [get:val data:netsplit [split $nick!$uhost]]] ago), exempting from scans..."
-            set nick:exempt($lchan,$snick) 1
+        if {[expr ([clock seconds] - $splitval) * 60] >= [cfg:get split:mem *]} {
+            debug 0 "raw:join: $nick returned from netsplit (split [userdb:timeago $splitval] ago), exempting from scans..."
+            set nick:exempt($lchan,$snick) 1;
+            set exempt 1;
         } else {
-                debug 1 "raw:join: $nick returned after 'netsplit' after timeout period (split [userdb:timeago [get:val data:netsplit [split $nick!$uhost]]] ago), not exempt from scans..."
+                debug 0 "raw:join: $nick returned after 'netsplit' after timeout period (split [userdb:timeago $splitval] ago), not exempt from scans..."
         }
-        unset data:netsplit([split $nick!$uhost])
+        unset data:netsplit($nick!$uhost)
+    } else {
+        debug 0 "raw:join: $nick joined and data:netsplit($nick!$uhost) doesn't exist or is empty... continuing"
     }
 
     # -- exempt if recently set umode +x (read from signoff message)
-    set exmpt [get:val nick:exempt $lchan,$snick]
-    if {[info exists nick:setx($snick)] && ($exmpt eq 0 || $exmpt eq "")} { 
+    if {[info exists nick:setx($snick)] && $exempt eq 0} { 
         debug 1 "raw:join: $nick!$uhost has just set umode +x (exempt from floodnet detection)"
-        set nick:exempt($lchan,$snick) 1; set exmpt 1
-    } else { set exmpt 0 }
+        set nick:exempt($lchan,$snick) 1; set exempt 1
+    }
 
     # -- exempt if authenticated
-    if {[userdb:isLogin $nick]} {
+    if {[userdb:isLogin $nick] && $exempt eq 0} {
         debug 1 "raw:join: $nick!$uhost is authenticated (exempt from floodnet detection)"
-        set nick:exempt($lchan,$snick) 1; set exmpt 1
+        set nick:exempt($lchan,$snick) 1; set exempt 1
     }
 
     # -- exempt if opped on common chan
-    if {[isop $nick] && $exmpt eq 0} {
+    if {[isop $nick] && $exempt eq 0} {
         debug 1 "raw:join: $nick!$uhost is opped on common chan (exempt from floodnet detection" 
-        set nick:exempt($lchan,$snick) 1; set exmpt 1
+        set nick:exempt($lchan,$snick) 1; set exempt 1
     }
 
     # -- exempt if voiced on common chan
-    if {[isvoice $nick] && $exmpt eq 0} {
+    if {[isvoice $nick] && $exempt eq 0} {
         debug 1 "raw:join: $nick!$uhost is voiced on common chan (exempt from floodnet detection)" 
-        set nick:exempt($lchan,$snick) 1; set exmpt 1
+        set nick:exempt($lchan,$snick) 1; set exempt 1
     }
     
     # -- exempt if umode +x
-    if {[string match -nocase "*.[cfg:get xhost:ext *]" $host] && $exmpt eq 0} { 
+    if {[string match -nocase "*.[cfg:get xhost:ext *]" $host] && $exempt eq 0} { 
         debug 1 "raw:join: $nick!$uhost is umode +x (exempt from floodnet detection)" 
-        set nick:exempt($lchan,$snick) 1; set exmpt 1
+        set nick:exempt($lchan,$snick) 1; set exempt 1
     }
         
     # -- exempt if resolved ident
-    if {![string match "~*" $ident] && $exmpt eq 0} { 
+    if {![string match "~*" $ident] && $exempt eq 0} { 
         debug 1 "raw:join: $nick!$uhost has resolved ident (exempt from floodnet detection)"
-        set nick:exempt($lchan,$snick) 1; set exmpt 1
+        set nick:exempt($lchan,$snick) 1; set exempt 1
     }
 
     # -- check for manual [temporary] override (from 'exempt' cmd)
-    if {[info exists nick:override($lchan,$snick)] && $exmpt eq 0} {
-        set nick:exempt($lchan,$snick) 1; set exmpt 1
+    if {[info exists nick:override($lchan,$snick)] && $exempt eq 0} {
+        set nick:exempt($lchan,$snick) 1; set exempt 1
         debug 1 "raw:join: $nick!$uhost is exempt from all scans via manual override."
     }
     
     # -- check for mode +D removal in chan (avoid floodnet scans for mass revoiced clients)
-    if {[info exists data:moded($chan)] && $exmpt eq 0} {
-        set nick:exempt($lchan,$snick) 1; set exmpt 1
+    if {[info exists data:moded($chan)] && $exempt eq 0} {
+        set nick:exempt($lchan,$snick) 1; set exempt 1
         debug 1 "raw:join: $nick!$uhost is exempt from all scans as result of post 'mode -d' mass-revoice"
     }
     
         
     # -- turn off exemption if test mode is on (helps for testing)
-    if {[info exists cfg(test)] && $exmpt eq 1} { 
+    if {[info exists cfg(test)] && $exempt eq 1} { 
         debug 1 "raw:join: test mode enabled -- $nick!$uhost is NOT exempt from floodnet detection"
         set nick:exempt($lchan,$snick) 0 
+        set exempt 0
     }
     
     # -- floodnet checks
     set hit 0
-    if {$exmpt eq 0 && [get:val chan:mode $lchan] ne "secure"} {
+    if {$exempt eq 0 && [get:val chan:mode $lchan] ne "secure"} {
         set hit [check:floodnet $snick $uhost $hand $chan]; # -- run floodnet detection
     } else { debug 1 "raw:join: user was exempt from primary (ie. nick, ident & nick!ident) floodnet detection" }
     
@@ -7550,7 +7573,7 @@ proc raw:nicknoton {server cmd text} {
         if {$nick eq $lnick} {
             # -- removing scanlist entry
             set scan:list(data,$lchan) [lreplace [get:val scan:list data,$lchan] $idx $idx]
-            putlog "\002scan:cleanup:\002 removed $nick from scan:list(data,$lchan)"
+            debug 3 "\002scan:cleanup:\002 removed $nick from scan:list(data,$lchan)"
         }
         incr idx
     }
@@ -7647,24 +7670,23 @@ proc raw:quit {nick uhost hand chan reason} {
 
 # -- netsplit handling
 proc raw:split {nick uhost hand chan} {
-    variable cfg
     variable data:netsplit;  # -- stores the unixtime that a client netsplit (by nick!userhost)
     # -- netsplit detected
-    if {![info exists data:netsplit([split $nick!$uhost])]} {
+    if {![info exists data:netsplit($nick!$uhost)]} {
         debug 1 "raw:split: netsplit detected in $chan: $nick!$uhost"
-        set data:netsplit([split $nick!$uhost]) [unixtime]
-        # -- do we keep this array value indefinitely, or unset after a configured timeout?
-        timer [cfg:get split:mem *] "arm::split:unset $nick!$uhost"
+        set data:netsplit($nick!$uhost) [unixtime]
+        # -- unset after a configured timeout
+        timer [cfg:get split:mem *] "arm::split:unset [split $nick!$uhost]"
     }
 }
 
 # -- netsplit rejoin handling
 proc raw:rejn {nick uhost hand chan} {
     variable data:netsplit;  # -- stores the unixtime that a client netsplit (by nick!userhost)
-    if {[info exists data:netsplit([split $nick!$uhost])]} {
+    if {[info exists data:netsplit($nick!$uhost)]} {
         # -- netsplit detected
         debug 1 "raw:split: netsplit rejoin identified in $chan: $nick!$uhost"
-        unset data:netsplit([split $nick!$uhost])
+        unset data:netsplit($nick!$uhost)
     }
 }
 
@@ -7856,7 +7878,7 @@ proc who {nick chan ident host ip flags xuser rname} {
     variable corowho;         # -- coroutine from raw:join to send data to scanner (by nick)
     
         
-    putlog "\002who:\002 nick: $nick -- chan: $chan -- ident: $ident -- host: $host -- ip: $ip -- flags: $flags -- xuser: $xuser -- rname: $rname"
+    debug 3 "\002who:\002 nick: $nick -- chan: $chan -- ident: $ident -- host: $host -- ip: $ip -- flags: $flags -- xuser: $xuser -- rname: $rname"
     
     set snick [split $nick];                        # -- make safe, for array keys
     set lnick [string tolower $nick];               # -- lower case for reliable dict search
@@ -7888,7 +7910,7 @@ proc who {nick chan ident host ip flags xuser rname} {
         # -- scan for a specific nick
         if {[info exists corowho($lnick)]} {
             # -- yield back to raw:join
-            putlog "\002who:\002 corowho($lnick) -- ip: $ip -- xuser: $xuser -- rname: $rname"
+            debug 4 "\002who:\002 corowho($lnick) -- ip: $ip -- xuser: $xuser -- rname: $rname"
             $corowho($lnick) "$ip $xuser $rname"
             return;
         } else {
@@ -8012,7 +8034,7 @@ proc raw:endofwho {server cmd text} {
                 # -- check if nick in leavelist, but not in nicklist
                 if {$n ni $nicklist && $n ni $wholist} {
                     set idx [lsearch -exact $leavelist $n]
-                    putlog "\002endofwho: 1 - \002removing $n from scan:list(leave,$lchan)"
+                    debug 4 "\002endofwho: 1 - \002removing $n from scan:list(leave,$lchan)"
                     set scan:list(leave,$lchan) [lreplace [get:val scan:list leave,$lchan] $idx $idx]
                     set leavelist [lreplace $leavelist $idx $idx]
                     set remove 1
@@ -8026,14 +8048,14 @@ proc raw:endofwho {server cmd text} {
                     if {$n ni [get:val scan:list who,$lchan]} {
                         # -- remove;
                         # nick must have left, changed nicks, been kicked, or quit
-                        if {[info exists scan:list(nicks,$lchan)]} { putlog "\002endofwho: 2 - $n not in scan:list(who,$lchan)!\002 removing from scan:list(nicks,$lchan)"; unset scan:list(nicks,$lchan) }
-                        if {[info exists scan:list(leave,$lchan)]} { putlog "\002endofwho: 3 - $n not in scan:list(leave,$lchan)!\002 removing from scan:list(leave,$lchan)"; unset scan:list(leave,$lchan) }
+                        if {[info exists scan:list(nicks,$lchan)]} { debug 4 "\002endofwho: 2 - $n not in scan:list(who,$lchan)!\002 removing from scan:list(nicks,$lchan)"; unset scan:list(nicks,$lchan) }
+                        if {[info exists scan:list(leave,$lchan)]} { debug 4 "\002endofwho: 3 - $n not in scan:list(leave,$lchan)!\002 removing from scan:list(leave,$lchan)"; unset scan:list(leave,$lchan) }
                         set remove 1
                     }
                     unset scan:list(who,$lchan)
                 } else {
                     # -- wholist is emtpy
-                    if {[info exists scan:list(nicks,$lchan)]} { putlog "\002endofwho:\002 4 - scan:list(who,$lchan) is empty!\002 clearing scan:list(nicks,$lchan)"; unset scan:list(nicks,$lchan) }
+                    if {[info exists scan:list(nicks,$lchan)]} { debug 4 "\002endofwho:\002 4 - scan:list(who,$lchan) is empty!\002 clearing scan:list(nicks,$lchan)"; unset scan:list(nicks,$lchan) }
                 }
                 
                 if {$remove} {
@@ -8103,7 +8125,6 @@ proc raw:endofwho {server cmd text} {
             set target [get:val scan:full $lchan,target]
             set start [get:val scan:full $lchan,start]
             set count [get:val scan:full $lchan,count]
-            putlog "raw:endofwho: start: $start"
             set runtime [runtime $start]
             reply $type $target "done. scanned $count users ($runtime)"
             if {$type ne "pub"} { putquick "NOTICE @$chan :Armour: channel scan complete. scanned $count users ($runtime)"  }
@@ -8346,6 +8367,8 @@ proc mode:rem:b {nick uhost hand chan mode target} {
     variable data:banmask
     variable userdb
     variable chan:mode;   # -- stores the operational mode of a channel (by chan) set lchan [string tolower $chan]
+    variable entries;     # -- dict storing all whitelist & blacklist entries
+
     if {![cfg:get black:unban:rem $chan]} { return; }; # -- only continue if configured
     set lchan [string tolower $chan]
     if {![info exists chan:mode($lchan)] || $nick eq $botnick} { return; }    
@@ -8356,6 +8379,9 @@ proc mode:rem:b {nick uhost hand chan mode target} {
     # -- check if there is a recent blacklist in memory
     foreach id [array names data:banmask] {
         if {$target eq [get:val data:banmask $id]} {
+            unset data:banmask($id)
+            if {![dict exists $entries $id]} { continue; }; # -- entry no longer exists
+
             set tchan [get:val list:chan $id]
             if {$tchan eq "*"} {
                 # -- if the entry is global, we need to check the user has global access to remove
@@ -8364,22 +8390,21 @@ proc mode:rem:b {nick uhost hand chan mode target} {
                     continue;
                 }
             }
-            # -- remove the blacklist    
-            set type [get:val list:method $id]
-            set method [get:val list:method $id]
-            set value [get:val list:method $id]
-            set action [get:val list:method $id]
-            set limit [get:val list:method $id]
-            set hits [get:val list:hits $id]
-            set reason [join [get:val list:reason $id]]        
+            # -- remove the blacklist
+            set type [dict get $entries $id type]
+            set method [dict get $entries $id method]
+            set value [dict get $entries $id value]
+            set action [dict get $entries $id action]
+            set limit [dict get $entries $id limit]
+            set hits [dict get $entries $id hits]
+            set reason [join [dict get $entries $id reason]]
             set ext [lassign [split $limit :] joins secs hold]
             if {$secs eq $hold} { set limit "$joins:$secs" }
-            if {$type eq "W"} { set list "whitelist" } \
-            elseif {$type eq "B"} { set list "blacklist" }
+            if {$type eq "white"} { set list "whitelist" } \
+            elseif {$type eq "black"} { set list "blacklist" }
             debug 1 "mode:rem:b: $nick unbanned $target -- automatically removing blacklist (method: $method -- value: $value)"
             db:rem $id
-            unset data:banmask($id)
-            if {$limit ne "1-1-1"} { reply pub $chan "removed $method $list entry (\002id:\002 $id \002value:\002 $value \002action:\002 $action \002limit:\002 $limit \002hits:\002 $hits \002reason:\002 $reason)" } \
+            if {$limit ne "1:1"} { reply pub $chan "removed $method $list entry (\002id:\002 $id \002value:\002 $value \002action:\002 $action \002limit:\002 $limit \002hits:\002 $hits \002reason:\002 $reason)" } \
             else { reply pub $chan "removed $method $list entry (\002id:\002 $id \002value:\002 $value \002action:\002 $action \002hits:\002 $hits \002reason:\002 $reason)" }
         }
     }
@@ -8462,7 +8487,7 @@ proc scan {nick chan full clicks ident ip host xuser rname} {
     
     set nick [join $nick];
     set lnick [string tolower $nick]
-    set snick $nick;                   # -- split nick for safe use in arrays 
+    set snick [split $nick];           # -- split nick for safe use in arrays 
     set lchan [string tolower $chan];  # -- make safe for use in arrays (lowercase)
     lassign [db:get id,chan channels chan $chan] cid chan; # -- get ID and fix chan case
 
@@ -8546,7 +8571,8 @@ proc scan {nick chan full clicks ident ip host xuser rname} {
     }
 
     # -- is nick exempt?
-    if {[info exists nick:exempt($lchan,$snick)]} { set exempt 1 } else { set exempt 0 }
+    set exempt [get:val nick:exempt $lchan,$snick]
+    if {$exempt eq ""} { set exempt 0 }
         
     debug 2 "scan: pre-vars: dnsbl: $dnsbl ipscan: $ipscan portscan: $portscan auth: $auth exempt: $exempt"
 
@@ -8850,11 +8876,12 @@ proc scan:match {chan ltype id method value ipscan nick ident host ip xuser rnam
     } else {
         # -- actual matching
         while {$match eq 0} {
-            if {[dict get $entries $id onlysecure] && [get:val chan:mode $chan] ne "secure"} {
+            set chanmode [get:val chan:mode $chan]
+            if {[dict get $entries $id onlysecure] && $chanmode ne "secure"} {
                 debug 1 "scan:match: skipping $ltype entry as onlysecure=1 (chan: $chan -- id: $id -- method: $method -- value: $value)"
                 break;
             }
-            if {[dict get $entries $id notsecure] && [get:val chan:mode $chan] eq "secure"} {
+            if {[dict get $entries $id notsecure] && $chanmode eq "secure"} {
                 debug 1 "scan:match: skipping $ltype entry as notsecure=1 (chan: $chan -- id: $id -- method: $method -- value: $value)"
                 break;
             }
@@ -9202,11 +9229,14 @@ proc scan:continue {nick ident ip host xuser rname chan} {
     
     if {$voice} {
         # -- voice the client, provided they're not voiced by now
-        if {![isvoice $nick $chan]} { putlog "scan:continue: \002giving voice!\002"; voice:give $chan $nick }
+        if {![isvoice $nick $chan]} { 
+            debug 1 "scan:continue: \002giving voice to $nick on $chan!\002"; 
+            voice:give $chan $nick 
+        }
         set leave ""
     } else {
         # -- maintain a list so we don't scan this client again
-        putlog "\002scan:continue:\002 adding $nick to scan:list(leave,$lchan)"
+        debug 3 "\002scan:continue:\002 adding $nick to scan:list(leave,$lchan)"
         set leave "leave"
     }
     
@@ -9578,9 +9608,9 @@ proc pubm:scan:process {nick uhost hand chan text} {
 proc scan:ctcp:check {nick ident host chan} {
     variable cfg;
     variable coroctcp; # -- stores coroutine for yield we're waiting for a CTCP VESION reply (by chan,nick)
-    putlog "\002scan:ctcp:check:\002 started"
+    debug 4 "\002scan:ctcp:check:\002 started"
     if {[info exists coroctcp($chan,$nick)]} {
-        putlog "\002scan:ctcp:check:\002 coroctcp exists"
+        debug 4 "\002scan:ctcp:check:\002 coroctcp exists"
         # -- we're waiting for a CTCP VERSION reply from this nick in this chan
         if {[cfg:get paranoid:ctcp:action $chan] eq "kick"} {
             set txt "kicked client!"
@@ -9605,7 +9635,7 @@ proc scan:ctcp:check {nick ident host chan} {
         $coroctcp($chan,$nick) 0; # -- return "0" to continue with manual handling
         unset coroctcp($chan,$nick)
     }
-    putlog "\002scan:ctcp:check:\002 ended"
+    debug 4 "\002scan:ctcp:check:\002 ended"
 }
 
 proc ctcp:version:reply {nick uhost hand dest keyword text} {
@@ -9652,9 +9682,10 @@ proc check:floodnet {nick uhost hand chan {xuser ""} {rname ""}} {
     variable cfg
     variable entries;        # -- dict: blacklist and whitelist entries 
     
-    variable flud;           # -- flud array holds counters for a fline pattern
     variable flud:id;        # -- the id of a given cumulative pattern (by chan,method,value)
     variable flud:count;     # -- the count of a given cumulative pattern (by id)
+    variable flud:nickcount; # -- the IDs that have already been matched for a given nick (by chan,nick)
+                             # -- avoids double matching (first from channel join, second from /WHO result)
     
     variable floodnet;       # -- tracking active floodnet (by chan)
     variable chanlock;       # -- tracking active channel lock (by chan)    
@@ -9675,25 +9706,42 @@ proc check:floodnet {nick uhost hand chan {xuser ""} {rname ""}} {
     variable data:chanban;   # -- state: tracks recently banned masks for a channel (by 'chan,mask')    
     variable data:hostnicks; # -- track nicknames on a host (by host,chan)
     
+    variable nick:newjoin;   # -- stores uhost for nicks that have recently joined a channel (by chan,nick)
     variable jointime:nick;  # -- stores the nick that joined a channel (by chan,timestamp)
     variable nick:jointime;  # -- stores the timestamp a nick joined a channel (by chan,nick)
     
     set ident [lindex [split $uhost @] 0]
     set host [lindex [split $uhost @] 1]
     set lchan [string tolower $chan]
+    set snick [split [join $nick]]; # -- join first as this proc gets nicknames sent in two ways
         
     debug 3 "check:floodnet: received: nick: [join $nick] -- ident: $ident -- host: $host -- hand: $hand -- chan: $chan -- xuser: $xuser -- rname: $rname"
     
     if {![info exists data:hostnicks($host,$lchan)]} { set data:hostnicks($host,$lchan) $nick }
+
+    # -- check if called from JOIN or WHO result
+    # -- ensure processing doesn't occur twice for the same nick, for the same join
+    if {$xuser eq "" && $rname eq ""} {
+        # -- called from a channel JOIN
+        debug 0 "\002check:floodnet: called from JOIN\002"
+        set whoscan 0
+        if {[info exists flud:nickcount($chan,$snick)]} { 
+            unset flud:nickcount($chan,$snick)
+        }
+    } else {
+        # -- called from a WHO result after a channel JOIN
+        debug 0 "\002check:floodnet: called from WHO\002"
+        set whoscan 1
+    }
     
     set tslist ""
-    # -- reorder newjoin list in chronological order
-    foreach ts [array names nick:jointime $lchan,$nick] {
-        lappend tslist $ts
+    # -- tslist containing timestamps, ordered by time they joined
+    foreach val [array names nick:jointime $lchan,*] {
+        lappend tslist [get:val nick:jointime $val]
     }
-    # -- tslist containing nicknames, ordered by time they joined
     set tslist [lsort -increasing $tslist]
     
+    # -- produce a list of nicks in chronological order by jointime
     set joinlist ""
     foreach ts $tslist {
         lappend joinlist [get:val jointime:nick $lchan,$ts]
@@ -9802,11 +9850,12 @@ proc check:floodnet {nick uhost hand chan {xuser ""} {rname ""}} {
                     set klist ""; set blist ""
                     debug 3 "check:floodnet: (adaptive -- $prefix) newcomer joinlist: $joinlist"
                     foreach newuser $joinlist {
-                        if {![info exists newjoin($newuser)]} {
+                        set newjoinuh [get:val nick:newjoin $chan,$newuser]
+                        if {$newjoinuh eq ""} {
                             set uh [getchanhost $newuser $chan]
-                            set newjoin($newuser) $uh
+                            set nick:newjoin($newuser) $uh
                         } else {
-                            set uh [lindex $newjoin($newuser) 0]
+                            set uh $newjoinuh
                         }
                         set i [lindex [split $uh @] 0]
                         set h [lindex [split $uh @] 1]
@@ -9901,26 +9950,53 @@ proc check:floodnet {nick uhost hand chan {xuser ""} {rname ""}} {
     # -- (automatic regex generation)
     
     # ---- BEGIN CUMULATIVE REGEX MATCHES
-    debug 3 "check:floodnet: (cumulative -- $prefix) beginning cumulative regex checks (floodnet detection)"
+    debug 3 "check:floodnet: (cumulative -- $prefix) beginning cumulative regex checks in $lchan (floodnet detection)"
 
     # -- fetch blacklist regex and host entry IDs where limit is not 1:1:1
     set ids [dict keys [dict filter $entries script {id dictData} {
-        expr {([dict get $dictData chan] eq $lchan || [dict get $dictData chan] eq "*") && [dict get $dictData type] eq "black" \
-        && ([dict get $dictData method] eq "regex" || [dict get $dictData method] eq "regex") \
-        && [dict get $dictData value] eq $host && [dict get $dictData limit] ne "1:1:1"}
+        expr {([dict get $dictData chan] eq $lchan || [dict get $dictData chan] eq "*") \
+        && [dict get $dictData type] eq "black" \
+        && ([dict get $dictData method] eq "host" || [dict get $dictData method] eq "regex") \
+        && [dict get $dictData limit] ne "1:1:1"}
     }]]
     
+    set noauto 0; # -- track to prevent prevention of automatic blacklist entries after cumulative hit
+
     foreach id $ids {    
         # -- break out before we even begin if we've hit this client already
         # -- prevent unnecessary processing
         if {$hit} { break; }
+
+        # -- avoid double matching if called from WHO and ID was already matched
+        if {$id in [get:val flud:nickcount $chan,$snick] && $whoscan} { 
+            putlog "check:floodnet: \002skipping cumulative entry:\002 chan: $chan -- nick: $snick -- id: $id -- \002nickcount: [get:val flud:nickcount $chan,$snick]\002"
+            continue; 
+        }
         
         set method [dict get $entries $id method]
         set equal [dict get $entries $id value]
         set limit [dict get $entries $id limit]
         set reason [dict get $entries $id reason]
+
+        set chanmode [get:val chan:mode $chan]
+        if {[dict get $entries $id onlysecure] && $chanmode ne "secure"} {
+            debug 1 "check:floodnet: skipping blacklist entry as onlysecure=1 (chan: $chan -- id: $id -- method: $method -- value: $equal)"
+            continue;
+        }
+        if {[dict get $entries $id notsecure] && $chanmode eq "secure"} {
+            debug 1 "check:floodnet: skipping blacklist entry as notsecure=1 (chan: $chan -- id: $id -- method: $method -- value: $equal)"
+            continue;
+        }
+        if {[dict get $entries $id disabled]} {
+            debug 1 "check:floodnet: skipping blacklist entry as disabled=1 (chan: $chan -- id: $id -- method: $method -- value: $equal)"
+            continue;
+        }
+        if {[dict get $entries $id noident] && ![string match "~*" $ident]} {
+            debug 1 "check:floodnet: skipping blacklist entry as noident=1 (chan: $chan -- id: $id -- method: $method -- value: $equal -- \002ident:\002 $ident)"
+            continue;
+        }
         
-        debug 3 "check:floodnet: (cumulative -- $prefix) looping: flud:id($chan,$method,$equal)"
+        debug 3 "check:floodnet: (cumulative -- $prefix) looping: id: $id (chan: $chan -- method: $method -- value: $equal -- limit: $limit)"
 
         append reason " \[id: $id\]"
         set extlimit [split $limit ":"]
@@ -9928,33 +10004,37 @@ proc check:floodnet {nick uhost hand chan {xuser ""} {rname ""}} {
         
         # -- we really only care about host and regex types
         
-        if {$method == "host"} {
+        if {$method eq "host"} {
             # -- check if match nick
-            if {[string tolower $equal] == [string tolower $host] || [string match -nocase $equal $host]} {
+            if {[string match -nocase $equal $uhost] || [string match -nocase $equal $host]} {
                 # -- matched!
                 debug 3 "check:floodnet: (cumulative -- $prefix) host match: [join $equal] against string: [join $nick]!$uhost"
+
+                debug 3 "check:floodnet: \002adding host id: $id for $chan to flud:nickcount($chan,$snick) to prevent double matching\002"
+                append flud:nickcount($chan,$snick) "$id "
+
                 if {![info exists flud:count($id)]} {
                     # -- no such tracking array exists for this host/mask
-                    debug 3 "check:floodnet: (cumulative -- $prefix) host: no tracking array exists: flud:count($id) -- created."
+                    debug 3 "check:floodnet: (cumulative -- $prefix) host: \002no trackin\002 array exists: flud:count($id) -- \002created.\002"
                     set flud:count($id) 1
                     # -- unset after timeout
-                    utimer $secs "arm::flud:unset $id"
+                    utimer $secs "arm::flud:unset $chan $id $snick"
                     
                 } else {
                         # -- existing tracking array, increase counter
                         incr flud:count($id)
-                        debug 3 "check:floodnet: (cumulative -- $prefix) host: existing tracking array count flud:count($id): [get:val flud:count $id]"
+                        debug 3 "check:floodnet: (cumulative -- $prefix) host: \002existing\002 tracking array count flud:count($id): [get:val flud:count $id]"
                         set count [get:val flud:count $id]
                         if {$count < $joins} {
                             # -- breach not met
-                            debug 3 "check:floodnet: (cumulative -- $prefix) host: breach not yet met -- increased flud:count($id) counter."
+                            debug 3 "check:floodnet: (cumulative -- $prefix) host: breach \002not yet met\002 -- \002increased\002 flud:count($id) counter."
                             # -- clear existing unset utimers for this value
                             flud:preclear $equal
                     
                             # -- setup timer to clear adaptive pattern count
                             debug 3 "check:floodnet: (cumulative -- $prefix) host: unsetting in $secs secs: flud:count($id)"
                             # -- unset after timeout
-                            utimer $secs "arm::flud:unset $id"
+                            utimer $secs "arm::flud:unset $chan $id $snick"
                             
                         } else {
                                 # -- joinflood breach!
@@ -9962,23 +10042,27 @@ proc check:floodnet {nick uhost hand chan {xuser ""} {rname ""}} {
                                 # -- store the active floodnet
                                 set floodnet($chan) 1
                                 
-                                set hit 1
+                                # -- store the hit
+                                set hit 1; set noauto 1; # -- do not also add auto blacklist entry
+
                                 # -- clear existing unset utimers for this value
                                 flud:preclear [split $equal]
                                 # -- setup timer to clear adaptive pattern count
                                 debug 3 "check:floodnet: (cumulative -- $prefix) host: unsetting in extended $hold secs: flud:count($id)"
                                 # -- unset after timeout
-                                utimer $hold "arm::flud:unset $id"    
+                                utimer $hold "arm::flud:unset $chan $id $snick"    
                                 
-                                debug 3 "check:floodnet: (cumulative -- $prefix) host breach met! client found: [join $nick]!$uhost -- finding pre-record clients..."   
+                                debug 3 "check:floodnet: (cumulative -- $prefix) \002host breach met!\002 client found: [join $nick]!$uhost -- finding \002pre-record\002 clients..."   
     
                                 foreach client $joinlist {
                                     # -- add this nick at the end
-                                    if {$client == $nick} { continue; }
-                                    if {[string match [string tolower $equal] [string tolower $newjoin($client)]]} {
-                                        set thehost [lindex [split $newjoin($client) @] 1]
+                                    if {$client eq $nick} { continue; }
+                                    set sclient [split $client]
+                                    set newjoinuh [get:val nick:newjoin $chan,$sclient]
+                                    if {[string match -nocase $equal $newjoinuh]} {
+                                        set thehost [lindex [split $newjoinuh @] 1]
                                         set mask "*!*@$thehost"
-                                        debug 3 "\002check:floodnet: (cumulative -- $prefix) host pre-record client found: [join $client]!$newjoin($client)\002"
+                                        debug 3 "\002check:floodnet: (cumulative -- $prefix) host pre-record client found: $client!$newjoinuh\002"
                                         # -- add client to kickban queue if doesn't exist
                                         if {$client ni $klist} { lappend klist $client }
                                         if {$client ni [get:val data:kicks $chan]} { lappend data:kicks($chan) $client }
@@ -10010,6 +10094,7 @@ proc check:floodnet {nick uhost hand chan {xuser ""} {rname ""}} {
                                 
                                 set mask "*!*@$host"
                                 # -- track kick reason
+                                putlog "\002check:floodnet: setting kreason($chan,$nick) to $reason\002"
                                 set kreason($chan,$nick) $reason
                                 # -- add mask to ban queue if doesn't exist
                                 if {$mask ni $blist} { lappend blist $mask }
@@ -10023,37 +10108,42 @@ proc check:floodnet {nick uhost hand chan {xuser ""} {rname ""}} {
         }
         # -- end of host check
         
-        if {$method == "regex"} {
+        if {$method eq "regex"} {
             # -- check if match nick
-            if {[regexp -- [split $equal] "[join $nick]!$uhost/$rname"] || [regexp -- [split $equal] $rname]} {
+            if {[regexp -- $equal "[join $nick]!$uhost/$rname"]} {
                 # -- matched!
-                debug 3 "check:floodnet: (cumulative -- $prefix) regex match: [join $equal] against string: [join $nick]!$uhost/$rname"
+                debug 3 "check:floodnet: (cumulative -- $prefix) \002regex match\002: [join $equal] against string: [join $nick]!$uhost/$rname"
+
+                debug 3 "check:floodnet: \002adding regex id: $id for $chan to flud:nickcount($chan,$snick) to prevent double matching\002"
+                append flud:nickcount($chan,$snick) "$id "
+
+
                 if {![info exists flud:count($id)]} {
                     # -- no such tracking array exists for this host/mask
-                    debug 3 "check:floodnet: (cumulative -- $prefix) host: no tracking array exists: flud:count($id) -- created."
+                    debug 3 "check:floodnet: (cumulative -- $prefix) host: \002no tracking\002 array exists: flud:count($id) -- \002created.\002"
                     set flud:count($id) 1
                     # -- unset after timeout
-                    utimer $secs "arm::flud:unset $id"
+                    utimer $secs "arm::flud:unset $chan $id $snick"
                     
                 } else {
                         # -- existing tracking array, increase counter
+                        debug 3 "check:floodnet: (cumulative -- $prefix) regex: \002existing tracking\002 array count flud:count($id): [get:val flud:count $id]"
                         incr flud:count($id)
-                        debug 3 "check:floodnet: (cumulative -- $prefix) regex: existing tracking array count flud:count($id): [get:val flud:count $id]"
                         set count [get:val flud:count $id]
                         if {$count < $joins} {
                             # -- breach not met
-                            debug 3 "check:floodnet: (cumulative -- $prefix) regex: breach not yet met -- increased flud:count($id) counter."
+                            debug 3 "check:floodnet: (cumulative -- $prefix) regex: breach \002not yet met\002 -- increased flud:count($id) counter to: \002$count\002"
                             # -- clear existing unset utimers for this value
                             flud:preclear [split $equal]
                     
                             # -- setup timer to clear adaptive pattern count
                             debug 3 "check:floodnet: (cumulative -- $prefix) regex: unsetting in $secs secs: flud:count($id)"
                             # -- unset after timeout
-                            utimer $secs "arm::flud:unset $id"
+                            utimer $secs "arm::flud:unset $chan $id $snick"
                             
                         } else {
                                 # -- joinflood breach!
-                                set hit 1
+                                set hit 1; set noauto 1; # -- do not also add automatic entry
                                 incr flud:count($id)
                                 # -- store the active floodnet
                                 set floodnet($chan) 1
@@ -10062,19 +10152,22 @@ proc check:floodnet {nick uhost hand chan {xuser ""} {rname ""}} {
                                 # -- setup timer to clear adaptive pattern count
                                 debug 3 "check:floodnet: (cumulative -- $prefix) regex: unsetting in extended $hold secs: flud:count($id)"
                                 # -- unset after timeout
-                                utimer $hold "arm::flud:unset $id"    
+                                utimer $hold "arm::flud:unset $chan $id $snick"    
                                 
-                                debug 3 "check:floodnet: (cumulative -- $prefix) regex breach met! client found: [join $nick]!$uhost -- finding pre-record clients..."              
+                                debug 3 "check:floodnet: (cumulative -- $prefix) \002regex breach met!\002 client found: [join $nick]!$uhost -- finding \002pre-record\002 clients..."              
+
                                 # -- find the pre-record clients
                                 foreach client $joinlist {
-                                    if {[regexp -- [join $equal] $newjoin($client)]} {
+                                    set sclient [split $client]
+                                    set newjoinuh [get:val nick:newjoin $chan,$sclient]
+                                    if {[regexp -- [join $equal] $newjoinuh]} {
                                         # -- add this nick at the end
                                         if {$client == $nick} { continue; }
-                                        debug 3 "\002check:floodnet: (cumulative -- $prefix) regex pre-record client found: [join $client]!$newjoin($client)\002"
+                                        debug 3 "\002check:floodnet: (cumulative -- $prefix) regex pre-record client found: $client!$newjoinuh\002"
                                         # -- add client to kickban queue if doesn't exist already
                                         if {$client ni $klist} { lappend klist $client }
                                         if {$client ni [get:val data:kicks $chan]} { lappend data:kicks($chan) $client }
-                                        set thehost [lindex [split $newjoin($client) @] 1]
+                                        set thehost [lindex [split $newjoinuh @] 1]
                                         set mask "*!*@$thehost"
                                         # -- add any other nicknames on this host to kickqueue
                                         foreach hnick [get:val hostnicks $thehost,$lchan] {
@@ -10082,6 +10175,7 @@ proc check:floodnet {nick uhost hand chan {xuser ""} {rname ""}} {
                                             if {$hnick ni [get:val data:kicks $chan]} { lappend data:kicks($chan) $hnick }
                                         }
                                         # -- track kick reason
+                                        putlog "\002check:floodnet: setting kreason($chan,$nick) to $reason\002"
                                         set kreason($chan,$client) $reason
                                         # -- add mask to ban queue if doesn't exist and wasn't recently banned by me
                                         if {$mask ni $blist} { lappend blist $mask }
@@ -10097,6 +10191,7 @@ proc check:floodnet {nick uhost hand chan {xuser ""} {rname ""}} {
                                 if {[join $nick] ni [get:val data:kicks $chan]} { lappend data:kicks($chan) [join $nick] }
                                 set mask "*!*@$host"
                                 # -- track kick reason
+                                putlog "\002check:floodnet: setting kreason($chan,$nick) to $reason\002"
                                 set kreason($chan,$nick) $reason
                                 # -- add mask to ban queue if doesn't exist
                                 if {$mask ni $blist} { lappend blist $mask }
@@ -10116,7 +10211,7 @@ proc check:floodnet {nick uhost hand chan {xuser ""} {rname ""}} {
     # ---- END CUMULATIVE REGEX MATCHES
     
     # -- automatic blacklist entries
-    if {[cfg:get auto:black $chan]} {
+    if {[cfg:get auto:black $chan] && !$noauto} {
     
         foreach ban $blist {
             # -- don't need a mask
@@ -10167,91 +10262,112 @@ proc check:floodnet {nick uhost hand chan {xuser ""} {rname ""}} {
 # -- custom ban queue (and chammode -r to unlock chan when serverqueue is emptied)
 # -- i've noticed that the eggdrop queues are too slow, and I need to try to stack modes wherever possible
 proc flud:queue {} {
-    variable cfg
+    global server
     variable data:bans;  # -- banlist queue
     variable data:kicks; # -- kicklist queue
     variable floodnet;   # -- tracking active floodnet (by chan)
     variable chanlock;   # -- tracking active channel lock (by chan)
+    variable dbchans;    # -- dict: list of channel entries
+    variable kreason;    # -- kick reason (by chan,nick)
 
-    db:connect
-    foreach chan [db:query "SELECT chan FROM channels WHERE chan != '*'"] {
-        if {![info exists data:bans($chan)]} { set data:bans($chan) "" }
-        
-        if {[get:val data:bans $chan] != ""} { debug 5 "flud:queue: global ban queue list: [get:val data:bans $chan]" }
-            
+    #debug 3 "flud:queue: starting..."
+
+    set cids [dict keys $dbchans]
+    
+    foreach cid $cids {
+        set chan [dict get $dbchans $cid chan]
+        if {$chan eq "*"} { continue; }; # -- skip global chan
+
+        set bans [get:val data:bans $chan]
+        set kicks [get:val data:kicks $chan]
+
         if {![info exists floodnet($chan)]} { set fludactive 0 } else { set fludactive 1 }
-        
+                
         set size [queuesize server]
-        
         set lockdown 0
-        
-        if {$size >= 0 && $fludactive} {       
+        if {$size >= 3 && $fludactive} {       
             # -- announce queue size if floodnet is active
-            debug 5 "flud:queue: server queue size is >= 3 messages (size: $size)"
+            debug 3 "flud:queue: server queue size is >= 3 messages (size: $size)"
             if {![info exists chanlock($chan)]} { set lockdown 1 }
         }
         
         # -- process global ban queue if exists
-        if {[get:val data:bans $chan] != ""} {
-            debug 1 "\002flud:queue:\002 stacking ban modes for banlist: [get:val data:bans $chan]"
+        while {$bans ne ""} {
+            debug 1 "\002flud:queue:\002 stacking ban modes for banlist: $bans"
             set length [llength [get:val data:bans $chan]]
-            while {[get:val data:bans $chan] != ""} {
-                if {$lockdown && ![info exists chanlock($chan)]} {
-                    # -- safetey net in case + isn't included in the var
-                    if {![string match "+*" [cfg:get chanlock:mode $chan]]} {
-                        set lockmode [cfg:get chanlock:mode $chan]
-                    } else { set lockmode [string range [cfg:get chanlock:mode $chan] 1 end] }
-                    # -- count the modes
-                    set mcount [string length $lockmode]   
-                    # -- subtract from the 6 stacked modes allowed  
-                    set bstack [expr 6 - $mcount]
-                    # -- concatenate the modes for stack
-                    set modes  "+$lockmode[string repeat "b" $length]"
-                                    
-                    debug 1 "\002flud:queue:\002 locking down chan $chan via chanmode [cfg:get chanlock:mode $chan]"
-                    
-                    set chanlock($chan) 1
-                    # -- number of banmasks to include in stack (counting from 0)
-                    set num [expr 5 - $mcount]
-                    set blist [join [lrange [get:val data:bans $chan] 0 $num]]
-                    # -- unlock chan in N seconds (if serverqueue is cleared) - 20secs
-                    flud:unlock $chan
-                    # -- prevent kicks from starting for 5 seconds after chanlock
-                    utimer 5 arm::flud:kick:queue
-                    
-                } else {
-                    if {$length >= 6} { set modes "+bbbbbb" } else { set modes "+[string repeat "b" $length]" }
-                    set blist [join [lrange ${data:bans($chan)} 0 5]]
-                    set num 5
+            if {$lockdown && ![info exists chanlock($chan)]} {
+                # -- safetey net in case + isn't included in the var
+                set lockmode [cfg:get chanlock:mode $chan]
+                if {[string match "+*" $lockmode]} {
+                    set lockmode [string range $lockmode 1 end] 
                 }
-                debug 1 "\002flud:queue:\002 executing: MODE $chan $modes $blist"
-                # -- putnow is instant
-                # -- WARNING: it is *possible* for putnow to excess flood the bot
-                putnow "MODE $chan $modes $blist"
-                set data:bans($chan) [lreplace [get:val data:bans $chan] 0 $num]
+                # -- count the modes
+                set mcount [string length $lockmode]   
+                # -- subtract from the 6 stacked modes allowed  
+                set bstack [expr 6 - $mcount]
+                # -- concatenate the modes for stack
+                set modes  "+$lockmode[string repeat "b" $length]"
+                                
+                debug 1 "\002flud:queue:\002 locking down chan $chan via chanmode +$lockmode"
                 
+                set chanlock($chan) 1
+                # -- number of banmasks to include in stack (counting from 0)
+                set num [expr 5 - $mcount]
+                set blist [join [lrange [get:val data:bans $chan] 0 $num]]
+                # -- unlock chan in N seconds (if serverqueue is cleared) - 20secs
+                flud:unlock $chan
+                
+            } else {
+                if {$length >= 6} { set modes "+bbbbbb" } else { set modes "+[string repeat "b" $length]" }
+                set blist [join [lrange [get:val data:bans $chan] 0 5]]
+                set num 5
             }
-            
-            debug 1 "flud:queue: server queue size is empty, unset floodnet track in [cfg:get chanlock:time $chan] secs"
-            utimer [cfg:get chanlock:time $chan] "catch { unset arm::floodnet($chan) }"
+            debug 1 "\002flud:queue:\002 executing: MODE $chan $modes $blist"
+            # -- putnow is instant
+            # -- WARNING: it is *possible* for putnow to excess flood the bot
+            putnow "MODE $chan $modes $blist"
+            set bans [lreplace [get:val data:bans $chan] 0 $num]
         
-        } else {
-            # -- fallback in case there are kicks but no bans
-            set dokicks 0
-            foreach chan [array names data:kicks] {
-                set thelist [get:val data:kicks $chan]
-                if {$thelist ne ""} {
-                    set dokicks 1
-                    debug 4 "flud:queue: processing kicks (chan: $chan -- list: $thelist) -> flud:kick:queue"
+        }; # -- end ban queue
+
+        set data:bans($chan) ""
+
+        # -- kick queue
+        if {$kicks ne ""} { debug 3 "flud:queue: kicking kicklist from $chan: [join $kicks]" }
+        foreach client $kicks {
+            # -- safety net if not on server
+            if {![botonchan $chan] || ![botisop $chan] || $server eq ""} {
+                debug 0 "flud:queue: not on chan $chan or not op... skipping"
+                continue;
+            };
+            set sclient [split $client]
+            set reason "join flood detected"; # -- default reason 
+            # -- kick users
+            if {[info exists kreason($chan,$sclient)]} { 
+                # -- safety net
+                if {$kreason($chan,$sclient) != ""} {
+                    set reason [get:val kreason $chan,$sclient]
+                    unset kreason($chan,$sclient) 
                 }
             }
-            if {$dokicks eq 1} {
-                # -- process kicks
-                flud:kick:queue
-            }
+            putquick "KICK $chan $client :Armour: $reason"
+            # putkick $chan $client "Armour: $reason"
+
         }
-    }
         
+        set data:kicks($chan) ""
+        # -- end kick queue
+
+        # -- unlock channel after configured delay when server queue is empty
+        set size [queuesize server]
+        if {$size eq 0} {
+            #debug 1 "flud:queue: server queue size is empty, unset floodnet track in [cfg:get chanlock:time $chan] secs"
+            #utimer [cfg:get chanlock:time $chan] "arm::flud:unlock $chan"
+            flud:unlock $chan
+        }
+
+    }; # -- end foreach chan
+
     # -- use miliseconds
     after [cfg:get queue:flud $chan] arm::flud:queue
 }
@@ -10280,49 +10396,6 @@ proc flud:unlock {chan} {
         # -- add another N seconds to the delay and check again
         utimer [cfg:get chanlock:time $chan] "arm::flud:unlock $chan"
     }
-}
-
-# -- including kicks in main ban queue slows the bans down -- do these less often
-proc flud:kick:queue {} {
-    global server
-    variable cfg
-
-    variable data:kicks; # -- kicklist queue
-    variable kreason;    # -- kick reason (by chan,nick)
-
-    foreach chan [array names data:kicks]] {
-            if {}; # -- safety net if not in chan or deopped
-            set thelist [get:val data:kicks $chan]
-            if {$thelist eq ""} { return; }; # -- safety net
-            # -- safety net if not on server
-            if {$server eq "" || ![botisop $chan] || ![botonchan $chan]} {
-                set data:kicks($chan) ""; # -- flush kicklist for chan
-                return;
-            }; 
-            debug 5 "flud:kick:queue: data:kicks($chan): $thelist"        
-            set reason "join flood detected"; # -- default reason 
-            # -- kick users
-            foreach client $thelist {
-                debug 3 "flud:kick:queue: kicking kicklist: [join $thelist]"
-                if {[info exists kreason($chan,$client)]} { 
-                    # -- safety net
-                    if {$kreason($client) != ""} {
-                        set reason [get:val kreason $chan,$client]
-                        unset kreason($chan,$client) 
-                    }
-                }
-                putquick "KICK $chan $client :Armour: $reason"
-                # putkick $chan $client "Armour: $reason"
-                
-                # putkick $chan [join ${data:kicks($chan)} ,] "Armour: join flood detected" 
-                #set data:kicks($chan) ""
-            }
-    }
-    
-    set data:kicks($chan) ""
-    
-    # -- we don't need to restart this
-    #utimer 5 arm::flud:kick:queue
 }
 
 debug 0 "\[@\] Armour: loaded floodnet detection."
@@ -12823,7 +12896,10 @@ proc userdb:unset:vars {type nick uhost chan} {
                               #        leave,*    :  nicks already scanned and left
                               #        nicks,*    :  nicks being scanned
                               #        data,*     :  a list to be scanned: nick chan full clicks ident ip host xuser rname
-    variable data:captcha;    # -- holds captcha data for nick (by nick,chan)    
+    variable data:captcha;    # -- holds captcha data for nick (by nick,chan)  
+    variable nick:jointime;   # -- stores the timestamp a nick joined a channel (by chan,nick)
+    variable jointime:nick;   # -- stores the nick that joined a channel (by chan,timestamp)
+       
     variable nickdata;        # -- dict: stores data against a nickname
                               #           nick
                               #              ident
@@ -12839,10 +12915,24 @@ proc userdb:unset:vars {type nick uhost chan} {
                               #           chanlist
                               #           chanlist_ts
 
+    set nick [split $nick];
     dict unset nickdata [string tolower $nick];  # -- remove dict for nick data
     
     set host [lindex [split $uhost @] 1]
     set lchan [string tolower $chan]
+
+    debug 0 "userdb:unset:vars: $type in $chan for $nick!$uhost"
+
+    # -- remove trackers for the jointime to a channel
+    if {[info exists nick:jointime($lchan,$nick)]} {
+        set ts [get:val nick:jointime $lchan,$nick]
+        if {[info exists jointime:nick($lchan,$ts)]} {
+            debug 4 "userdb:unset:vars: $type in $chan removing jointime:nick($lchan,$ts)"
+            unset jointime:nick($lchan,$ts)
+        }
+        debug 4 "userdb:unset:vars: $type in $chan removing nick:jointime($lchan,$nick)"
+        unset nick:jointime($lchan,$nick)
+    }
         
     # -- scan:list:
     #      data,*  - data list of those being scanned
@@ -13178,7 +13268,6 @@ proc userdb:who {ident ip host nick xuser} {
 proc userdb:raw:account {server cmd arg} {
     variable userdb
     variable nickdata
-    variable newjoin
     global botnick
     
     set arg [split $arg]
@@ -14669,11 +14758,28 @@ proc adapt:unset {type exp} {
 
 # -- arm:flud:unset
 # clear floodnet track
-proc flud:unset {value} {
-    variable flud:count; # -- the count of a given cumulative pattern (by id)
-    if {[info exists flud:count($value)]} {
-        debug 3 "flud:unset: removing floodnet tracker flud:count([join $value])"
-        unset flud($value)
+proc flud:unset {chan id snick} {
+    variable flud:count;     # -- the count of a given cumulative pattern (by id)
+    variable flud:nickcount; # -- the IDs that have already been matched for a given nick (by chan,nick)
+                             # -- avoids double matching (first from channel join, second from /WHO result)
+
+    # -- remove ID from count list
+    if {[info exists flud:count($id)]} {
+        debug 3 "flud:unset: removing floodnet tracker flud:count([join $id])"
+        unset flud:count($id)
+    }
+
+    # -- remove ID from nickcount list
+    if {[info exists flud:nickcount($chan,[split $snick])]} {
+        debug 3 "flud:unset: flud:nickcount($chan,[split $snick]): [get:val flud:nickcount $chan,$snick]"
+        set ids [join [get:val flud:nickcount $chan,$snick]]
+        if {$ids ne ""} {
+            set x [lsearch $ids $id]
+            debug 3 "flud:unset: removing floodnet tracker flud:nickcount($chan,$snick)"
+            set ids [lreplace $ids $x $x]; # -- remove ID from list
+        }
+        if {$ids eq ""} { unset flud:nickcount($chan,[split $snick]) } \
+        else { set flud:nickcount($chan,$snick) $ids }
     }
 }
 
@@ -14717,9 +14823,9 @@ proc flood:line:unmode {chan} {
 proc split:unset {value} {
     variable cfg
     variable data:netsplit;  # -- state: tracks the presence of a netsplit
-    if {[info exists data:netsplit([escape $value])]} {
-        debug 2 "arm:split:unset: unsetting netsplit([join [escape $value]]) after [cfg:get split:mem *] mins"
-        unset netsplit([escape $value])
+    if {[info exists data:netsplit($value)]} {
+        debug 2 "arm:split:unset: unsetting netsplit([join $value]) after [cfg:get split:mem *] mins"
+        unset data:netsplit($value)
     }
 }
 
@@ -14745,7 +14851,7 @@ proc newjoin:unset {nick chan} {
     # -- remove associated jointime for nick on chan
     foreach ts [array names jointime:nick] {
         set tnick [get:val jointime:nick $chan,$ts]
-        if {$nick == $tnick} { 
+        if {$nick eq $tnick} { 
             debug 4 "newjoin:unset: removed newcomer jointime (timestamp) tracker join:time($chan,$ts) for nick: $nick"
             unset jointime:nick($chan,$ts) 
         }
@@ -15569,7 +15675,9 @@ proc arm:cmd:update {0 1 2 3 {4 ""} {5 ""}} {
         if {[file isfile ./armour/backup/.lock]} {
             reply $type $target "\002error:\002 script download is in progress, please try again later."
             return;
-        }
+        } else { exec touch ./armour/backup/.lock }
+
+        set start [unixtime]
 
         # -- find backup
         set backup [lindex $arg 1]
@@ -15605,7 +15713,28 @@ proc arm:cmd:update {0 1 2 3 {4 ""} {5 ""}} {
 
         # -- restore backup
         debug 0 "\002cmd:update:\002 restoring backup: $backupts"
-        #update:copy ./armour/backup/backup-$backupts ./armour $debug
+        update:copy ./armour/backup/backup-$backupts ./armour $debug
+
+        set runtime [expr [unixtime] - $start]
+        # -- TODO: fix versions and revisions
+        debug 0 "\002cmd:update:\002 script \restore complete\002 (\002runtime:\002 $runtime secs\002)"
+        if {$debug} { set mode "tested" } else { set mode "complete" }
+        update:note "\002Armour\002 script \002v$ver\002 (\002revision:\002 $rev) restore $mode (\002runtime:\002 $runtime)" $ghdata
+
+        reply $type $target "script \002[cfg:get version]\002 (\002revision:\002 [cfg:get revision])\
+            installation $mode (\002runtime:\002 $runtime secs -- \002new config settings:\002 $new)"
+
+        # -- remove the lock file
+        debug 0 "\002cmd:update:\002 removing lock file"
+        catch { exec rm ./armour/backup/.lock }
+
+        if {!$debug} {
+            # -- TODO: fix version & revision
+            putnow "QUIT :Loading Armour \002[cfg:get version] (revision: \002[cfg:get revision]\002)"
+            restart; # -- restart eggdrop to ensure full script load
+        } else {
+            reply $type $target "\002info:\002 debug mode enabled, restore not actually applied."
+        }
 
     } elseif {$action eq "branches" || $action eq "b"} {
         # -- list available branches
@@ -15736,7 +15865,7 @@ proc update:check {branch {debug 0}} {
             dict set ghdata status "outdated"
             dict set ghdata newrevision 1
             set sendnote 1
-            set output "revision update (\002v$grevision\002) of version \002v$version\002 available! \002current revision:\002 $revision"
+            set output "revision update (\002$grevision\002) of version \002v$version\002 available! \002current revision:\002 $revision"
         } else {
             # -- local version is up to date
             dict set ghdata status "current"
@@ -16218,7 +16347,7 @@ db:load:chan
 if {[info exists vars]} { unset vars }
 
 # -- unset existing exempt array
-lappend vars exempt
+lappend vars nick:exempt
 
 # -- unset existing adaptive regex tracking arrays
 lappend vars adapt
@@ -16230,7 +16359,8 @@ lappend vars adapti
 lappend vars adaptir
 lappend vars adaptr
 # -- unset floodnet tracking counters
-lappend vars flud
+lappend vars flud:count
+lappend vars flud:nickcount
 lappend vars floodnet
 
 # -- unset text type blacklist counters
@@ -16240,19 +16370,19 @@ lappend vars flood:text
 lappend vars flood:line
 
 # -- unset nicks on host tracking array
-lappend vars hostnicks
+lappend vars data:hostnicks
 
 # -- unset nicks on ip tracking array
-lappend vars ipnicks
+lappend vars data:ipnicks
 
 # -- unset host on nick tracking array
 lappend vars nickhost
 
 # -- unset ip on nick tracking array
-lappend vars nickip
+lappend vars data:nickip
 
 # -- unset scanlist for /endofwho
-lappend vars scanlist
+lappend vars scan:list
 
 # -- unset pranoid coroutine array for arm:scan:continue
 lappend vars paranoid
@@ -16267,25 +16397,37 @@ lappend vars fullname
 lappend vars kreason
 
 # -- unset existing setx array (newly umode +x clients)
-lappend vars setx
+lappend vars nick:setx
 
-# -- unset existing newjoin array (temp array to identify newcomers in channel)
-lappend vars newjoin
+# -- unset tracking for jointime based on chan,nick
+lappend vars nick:jointime
+
+# -- unset exnisting newjoin array (temp array to identify newcomers in channel)
+lappend vars nick:newjoin
+
+# -- unset tracking holding the nick based on chan,jointime
+lappend vars jointime:nick
 
 # -- unset wholist (tracks users between /WHO's)
 lappend vars wholist
 
 # -- unset temporary exemption overrides (from 'exempt' command)
-lappend vars override
+lappend vars nick:override
 
 # -- unset netsplit memory (track's users lost in netsplits)
-lappend vars netsplit
+lappend vars data:netsplit
 
-# -- unset list of recently kicked nicknames for a channel (by chan)
+# -- unset list of masks to ban for a channel (by chan)
+lappend vars data:bans
+
+# -- unset list of nicknames to kick for a channel (by chan)
 lappend vars data:kicks
 
+# -- tracks the most recently banned ban for a given entry ID
+lappend vars data:idban
+
 # --- unset global banlist array
-lappend vars gblist
+#lappend vars gblist
 
 # -- unset trackers from 'black' command
 lappend vars data:black
@@ -16315,7 +16457,7 @@ mode:secure
 utimer [expr [cfg:get queue:secure *] / 2] arm::voice:stack; # -- offset the voice timer from the /who (in mode:secure); 
                                                      
 # -- start floodnet mode queue timer (attempts to stack bans during floodnet)
-flud:queue;  # -- TODO: re-enable once updated proc to v4.0
+flud:queue; 
 
 # -- load dronebl package if required
 if {[cfg:get dronebl] eq 1} { source ./armour/packages/libdronebl.tcl }
@@ -16349,5 +16491,5 @@ foreach script $data {
 arm::loadcmds; # -- load all commands (incl. plugins)
 # ------------------------------------------------------------------------------------------------
 
-arm::debug 0 "\[@\] Armour: loaded [cfg:get version *] (empus@undernet.org)"
+arm::debug 0 "\[@\] Armour: loaded [arm::cfg:get version *] (empus@undernet.org)"
 

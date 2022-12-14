@@ -372,7 +372,7 @@ set cfg(auth:serv:nick) "X"
 # leave blank if using NickServ auth mechanism
 set cfg(auth:serv:host) "channels.undernet.org"
 
-# -- non-regex extension for umode +x registered users - [users.undernet.org]
+# -- extension for umode +x registered users - [users.undernet.org]
 # -- change with care to suit your own network
 set cfg(xhost:ext) "users.undernet.org"
 
@@ -1041,12 +1041,12 @@ set addcmd(twitter)     {  arm       500        pub msg dcc  }
 # -- to load plugins, uncomment their line after editing the config parameters in each file
 set files {
     # -- plugins (optional)
-    #./armour/plugins/smsbot.tcl       # -- smsglobal plugin
-    #./armour/plugins/trakka.tcl       # -- trakka plugin
-    #./armour/plugins/tell.tcl         # -- tell plugin
-    #./armour/plugins/push.tcl         # -- pushover plugin
-    #./armour/plugins/email.tcl        # -- email plugin
-    #./armour/plugins/quote/quote.tcl  # -- quote plugin
+    #./armour/plugins/quote.tcl          # -- quote plugin
+    #./armour/plugins/trakka/trakka.tcl  # -- trakka plugin
+    #./armour/plugins/smsbot.tcl         # -- smsglobal plugin
+    #./armour/plugins/tell.tcl           # -- tell plugin
+    #./armour/plugins/push.tcl           # -- pushover plugin
+    #./armour/plugins/email.tcl          # -- email plugin
 }
 # ------------------------------------------------------------------------------------------------
 # end of configuration
