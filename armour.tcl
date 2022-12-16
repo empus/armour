@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Fri Dec 16 07:55:25 PST 2022
+# armour.tcl v4.0 autobuild completed on: Fri Dec 16 08:20:04 PST 2022
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -16329,7 +16329,7 @@ if {[info exists addrbl]} {
     foreach entry [array names addrbl] {
         lassign [array get addrbl $entry] rbl value
         lassign $value desc score auto
-        array set scan:rbls [list $rbl$ [list $desc] $auto]
+        array set scan:rbls [list $rbl [list $desc] $auto]
         debug 3 "\[@\] Armour: loaded DNSBL scan: RBL: $rbl -- desc: $desc -- score: $score -- auto: $auto"
     }
 }
