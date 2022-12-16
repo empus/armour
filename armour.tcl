@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Fri Dec 16 08:45:48 PST 2022
+# armour.tcl v4.0 autobuild completed on: Fri Dec 16 09:08:20 PST 2022
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -15550,6 +15550,8 @@ proc arm:cmd:update {0 1 2 3 {4 ""} {5 ""}} {
         debug 0 "\002update:\002 debug mode obtained from config: \002$debug\002"
     }
 
+    debug 0 "\002cmd:update:\002 action: \002$action\002 -- branch: \002$branch\002 (arg: $arg)"
+
     # -- get the data
     lassign [update:check $branch $debug] success ghdata output
     if {$success eq "0"} {
@@ -15575,6 +15577,7 @@ proc arm:cmd:update {0 1 2 3 {4 ""} {5 ""}} {
     # -- check for available update
     if {$action eq "check" || $action eq "c"} {
         reply $type $target $output; # -- send the output to the user
+
     } elseif {$action eq "install" || $action eq "i"} {
         # -- install script update
         if {$update eq 0 && [lsearch $arg "-force"] eq "-1" && [lsearch $arg "-f"] eq "-1"} {
@@ -15724,11 +15727,12 @@ proc update:github {url desc type target} {
 # -- check for update
 proc update:check {branch {debug 0}} {
     variable github
+    debug 0 "\002update:check:\002 checking for updates -- branch: $banch -- debug: $debug"
     set url "https://raw.githubusercontent.com/empus/armour/${branch}/.version"
     http::register https 443 [list ::tls::socket -tls1.2 true]
     http::config -useragent "mozilla" 
     set errcode [catch {set tok [::http::geturl $url -timeout 10000]} error]
-    debug 0 "\002update:check:\002 errcode: $errcode -- error: $error"
+    debug 5 "\002update:check:\002 errcode: $errcode -- error: $error"
     # -- check for errors
     if {$errcode} {
         debug 0 "\002update:check:\002 failed to get version info from github (error: $error)"
@@ -16102,7 +16106,7 @@ proc update:install {update} {
                         lassign $value desc score auto;
                         debug 1 "\002update:install:\002 using \002existing\002 DNSBL config (port: $rbl -- desc: $desc)"
                         puts $fd "set addrbl($srbl) \"[list $desc] $score $auto\""
-                        array set scan:rbls [list $rbl [list $desc] $score $auto]
+                        array set scan:rbls $rbl [list [list $desc] $score $auto]
                     }
                 } else {
                     # -- no existing scan:rbls config
@@ -16329,7 +16333,7 @@ if {[info exists addrbl]} {
     foreach entry [array names addrbl] {
         lassign [array get addrbl $entry] rbl value
         lassign $value desc score auto
-        array set scan:rbls [list $rbl [list $desc] $auto]
+        array set scan:rbls $rbl [list [list $desc] $score $auto]
         debug 3 "\[@\] Armour: loaded DNSBL scan: RBL: $rbl -- desc: $desc -- score: $score -- auto: $auto"
     }
 }
