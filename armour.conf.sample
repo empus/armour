@@ -6,7 +6,7 @@
 # /_/   \_\_|  |_| |_| |_|\___/ \__,_|_|   
 #                                          
 #
-# Anti abuse and channel management script for eggdrop bots on the IRC networks.
+# Abuse and channel management script for eggdrop bots on the IRC networks.
 #
 # Armour automatic onjoin scanning be be placed in one of three modes:
 #    ON        :    Automatic scans upon client channel /join
@@ -20,7 +20,7 @@
 #    whitelists
 #    blacklists
 #    dnsbl scans  :    dnswl exemptions and remote 'bounce' bot supported
-#    proxy scans  :    remote 'bounce' bot supported
+#    port scans   :    remote 'bounce' bot supported
 #    onchan scans :    remote 'bounce' bot supported
 #
 # ------------------------------------------------------------------------------------------------
@@ -143,6 +143,7 @@ set cfg(register) 1
 set cfg(register:inchan) "#chan1 #chan2"
 
 # -- what global access level to give to newusers? - [1]
+# -- applies to 'newuser' command when no global level given, and to 'register' command
 set cfg(register:level) 1
 
 # -- send notes to global level 500 users when newuser is created with 'register' cmd? (0|1) - [1]
@@ -924,6 +925,10 @@ set cfg(paranoid:klimit) "1:670"
 # DRONEBL
 # ------------------------------------------------------------------------------------------------
 
+# -- enable DroneBL to support RBL additions and removals? 
+# -- note that this is not required only to do RBL lookups, which can be done via `set scan:rrbls`
+set cfg(dronebl) 0
+
 # -- DroneBL RPC Key (www.dronebl.org)
 # - caution: you are responsible for DroneBL submissions with this key
 # - allocate access with care 
@@ -1026,11 +1031,10 @@ set addcmd(addchan)     {  userdb    450        pub msg dcc  }
 set addcmd(remchan)     {  userdb    450        pub msg dcc  }
 set addcmd(modchan)     {  userdb    450        pub msg dcc  }
 set addcmd(do)          {  userdb    500        pub msg dcc  }
-set addcmd(die)         {  userdb    500        pub msg dcc  }
+set addcmd(die)         {  arm       500        pub msg dcc  }
 set addcmd(conf)        {  arm       500        pub msg dcc  }
 set addcmd(showlog)     {  arm       500        pub msg dcc  }
 set addcmd(update)      {  arm       500        pub msg dcc  }
-set addcmd(twitter)     {  arm       500        pub msg dcc  }
 
 
 # ------------------------------------------------------------------------------------------------
@@ -1059,8 +1063,6 @@ set files {
 # end of namespace; scripts must be loaded afterwards, to avoid nested namespaces 
 # ------------------------------------------------------------------------------------------------
 source ./armour/armour.tcl; # -- do not edit
-# ------------------------------------------------------------------------------------------------
-putlog "\[@\] Armour $arm::cfg(version) Loaded (empus@undernet.org)"
 # ------------------------------------------------------------------------------------------------
 
 

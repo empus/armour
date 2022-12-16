@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Wed Dec 14 06:13:23 PST 2022
+# armour.tcl v4.0 autobuild completed on: Thu Dec 15 18:00:24 PST 2022
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -658,7 +658,6 @@ proc loadcmds {} {
     if {[cfg:get cmd:short *]} {
         # -- cmd: ban
         proc arm:cmd:kb {0 1 2 3 {4 ""} {5 ""}} { coroexec arm:cmd:ban $0 $1 $2 $3 $4 $5 };        # -- cmd: ban
-        proc arm:cmd:cmds {0 1 2 3 {4 ""} {5 ""}} { coroexec arm:cmd:cmds $0 $1 $2 $3 $4 $5 };     # -- cmd: cmds
         proc arm:cmd:commands {0 1 2 3 {4 ""} {5 ""}} { coroexec arm:cmd:cmds $0 $1 $2 $3 $4 $5 }; # -- cmd: cmds
         proc arm:cmd:k {0 1 2 3 {4 ""} {5 ""}} { coroexec arm:cmd:kick $0 $1 $2 $3 $4 $5 };        # -- cmd: kick
         proc arm:cmd:b {0 1 2 3 {4 ""} {5 ""}} { coroexec arm:cmd:black $0 $1 $2 $3 $4 $5 };       # -- cmd: black
@@ -3545,7 +3544,6 @@ proc unban {chan mask} {
 }
 
 # -- grab values from Armour config if this is not a standalone scan bounce bot
-if {![info exists cfg(debug)]} { set cfg(ban) $iscan(debug) }
 if {![info exists cfg(ban)]} { set cfg(ban) $iscan(cfg:ban) }
 if {![info exists cfg(ban:time)]} { set cfg(ban:time) $iscan(cfg:ban:time) }
 if {![info exists cfg(notc:white)]} { set cfg(notc:white) $iscan(cfg:notc:white) }
@@ -3721,7 +3719,8 @@ proc arm:cmd:cmds {0 1 2 3 {4 ""} {5 ""}} {
     variable cfg
     variable armbind; # -- the list of arm command binds
     variable userdb;  # -- the list of userdb command binds
-    variable dbchans;
+    variable dbchans; # -- dict with the list of channels
+    
     lassign [proc:setvars $0 $1 $2 $3 $4 $5] type stype target starget nick uh hand source chan arg 
     
     set cmd "cmds"
@@ -3746,14 +3745,12 @@ proc arm:cmd:cmds {0 1 2 3 {4 ""} {5 ""}} {
         }
     }
 
-    putlog "\002debug\002: 1"
-
     # -- show a list of commands this guy has access to
-    foreach i [array names userdb] {
+    foreach i [array names userdb cmd,*,$type] {
         set line [split $i ,]
         lassign $line a c t
-        if {$a ne "cmd" || $t ne $type} { continue; }
         if {[string length $c] eq 1 || $c eq "kb"} { continue; }; # -- don't include the single char shortcut commands
+        if {$c eq "reload" || $c eq "whois"} { continue; }; # -- shortcut to 'load' and 'info'
         set l $userdb($i)
         # -- has access to command (for bind type)
         if {$clevel ne ""} {
@@ -3766,9 +3763,11 @@ proc arm:cmd:cmds {0 1 2 3 {4 ""} {5 ""}} {
             if {![info exists levels($l)]} { set levels($l) $c } else { lappend levels($l) $c }
         }
     }
-    if {$cmdlist eq ""} { reply $stype $starget "\002error:\002 no access to any commands!"; return; }
+    lappend levels(0) "login"
+    lappend levels(0) "logout"
+    lappend levels(0) "newpass"
 
-    putlog "\002debug\002: 2"
+    if {$cmdlist eq ""} { reply $stype $starget "\002error:\002 no access to any commands!"; return; }
 
     if {$clevel eq "levels"} {
         if {$type eq "pub"} {
@@ -3778,15 +3777,12 @@ proc arm:cmd:cmds {0 1 2 3 {4 ""} {5 ""}} {
         # -- user is looking for a command overview per level
         set lvls [lsort -integer -decreasing [array names levels]]
         foreach l $lvls {
-            putlog "\002debug\002: 2a"
             reply $ntype $ntarget "\002Level $l:\002 [lsort -dictionary [join $levels($l)]]"
         }
         # -- create log entry for command use
         log:cmdlog BOT * 1 $user $uid [string toupper $cmd] [join $arg] $source "" "" ""
         return;
     }
-
-    putlog "\002debug\002: 3"
 
     # -- load commands only if applicable
     lappend cmdlist "login logout newpass"; # -- userdb commands
@@ -3796,8 +3792,6 @@ proc arm:cmd:cmds {0 1 2 3 {4 ""} {5 ""}} {
     set clevels [db:query "SELECT cid FROM levels WHERE uid=$uid"]; # -- channels this user has access to
     db:close
     set trakka 0
-
-    putlog "\002debug\002: 4"
     
     # -- append trakka commands
     foreach chanid $clevels {
@@ -3808,8 +3802,6 @@ proc arm:cmd:cmds {0 1 2 3 {4 ""} {5 ""}} {
         } else { set trakka 0 }
     }
     if {$trakka} { lappend cmdlist "ack nudge score" }
-
-    putlog "\002debug\002: end"
 
     # -- send the command list
     reply $stype $starget "\002commands:\002 [lsort -unique -dictionary [join $cmdlist]]"
@@ -5117,7 +5109,7 @@ proc arm:cmd:scan {0 1 2 3 {4 ""}  {5 ""}} {
     }
     
     # -- check for ASN
-    if {[regexp -- {^[0-9]+$} $search]} {
+    if {[regexp -- {^(AS)?[0-9]+$} $search]} {
         # -- value is ASN
         debug 2 "arm:cmd:scan: value: $search is type: ASN"
         set vtype "asn"
@@ -5170,7 +5162,7 @@ proc arm:cmd:scan {0 1 2 3 {4 ""}  {5 ""}} {
 
     set hits 0; set mcount 0; set match 0;
     foreach ltype "white black" {
-        debug 0 "\002arm:scan:\002 looping: ltype: $ltype"
+        debug 0 "\002arm:scan:\002 looping: ltype: $ltype -- chan: $chan"
         # arm::scan:match chan ltype id method value ipscan nick ident host ip xuser rname ?country? ?asn? ?cache? ?hits? ?text?
 
         set ids [dict keys [dict filter $entries script {id dictData} {
@@ -5179,16 +5171,19 @@ proc arm:cmd:scan {0 1 2 3 {4 ""}  {5 ""}} {
         }]]
 
         set cache "";
+        putlog "arm:scan: ids: $ids"
         foreach id $ids {
             set tchan [dict get $entries $id chan]
             set method [string tolower [dict get $entries $id method]]
             set value [dict get $entries $id value]
 
-            #debug 0 "\002arm:scan:\002 looping: id: $id -- tchan: $tchan -- method: $method -- value: $value (ltype: $ltype)"
+            debug 4 "\002arm:scan:\002 looping: id: $id -- tchan: $tchan -- method: $method -- value: $value (ltype: $ltype)"
 
             # -- check match, recursively
             lassign [scan:match $tchan $ltype $id $method $value $ipscan $tnick $tident $thost $tip $txuser $trname $country $asn $cache $hits] \
                 match hit todo what cache hits country asn
+
+            putlog "id: $id -- what: $what -- match: $match -- hit: $hit -- cache: $cache -- hits: $hits"
             
             if {$match} {
                 # -- there was a match!
@@ -5371,9 +5366,8 @@ proc arm:cmd:search {0 1 2 3 {4 ""} {5 ""}} {
 # -- command: load
 proc arm:cmd:reload {0 1 2 3 {4 ""} {5 ""}} { arm:cmd:load $0 $1 $2 $3 $4 $5 }
 proc arm:cmd:load {0 1 2 3 {4 ""}  {5 ""}} {
-    variable cfg
-    variable user:nick;  # -- the current nickname of a user (by user)
-    variable user:id;    # -- the id of a user (by user)
+    variable entries; # -- dict to store blacklist and whitelist entries
+    variable dbusers; # -- dict to store user db entries
     lassign [proc:setvars $0 $1 $2 $3 $4 $5]  type stype target starget nick uh hand source chan arg 
     
     set cmd "load"
@@ -5391,11 +5385,15 @@ proc arm:cmd:load {0 1 2 3 {4 ""}  {5 ""}} {
     # -- loading user db from file
     userdb:db:load
     
-    set wcount [llength [array names list:id "white,*"]]
-    set bcount [llength [array names list:id "black,*"]]
-    set ucount [llength [array names user:id]]
+    set wcount 0; set bcount 0;
+    set ids [dict keys $entries]
+    foreach id $ids {
+        set ltype [dict get $entries $id type]
+        if {$ltype eq "white"} { incr wcount } elseif {$ltype eq "black"} { incr bcount }
+    }
+    set ucount [llength [dict keys $dbusers]]
     
-    reply $type $target "loaded $wcount whitelist, $bcount blacklist, and $ucount user entries to memory"
+    reply $type $target "loaded \002$wcount\002 whitelist, \002$bcount\002 blacklist, and \002$ucount\002 user entries to memory"
     
     # -- create log entry for command use
     log:cmdlog BOT * 1 $user $uid [string toupper $cmd] [join $arg] $source "" "" ""
@@ -5405,8 +5403,6 @@ proc arm:cmd:load {0 1 2 3 {4 ""}  {5 ""}} {
 # -- save db's & rehash eggdrop
 proc arm:cmd:rehash {0 1 2 3 {4 ""}  {5 ""}} {
     variable cfg;
-    variable user:nick;  # -- the current nickname of a user (by user)
-    variable user:id;    # -- the id of a user (by user)
     lassign [proc:setvars $0 $1 $2 $3 $4 $5]  type stype target starget nick uh hand source chan arg 
 
     set cmd "rehash"
@@ -5431,8 +5427,6 @@ proc arm:cmd:rehash {0 1 2 3 {4 ""}  {5 ""}} {
 # -- save db's & restart eggdrop
 proc arm:cmd:restart {0 1 2 3 {4 ""}  {5 ""}} {
     variable cfg;
-    variable user:nick;  # -- the current nickname of a user (by user)
-    variable user:id;    # -- the id of a user (by user)
     lassign [proc:setvars $0 $1 $2 $3 $4 $5]  type stype target starget nick uh hand source chan arg 
 
     set cmd "restart"
@@ -5460,8 +5454,6 @@ proc arm:cmd:restart {0 1 2 3 {4 ""}  {5 ""}} {
 # -- save db's & kills bot
 proc arm:cmd:die {0 1 2 3 {4 ""}  {5 ""}} {
     variable cfg;
-    variable user:nick;  # -- the current nickname of a user (by user)
-    variable user:id;    # -- the id of a user (by user)
     lassign [proc:setvars $0 $1 $2 $3 $4 $5]  type stype target starget nick uh hand source chan arg 
 
     set cmd "die"
@@ -5489,8 +5481,6 @@ proc arm:cmd:die {0 1 2 3 {4 ""}  {5 ""}} {
 # -- command bot to speak
 proc arm:cmd:say {0 1 2 3 {4 ""}  {5 ""}} {
     variable cfg;
-    variable user:nick;  # -- the current nickname of a user (by user)
-    variable user:id;    # -- the id of a user (by user)
     lassign [proc:setvars $0 $1 $2 $3 $4 $5]  type stype target starget nick uh hand source chan arg 
 
     set cmd "say"
@@ -5579,8 +5569,6 @@ proc arm:cmd:jump {0 1 2 3 {4 ""}  {5 ""}} {
 # -- command: version
 proc arm:cmd:version {0 1 2 3 {4 ""}  {5 ""}} {
     variable cfg
-    variable user:nick;  # -- the current nickname of a user (by user)
-    variable user:id;    # -- the id of a user (by user)
     lassign [proc:setvars $0 $1 $2 $3 $4 $5]  type stype target starget nick uh hand source chan arg 
     
     set cmd "version"
@@ -5625,8 +5613,6 @@ proc arm:cmd:version {0 1 2 3 {4 ""}  {5 ""}} {
 # -- command: idle
 proc arm:cmd:idle {0 1 2 3 {4 ""}  {5 ""}} {
     variable cfg
-    variable user:nick;  # -- the current nickname of a user (by user)
-    variable user:id;    # -- the id of a user (by user)
     lassign [proc:setvars $0 $1 $2 $3 $4 $5]  type stype target starget nick uh hand source chan arg 
     
     set cmd "idle"
@@ -5680,7 +5666,7 @@ proc arm:cmd:stats {0 1 2 3 {4 ""}  {5 ""}} {
 
 
     if {![userdb:isAllowed $nick $cmd $where $type]} { return; }; # -- check access for command in provided chan
-    if {$where ne "*" && [userdb:isValidchan $where] eq 0} { reply $type $target "\002error\002: channel $where is not registered."; return; }
+    #if {$where ne "*" && [userdb:isValidchan $where] eq 0} { reply $type $target "\002error\002: channel $where is not registered."; return; }
     lassign [db:get id,user users curnick $nick] uid user
 
     # -- provide syntax only if chan is malformed
@@ -7109,7 +7095,7 @@ proc arm:cmd:note {0 1 2 3 {4 ""}  {5 ""}} {
         db:connect
         set query "DELETE FROM notes WHERE to_u='$user'"
         if {[string is digit $id]} {
-            set db_id [lindex [db:query "SELECT id FROM notes to_u='$user' AND WHERE id='$id'"] 0]
+            set db_id [lindex [db:query "SELECT id FROM notes WHERE to_u='$user' AND id='$id'"] 0]
             if {$db_id eq ""} { reply $type $target "no such note exists." ; return; }
             append query " AND id=$id"
         } elseif {$id eq "*"} {
@@ -7155,22 +7141,27 @@ proc arm:cmd:queue {0 1 2 3 {4 ""}  {5 ""}} {
     if {$chan eq "*"} { set chanlist [channels] } else { set chanlist $chan }    
     
     # -- all chans
-    set hcount 0; set ncount 0;
+    set hcount 0; set ncount 0; set count 0
     foreach tchan $chanlist {
         set ltchan [string tolower $tchan]
         set cid [db:get id channels chan $tchan]
         if {$cid eq ""} { continue; }
         if {![userdb:isAllowed $nick $cmd $tchan $type]} { continue; }
         if {[get:val chan:mode $tchan] != "secure"} { continue; }; # -- only return for secure mode chans
+        incr count
         if {[info exists scan:list(leave,$ltchan)]} { set hcount [llength [get:val scan:list leave,$ltchan]] }
         if {[info exists scan:list(nicks,$ltchan)]} { set ncount [llength [get:val scan:list nicks,$ltchan]] }
         if {$hcount eq 0} { set hidden "hidden users" } else { set hidden "hidden users ([get:val scan:list leave,$ltchan])." }
         if {$ncount eq 0} { set leave "users being scanned" } else { set leave "users being scanned ([get:val scan:list nicks,$ltchan])." }
         reply $type $target "\002\[$tchan\]\002 \002$hcount\002 $hidden. \002$ncount\002 $leave"
     }
-    
-    # -- create log entry
-    log:cmdlog BOT * 1 $user uid [string toupper $cmd] [join $arg] $source "" "" ""
+
+    if {$count eq 0} {
+        reply $type $target "no channels in \002secure\002 mode found."
+    } else {
+        # -- create log entry
+        log:cmdlog BOT * 1 $user uid [string toupper $cmd] [join $arg] $source "" "" ""
+    }
 }
 
 debug 0 "\[@\] Armour: loaded user commands"
@@ -11294,7 +11285,7 @@ proc userdb:cmd:remchan {0 1 2 3 {4 ""}  {5 ""}} {
 
     # -- command: remchan
     if {$rchan eq ""} {
-        reply $stype $starget "\002usage:\002 remchan <chan> -force";
+        reply $stype $starget "\002usage:\002 remchan <chan>";
         return;
     }
 
@@ -11332,7 +11323,7 @@ proc userdb:cmd:remchan {0 1 2 3 {4 ""}  {5 ""}} {
     }
 
     # -- delete usernames when they are no longer added to any channels? 
-    # -- risky as it could delete users who  have not yet been added to other chans
+    # -- risky as it could delete users who have not yet been added to other chans
     set rows [db:query "SELECT id FROM users"]
     db:close
     set count 0;
@@ -11553,13 +11544,9 @@ proc userdb:cmd:access {0 1 2 3 {4 ""}  {5 ""}} {
 # self register new user account
 proc userdb:cmd:register {0 1 2 3 {4 ""}  {5 ""}} {
     global botnick botnet-nick uservar
-    variable cfg
+    variable dbusers;         # -- dict to store users
     variable selfregister;    # -- the data for a username self-registration:
                               #            coro,$nick:    the coroutine for a nickname
-    variable user:id;         # -- the id of a user (by user)
-    variable user:user;       # -- the username of a user (by id)
-    variable user:xuser;      # -- the xuser of a user (by id)
-    variable user:languages;  # -- the languages for a user (by id)
     
     lassign [proc:setvars $0 $1 $2 $3 $4 $5] type stype target starget nick uh hand source chan arg 
     
@@ -11571,11 +11558,9 @@ proc userdb:cmd:register {0 1 2 3 {4 ""}  {5 ""}} {
     # -- only continue if enabled and user is in optionally configured chanlist
     set cont 0
     foreach tchan [channels] {
-        putlog "\002userdb:cmd:register:\002 tchan: $chan"
         if {[cfg:get register:inchan $chan] eq ""} { set cont 1; break; }; # -- check if allowed from any chan
         if {[onchan $nick $tchan] && [string tolower $tchan] in [string tolower [cfg:get register:inchan $chan]]} { set cont 1; break; }
     }
-    putlog "\002userdb:cmd:register:\002 cont: $cont"
     if {!$cont} { return; }
     
     # -- ensure user has required access for command
@@ -11584,16 +11569,9 @@ proc userdb:cmd:register {0 1 2 3 {4 ""}  {5 ""}} {
     # -- end default proc template
     
     set tuser [lindex $arg 0]    
-    # -- do some ircd dependant handling
-    if {[cfg:get ircd *] eq 1} {
-        # -- ircu (Undernet/Quakenet)
-        if {$tuser eq ""} {
-            reply $stype $starget "\002usage:\002 register <user>";
-            return;
-        }
-    } else {
-        # -- IRCnet/EFnet -- or some other
-        reply $stype $starget "\002(\002error\002)\002 self register only available for supported ircds";
+    if {$tuser eq ""} {
+        reply $stype $starget "\002usage:\002 register <user>";
+        return;
     }
     
     if {$user ne ""} {
@@ -11666,6 +11644,10 @@ proc userdb:cmd:register {0 1 2 3 {4 ""}  {5 ""}} {
     db:query "INSERT INTO users (user,xuser,pass,register_ts,register_by) VALUES ('$db_user', '$db_xuser', '$encpass','$reg_ts','$reg_by')"
     set userid [db:last:rowid]
 
+    # -- store in dbusers dict
+    dict set dbusers $userid [list user $tuser account $xuser pass $encpass register_ts $reg_ts register_by $reg_by \
+        email "" languages "" curnick "" curhost "" lastnick "" lasthost "" lastseen ""]
+
     if {$newlevel eq 0 || $newlevel eq ""} {
         set newlevel "none"
     } else {
@@ -11675,19 +11657,14 @@ proc userdb:cmd:register {0 1 2 3 {4 ""}  {5 ""}} {
         db:query "INSERT INTO levels (cid,uid,level,added_ts,added_bywho,modif_ts,modif_bywho) \
             VALUES (1,$userid,$newlevel,$added_ts,'$added_bywho',$added_ts,'$added_bywho')"
     }
-        
-    set user:id($tuser) $userid
-    set user:user($userid) $tuser
-    set user:xuser($userid) $xuser
-    set user:languages($userid) "EN"
-    
+            
     debug 0 "userdb:cmd:register: user self-registration by nick: $nick (user: $tuser -- id: $userid -- account: $xuser -- globlevel: $newlevel)"
     
     if {$xuser ne ""} {
         reply $type $target "registered user $tuser (\002uid:\002 $userid \002account:\002 $xuser)"
     } else {
         reply $type $target "registered user $tuser. check /notice for temporary password \002(\002uid:\002 $userid\002)\002"
-        reply notc $target "temporary password is '$newpass'. to change, do /msg $botnick newpass <newpassword>"
+        reply notc $target "temporary password is '$newpass' -- to change, do /msg $botnick newpass <newpassword>"
     }
 
     # -- send a note to managers?
@@ -11727,12 +11704,7 @@ proc userdb:cmd:register {0 1 2 3 {4 ""}  {5 ""}} {
 # create new user account
 proc userdb:cmd:newuser {0 1 2 3 {4 ""}  {5 ""}} {
     global botnick botnet-nick uservar
-    variable cfg
-    variable user:id;         # -- the id of a user (by user)
-    variable user:user;       # -- the username of a user (by id)
-    variable user:xuser;      # -- the xuser of a user (by id)
-    variable user:languages;  # -- the languages for a user (by id)
-    variable user:password;   # -- the password for a user (by id)
+    variable dbusers; # -- dict to store users
     
     lassign [proc:setvars $0 $1 $2 $3 $4 $5] type stype target starget nick uh hand source chan arg 
     
@@ -11809,7 +11781,7 @@ proc userdb:cmd:newuser {0 1 2 3 {4 ""}  {5 ""}} {
     # -- check it xuser is already assigned to a user
     set xuser [userdb:user:get xuser xuser $trgxuser]
     if {$xuser ne ""} {
-        reply $type $target "error: xuser $xuser is already associated to a username ([userdb:user:get user xuser $xuser]).";
+        reply $type $target "\002error:\002 network account \002$xuser\002 is already associated with user: \002[userdb:user:get user xuser $xuser]\002";
         return;
     }
 
@@ -11822,6 +11794,9 @@ proc userdb:cmd:newuser {0 1 2 3 {4 ""}  {5 ""}} {
     db:query "INSERT INTO users (user,xuser,pass,register_ts,register_by) VALUES ('$db_user', '$db_xuser', '$encpass','$reg_ts','$reg_by')"
     set userid [db:last:rowid]
 
+    # -- store in dbusers dict
+    dict set dbusers $userid [list user $trguser account $trgxuser pass $encpass register_ts $reg_ts register_by $reg_by \
+        email "" languages "" curnick "" curhost "" lastnick "" lasthost "" lastseen ""]
     if {$globlvl eq 0} {
         set globlvl "none"
     } else {
@@ -11830,13 +11805,7 @@ proc userdb:cmd:newuser {0 1 2 3 {4 ""}  {5 ""}} {
         db:query "INSERT INTO levels (cid,uid,level,added_ts,added_bywho,modif_ts,modif_bywho) \
             VALUES (1,$userid,$globlvl,$added_ts,$uid,$added_ts,$uid)"
     }
-        
-    set user:id($trguser) $userid
-    set user:user($userid) $trguser
-    set user:xuser($userid) $trgxuser
-    set user:languages($userid) "EN"
-    set user:password($userid) $encpass
-    
+            
     debug 1 "userdb:cmd:newuser: created user: $trguser (id: $userid -- xuser: $trgxuser -- level: $globlvl)"
     
     if {$trgxuser ne ""} {
@@ -11859,7 +11828,7 @@ proc userdb:cmd:newuser {0 1 2 3 {4 ""}  {5 ""}} {
 # deletes a user account
 proc userdb:cmd:deluser {0 1 2 3 {4 ""}  {5 ""}} {
     global botnick botnet-nick uservar
-    variable cfg
+    variable dbusers; # -- dict to store users
     
     lassign [proc:setvars $0 $1 $2 $3 $4 $5] type stype target starget nick uh hand source chan arg 
     
@@ -12029,7 +11998,7 @@ proc userdb:msg:login {nick uhost hand arg} {
 # modifies existing user account
 proc userdb:cmd:moduser {0 1 2 3 {4 ""}  {5 ""}} {
     global botnick
-    variable cfg
+    variable dbusers; # -- dict to store users
     variable code2lang
     lassign [proc:setvars $0 $1 $2 $3 $4 $5] type stype target starget nick uh hand source chan arg 
     
@@ -12069,9 +12038,7 @@ proc userdb:cmd:moduser {0 1 2 3 {4 ""}  {5 ""}} {
         reply $stype $target "\002usage:\002 moduser ?<chan|*>? <user> <level|automode|account|pass$xtra> <value>"
         return;
     }
-    
-    if {![userdb:isValidchan $chan]} { reply $type $target "\002(\002error\002)\002 $chan is not registered."; return; }
-    
+
     lassign [db:get id,chan channels chan $chan] cid chan;   # -- channel id (must come from db due to *)
     lassign [db:get id,user,curnick users user $tuser] tuid tuser tcurnick;  # -- get target user id and correct case username
     if {$tuid eq ""} { reply $type $target "\002(\002error\002)\002 who is $tuser?"; return; }
@@ -12121,6 +12088,7 @@ proc userdb:cmd:moduser {0 1 2 3 {4 ""}  {5 ""}} {
         db:connect
         db:query "UPDATE users SET xuser='$db_tvalue' WHERE lower(user)='[string tolower $tuser]'"
         db:close
+        dict set dbusers $tuid account $tvalue
     }
         
     if {$ttype eq "level"} {
@@ -12233,6 +12201,7 @@ proc userdb:cmd:moduser {0 1 2 3 {4 ""}  {5 ""}} {
         set xtra2 "password is $newpass"
         set encpass [userdb:encrypt $newpass]; # -- hashed random password
         userdb:user:set pass $encpass id $tuid
+        dict set dbusers $tuid pass $encpass
         reply $type $target "done. $xtra"
         if {$tcurnick ne ""} {
             reply notc $tcurnick "\002password changed\002 by $nick ($user). to login: \002/msg $botnick login $tuser $newpass\002"
@@ -12616,38 +12585,34 @@ proc userdb:get:level {user {chan ""}} {
 }
 
 # -- get the most logical channel for a user, when chan not given
+# -- returns the channel with the highest level, else the config default chan, else the channel given
 proc userdb:get:chan {user chan} {
-    variable chan:mode; # -- state: the operational mode of a registered channel (by chan)
-    if {[info exists chan:mode([string tolower $chan])]} { return $chan; }; # -- use the chan spoken in, if registered
-    set uid [get:val user:id $user]
-    if {$uid eq ""} { return [cfg:get chan:def *] }; # -- return default chan
-    set user [get:val user:user $uid]
+    variable dbchans;   # -- dict to store channels
+    variable dbusers;   # -- dict to store users
+
+    set cid [dict keys [dict filter $dbchans script {id dictData} { expr {[dict get $dictData chan] eq $chan} }]]
+    if {$cid ne ""} { return $chan }; # -- use the chan given, if registered
+
+    set uid [dict keys [dict filter $dbusers script {id dictData} { expr {[dict get $dictData user] eq $user} }]]
+    if {$uid eq ""} { return [cfg:get chan:def *] }; # -- return default chan, if user not authed
+    
+
+    # -- user is authed and channel not registered
+    debug 0 "userdb:get:chan: user $user is authed, but channel $chan is not registered"
     set rows [db:get cid,level levels uid $uid]; # -- GET cid,level FROM levels WHERE uid=<uid>
     set level 0; set chan "";
     foreach row $rows {
         lassign $row cid lvl
-        if {$lvl > $level} { set level $lvl; set chan [get:val chan:chan:id $cid] }
+        if {$lvl > $level} { set level $lvl; set chan [dict get $dbchans $cid]; }
     }
-    if {$chan eq "" || $chan eq "*"} { return [cfg:get chan:def *] } else { return $chan }
+    if {$chan eq "" || $chan eq "*"} { 
+        # -- return default channel
+        return [cfg:get chan:def *] 
+    } else { 
+        return $chan 
+    }
 }
 
-# -- get a channel name (by channel name or id)
-# -- TODO: do we need this?
-proc userdb:userchan {chan} {
-    variable chan:chan; # -- holds registered channel name (by id)
-    # -- global chan
-    if {$chan eq "*"} { return "*" }
-    if {regexp -- {^\d+|\*$} $chan} {
-        # -- chan id or '*' was given
-        set id $chan
-        if {[info exists chan:chan($id)]} {
-            return [get:val chan:chan $id]
-        } else { return ""; }
-    } else {
-        # -- grab from memory, allowing for wrong case
-        return [array names chan:chan -regexp "(?i)^$chan$"]
-    }
-}
 
 # -- check if nick is logged in?
 proc userdb:isLogin {nick} {
@@ -12737,28 +12702,27 @@ proc userdb:join {nick uhost hand chan} {
 
 # -- common login code
 proc userdb:login {nick uhost user {manual "0"} {chan ""}} {
-    variable cfg
-    variable user:nick;       # -- the current nickname of a user (by user)
-    variable user:user:nick;  # -- the username of a user (by nick)
-    variable user:curnick;    # -- the current nickname of a user (by id)
-    variable user:curhost;    # -- the current user@host of a user (by id)
+    variable dbusers; # -- dict to store users in memory
 
-    lassign [db:get id,curnick users user $user] uid curnick
+    lassign [db:get id,curnick,curhost users user $user] uid curnick curhost
     
     if {$curnick eq $nick && $manual} { reply msg $nick "uhh, you're already logged in. \002try: logout\002"; return; }
     
-    set user:nick($user) $nick
-    set user:user:nick($nick) $user
-    set user:curnick($uid) $nick
-    set user:curhost($uid) $uhost
-
     set luser [string tolower $user]
-    lassign [db:get curnick,curhost users user $luser] curnick curhost
+    set lastseen [unixtime]
 
     db:connect
     set res [db:query "UPDATE users SET curnick='[db:escape $nick]', curhost='$uhost', \
-        lastnick='[db:escape $curnick]', lasthost='[db:escape $curhost]', lastseen='[unixtime]' WHERE lower(user)='$luser'"]
+        lastnick='[db:escape $curnick]', lasthost='[db:escape $curhost]', lastseen='$lastseen' WHERE lower(user)='$luser'"]
     db:close
+
+    # -- update dbusers in memory
+    dict set dbusers $uid curnick $nick;
+    dict set dbusers $uid curhost $uhost;
+    dict set dbusers $uid lastnick $curnick;
+    dict set dbusers $uid lasthost $curhost;
+    dict set dbusers $uid lastseen $lastseen;
+
         
     if {!$manual} { set ltype "autologin" } else { set ltype "login" }; # -- login type
     lassign [db:get id,pass users user $user] uid dbpass
@@ -12850,33 +12814,27 @@ proc userdb:greet {chan nick user uid} {
 
 # -- common logout code
 proc userdb:logout {nick {uhost ""}} {
-    variable user:nick;       # -- the current nickname of a user (by user)
-    variable user:user:nick;  # -- the username of a user (by nick)
-    variable user:curnick;    # -- the current nickname of a user (by id)
-    variable user:curhost;    # -- the current user@host of a user (by id)
-    variable user:lastnick;   # -- the last used nickname of a user (by id)
-    variable user:lasthost;   # -- the last used user@host of a user (by id)
-    
+    variable dbusers; # -- dict to store users in memory
     db:connect
     set lnick [string tolower $nick]
     set row [lindex [db:query "SELECT id,user,curnick,curhost FROM users WHERE lower(curnick)='[db:escape $lnick]'"] 0]
     lassign $row uid user curnick curhost
     if {$user ne ""} {
         # -- log them out
+        set lastseen [clock seconds]
         set db_curnick [db:escape $curnick]
         # -- update db
-        set res [db:query "UPDATE users SET lastnick='$db_curnick', lasthost='$curhost', curnick=null, curhost=null \
+        set res [db:query "UPDATE users SET lastnick='$db_curnick', lasthost='$curhost', lastseen='$lastseen', curnick=null, curhost=null \
             WHERE lower(user)='[string tolower $user]'"]
+        
+        # -- update dict
+        dict set dbusers $uid curnick ""
+        dict set dbusers $uid curhost ""
+        dict set dbusers $uid lastnick $curnick
+        dict set dbusers $uid lasthost $curhost
+        dict set dbusers $uid lastseen $lastseen
     }
-    db:close
-    
-    if { [info exists user:nick($user)]       }   { unset user:nick($user)       }
-    if { [info exists user:user:nick($nick)]  }   { unset user:user:nick($nick)  }
-    if { [info exists user:curnick($uid)]     }   { unset user:curnick($uid)     }
-    if { [info exists user:curhost($uid)]     }   { unset user:curhost($uid)     }
-    if { [info exists user:lastnick($uid)]    }   { unset user:lastnick($uid)    } 
-    if { [info exists user:lasthost($uid)]    }   { unset user:lasthost($uid)    }  
-    
+    db:close    
 }
 
 # -- nickname signoff
@@ -12906,7 +12864,7 @@ proc userdb:kick {nick uhost handle chan vict reason} {
 proc userdb:unset:vars {type nick uhost chan} {
     global botnick
     
-    if {$nick eq $botnick || [oncommon $nick $chan]} {
+    if {$nick eq $botnick} {
         # -- still on some channels common with me, leave data
         return;
     }
@@ -12941,7 +12899,7 @@ proc userdb:unset:vars {type nick uhost chan} {
                               #           chanlist_ts
 
     set nick [split $nick];
-    dict unset nickdata [string tolower $nick];  # -- remove dict for nick data
+    if {![oncommon $nick $chan]} { dict unset nickdata [string tolower $nick] };  # -- remove dict for nick data
     
     set host [lindex [split $uhost @] 1]
     set lchan [string tolower $chan]
@@ -12965,6 +12923,7 @@ proc userdb:unset:vars {type nick uhost chan} {
     #      leave,* - nicks of those already scanned and being left 
     foreach entry [array names scan:list] {
         lassign [split $entry ,] ttype tchan
+        if {$tchan ne $chan} { continue; }
         set ltchan [string tolower $tchan]
         if {$ttype in "nicks leave"} {
             set pos [lsearch -exact [get:val scan:list $ttype,$ltchan] $nick]
@@ -13001,7 +12960,7 @@ proc userdb:unset:vars {type nick uhost chan} {
     }
         
     # -- textflud -- counts of lines matching blacklist text entries, for a nick
-    if {[info exists flood:text]} {
+    if {[info exists flood:text] && ![oncommon $nick $chan]} {
         foreach i [array names flood:text] {
             set tnick [lindex [split $i ,] 0]
             set tvalue [lindex [split $i ,] 1]
@@ -13030,7 +12989,7 @@ proc userdb:unset:vars {type nick uhost chan} {
     
     # -- stores the host address of a nickname
     # -- needed outside of eggdrop due to chanmode +D
-    if {[info exists data:nickhost($nick)]} {
+    if {[info exists data:nickhost($nick)] && ![oncommon $nick $chan]} {
         set host [get:val data:nickhost $nick]
         if {[info exists data:hostnicks($host)]} {
             # -- stores the nicknames on a host
@@ -13051,7 +13010,7 @@ proc userdb:unset:vars {type nick uhost chan} {
         unset data:captcha($nick,$chan)
     }
     
-    if {[userdb:isLogin $nick]} {
+    if {[userdb:isLogin $nick] && ![oncommon $nick $chan]} {
         # -- user is authenticated
         debug 0 "userdb:unset:vars: $nick no longer on a common channel, begin autologout"
         set user [userdb:user:get user nick $nick]
@@ -13062,9 +13021,6 @@ proc userdb:unset:vars {type nick uhost chan} {
 
 # -- nickname change
 proc userdb:nick {nick uhost hand chan newnick} {
-    variable user:nick;       # -- the current nickname of a user (by user)
-    variable user:user:nick;  # -- the username of a user (by nick)
-    variable user:curnick;    # -- the current nickname of a user (by id)
     
     variable flood:text;      # -- array to track the lines for a text pattern (by nick,pattern)    
     variable data:ipnicks;    # -- stores a list of nicks on a given IP (by IP,chan)
@@ -13093,11 +13049,6 @@ proc userdb:nick {nick uhost hand chan newnick} {
                               #           chanlist_ts    
     
     lassign [db:get id,user users curnick $nick] nid user
-    if {[info exists user:nick($user)]}   { set user:nick($user) $newnick }    
-    if {[info exists user:user:nick]}     { unset user:user:nick }
-    set user:user:nick($newnick) $user
-    if {[info exists user:curnick($nid)]} { unset user:curnick($nid) }
-    set user:curnick($nid) $newnick
         
     set host [lindex [split $uhost @] 1]
     set lchan [string tolower $chan]
@@ -13328,8 +13279,16 @@ proc userdb:raw:account {server cmd arg} {
 
 # -- check if command is allowed for nick
 proc userdb:isAllowed {nick cmd chan type} {
-    variable cfg;
     variable userdb;
+
+    # -- check channels we don't allow commands
+    set list [split [cfg:get chan:nocmd *] ,]
+    foreach channel $list {
+        if {[string tolower $channel] eq [string tolower $chan]} {
+            debug 0 "userdb:isAllowed: $chan does not allow use of bot commands (chan:nocmd) -- chan: $chan -- $nick: $nick -- cmd: $cmd"
+            return 0;
+        }
+    }
     
     # -- get username
     lassign [db:get id,user users curnick $nick] uid user
@@ -13432,77 +13391,37 @@ proc userdb:kill:timers {} {
     debug 0 "\002userdb:kill:timers:\002 killed $count timers and $ucount utimers"
 }
 
-# -- load the blacklist & white entries into memory
+# -- users into memory
 proc userdb:db:load {} {
-    variable user:nick;       # -- the current nickname of a user (by user)
-    variable user:id;         # -- the id of a user (by user)
-    variable user:user;       # -- the username of a user (by id)
-    variable user:user:nick;  # -- the username of a user (by nick)
-    variable user:xuser;      # -- the xuser of a user (by id)
-    variable user:email;      # -- the email address of a user (by id)
-    variable user:curnick;    # -- the current nickname of a user (by id)
-    variable user:curhost;    # -- the current user@host of a user (by id)
-    variable user:lastnick;   # -- the last used nickname of a user (by id)
-    variable user:lasthost;   # -- the last used user@host of a user (by id)
-    variable user:languages;  # -- the languages for a user (by id)
-    variable user:password;   # -- the password for a user (by id)
-        
-    debug 2 "\002userdb:db:load:\002 started"
-
-    # -- flush existing from memory
-    if { [info exists user:nick]       }   { unset user:nick       }
-    if { [info exists user:id]         }   { unset user:id         }
-    if { [info exists user:user]       }   { unset user:user       }
-    if { [info exists user:user:nick]  }   { unset user:user:nick  }
-    if { [info exists user:xuser]      }   { unset user:xuser      }
-    if { [info exists user:email]      }   { unset user:email      }
-    if { [info exists user:curnick]    }   { unset user:curnick    }
-    if { [info exists user:curhost]    }   { unset user:curhost    }
-    if { [info exists user:lastnick]   }   { unset user:lastnick   }    
-    if { [info exists user:lasthost]   }   { unset user:lasthost   }  
-    if { [info exists user:languages]  }   { unset user:languages  }
-    if { [info exists user:password]   }   { unset user:password   }
-    
+    if {[info exists dbusers]} { unset dbusers }
+    variable dbusers; # -- dict to store users
+    debug 4 "\002userdb:db:load:\002 started"
     # -- sqlite3 database
     db:connect          
     set results [db:query "SELECT id, user, xuser, email, curnick, curhost, lastnick, \
-        lasthost languages, pass FROM users"]
+        lasthost, languages, pass FROM users"]
     db:close
     set ucount 0;
     foreach row $results {
         incr ucount
         lassign $row id user xuser email curnick curhost lastnick lasthost languages pass
-        set user:nick($user) $curnick
-        set user:id($user) $id
-        set user:user($id) $user
-        set user:user:nick($curnick) $user
-        set user:xuser($id) $xuser
-        set user:email($id) $email
-        set user:curnick($id) $curnick
-        set user:curhost($id) $curhost
-        set user:lastnick($id) $lastnick
-        set user:lasthost($id) $lasthost
-        set user:languages($id) $languages
+        dict set dbusers $id user $user
+        dict set dbusers $id account $xuser
+        dict set dbusers $id email $email
+        dict set dbusers $id curnick $curnick
+        dict set dbusers $id curhost $curhost
+        dict set dbusers $id lastnick $lastnick
+        dict set dbusers $id lasthost $lasthost
+        dict set dbusers $id languages $languages
+        dict set dbusers $id pass $pass
         debug 4 "\002userdb:db:load:\002 id: $id -- user: $user -- xuser: $xuser"
     }
     debug 0 "\002userdb:db:load:\002 loaded $ucount users into memory"
 }
 
 # -- common code to delete a user
-proc userdb:deluser {user uid} {
-    variable user:nick;       # -- the current nickname of a user (by user)
-    variable user:id;         # -- the id of a user (by user)
-    variable user:user;       # -- the username of a user (by id)
-    variable user:user:nick;  # -- the username of a user (by nick)
-    variable user:xuser;      # -- the xuser of a user (by id)
-    variable user:email;      # -- the email address of a user (by id)
-    variable user:curnick;    # -- the current nickname of a user (by id)
-    variable user:curhost;    # -- the current user@host of a user (by id)
-    variable user:lastnick;   # -- the last used nickname of a user (by id)
-    variable user:lasthost;   # -- the last used user@host of a user (by id)
-    variable user:languages;  # -- the languages for a user (by id)
-    variable user:password;   # -- the password for a user (by id)
-    
+proc userdb:deluser {user uid} {   
+    variable dbusers; # -- dict to store users 
     # -- ok to delete the user
     db:connect
     set db_user [db:escape $user]
@@ -13523,18 +13442,8 @@ proc userdb:deluser {user uid} {
     }    
     db:close
 
-    set curnick [get:val user:nick $user]
-    if {[info exists user:nick($user)]}     { unset user:nick($user) }
-    if {[info exists user:id($user)]}       { unset user:id($user) }
-    if {[info exists user:user($uid)]}      { unset user:user($uid) }
-    if {[info exists user:xuser($uid)]}     { unset user:xuser($uid) }
-    if {[info exists user:email($uid)]}     { unset user:email($uid) }
-    if {[info exists user:curnick($uid)]}   { unset user:curnick($uid) }
-    if {[info exists user:curhost($uid)]}   { unset user:curhost($uid) }
-    if {[info exists user:lastnick($uid)]}  { unset user:lastnick($uid) }
-    if {[info exists user:lasthost($uid)]}  { unset user:lasthost($uid) }
-    if {[info exists user:languages($uid)]} { unset user:languages($uid) }
-    if {$curnick ne "" && [info exists user:user:nick($curnick)]} { unset user:user:nick($curnick) }
+    # -- remove user from memory 
+    dict unset dbusers $uid
     
     # -- deal with training plugin
     if {[info commands arm::train:deluser] ne ""} {
@@ -13649,20 +13558,11 @@ proc userdb:isInteger {arg} {
 
 # -- check if channel is valid?
 proc userdb:isValidchan {chan} {
-    variable cfg
-    
-    return 1; # -- TODO; remove use of this proc?
-    
-    set id [db:get id channels chan $chan]; # -- check against registered channels
-    if {$id eq ""} { set res 0; } else { set res 1 }
-    
-    # -- check channels we don't allow commands
-    set list [split [cfg:get chan:nocmd *] ,]
-    foreach channel $list {
-        if {[string tolower $channel] eq [string tolower $chan]} {
-            set res 0
-        }
-    }
+    set lchan [string tolower $chan]
+
+    set cid [dict keys [dict filter $dbchans script {id dictData} { expr {[string tolower [dict get $dictData chan]] eq $lchan} }]]
+    if {$cid eq ""} { return $res 0 } else { set res 1; }
+        
     return $res
 }
 

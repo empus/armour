@@ -352,7 +352,9 @@ proc trakka:cmd:nudge {0 1 2 3 {4 ""} {5 ""}} {
     set reason [cfg:get trakka:nudge:reason $chan]
     set duration [cfg:get trakka:nudge:time $chan]
     # -- use the nick as 0 to force the ident as hostmask
-    kickban 0 $mask 0 $chan $duration $reason    
+    kickban 0 $mask 0 $chan $duration $reason
+
+    if {$type ne "pub"} { reply $type $target "done." }
     
     # -- create log entry for command use (if integrated to Armour)
     log:cmdlog BOT $chan $cid $user $uid [string toupper $cmd] [join $arg] $source "" "" ""
