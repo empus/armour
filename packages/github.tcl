@@ -43,7 +43,7 @@ proc ::github::github {cmd owner repo folder token {branch "master"}} {
 
 # Folder download
 proc ::github::download {url folder token branch {debug true}} {
-    ::github::debug 1  "\002::github:download:\002 fetching rolder contents -- \002$url\002 to \002$folder\002"
+    ::github::debug 1  "\002::github:download:\002 fetching folder contents -- \002$url\002 to \002$folder\002"
     if {![file exists $folder]} {
         file mkdir $folder
     }

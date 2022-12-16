@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Fri Dec 16 01:44:42 PST 2022
+# armour.tcl v4.0 autobuild completed on: Fri Dec 16 07:55:25 PST 2022
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -13365,6 +13365,7 @@ proc userdb:init:autologin {} {
     variable cfg
     # -- only continue if autologin chan set
     set chanlogin [cfg:get chan:login *]
+    set chanlogin [join $chanlogin ,]
     if {$chanlogin ne ""} {
         utimer [cfg:get autologin:cycle *] arm::userdb:init:autologin
     }
@@ -15922,6 +15923,9 @@ proc update:download {ghdata} {
 
 # -- install the downloaded script
 proc update:install {update} {
+    variable scan:rbls;  # -- configured RBLs to scan
+    variable scan:ports; # -- configured ports to scan
+
     if {![file isfile ./armour/backup/.lock]} {
         # -- prevent loops
         debug 4 "\002update:install:\002 lock file \002doesn't exist\002, so we can't continue"
@@ -15984,7 +15988,7 @@ proc update:install {update} {
     set newconf "./armour/backup/armour-$start/${confname}.conf"
     set fd [open $newconf w]
 
-    set linecount 0; set unchanged 0; set changed 0; set new 0;
+    set linecount 0; set unchanged 0; set changed 0; set new 0; set newsettings [list]; set startports 1; set startrbls 1; set startfiles 1;
     # -- print the header with version
     debug 4 "\002update:install:\002 prefixing new config file with version info"
     set ver [dict get $ghdata gversion]
@@ -16003,31 +16007,31 @@ proc update:install {update} {
             regsub -all {\]} $line {\\]} line
         }
 
-        if {[regexp {^#} $line] || $line eq "" || $line eq "\r" || [regexp {^\s*$} $line]} {
-            # -- output comments and blank lines 'as is'
-            #debug 0 "\002update:install:\002 repeat line: $line"
+        if {[regexp {^#} $line] || $line eq "" || $line eq "\r" || [regexp {^\}} $line] || [regexp {^source} $line] \
+            || [regexp {^\s*$} $line] || [regexp {^if} $line] || [regexp {^set realname} $line] || [regexp {^namespace eval arm} $line]} {
+            # -- output comments, blank lines, if statements, script loads, and closing braces
             puts $fd $line
             continue
         }
-        if {[regexp {^set\s+cfg\(([^\)s]+)\)\s+"?([^\"]+)"?$} $line -> var val]} {
+        if {[regexp {^set cfg\(([^\)]+)\)\s+"?([^\"]*)"?.*$} $line -> var val]} {
             # -- set new config value
             set curval [cfg:get $var]
             variable cfg
-            if {![info exists cfg($var)]} { incr new }; # -- new config setting
+            if {![info exists cfg($var)]} { incr new; lappend newsettings $var; }; # -- new config setting
             if {$curval eq $val} {
                 # -- value is unchanged
                 incr unchanged
-                debug 1 "\002update:install:\002 unchanged config value: $var = $val"
+                debug 5 "\002update:install:\002 unchanged config value: $var = $val"
                 puts $fd $line
             } else {
                 incr changed
-                debug 0 "\002update:install:\002 using existing config value: $var = $val -> $curval"
+                debug 1 "\002update:install:\002 using existing config value: $var = $curval"
                 regsub -all {\[} $curval {\\[} curval
                 regsub -all {\]} $curval {\\]} curval
                 puts $fd "set cfg($var) \"$curval\""
             }
             continue
-        } elseif {[regexp {^set\s+addcmd\(([^\)s]+)\)\s+(.+)$} $line -> cmd config]} {
+        } elseif {[regexp {^set addcmd\(([^\)]+)\)\s+(.+)$} $line -> cmd config]} {
             # -- command configuration
             if {[regexp {\{\s*([^\s]+)\s+(\d+)\s+([^\}]+)\s*\}(.*)$} $config -> plugin lvl binds rest]} {
                 foreach bind $binds {
@@ -16058,17 +16062,89 @@ proc update:install {update} {
                     puts $fd $line
                 }
             } else {
-                debug 4 "\002update:install:\002 unknown command config: $line"
+                debug 0 "\002update:install:\002 \002WARNING:\002 adding unknown command config: $line"
                 puts $fd $line
+            }
+
+            # -- handle migrating old config mechanism for:
+            #      - scan:ports
+            #      - scan:rbls
+            #      - plugins
+
+        } elseif {[regexp -- {^set addport\(([^\)]+)\)\s+"?([^\"]*)"?.*$} $line -> sport sdesc]} {
+            # -- check for existing config for this port
+            if {$startports} {
+                # -- first port entry
+                if {[array names scan:ports] ne ""} {
+                    # -- existing scan:port config; add all ports but only do this on the first loop
+                    foreach port [array names scan:ports] {
+                        lassign [array get scan:ports $port] port desc
+                        debug 1 "\002update:install:\002 using \002existing\002 portscan config (port: $port -- desc: $desc)"
+                        puts $fd "set addport($port) \"$desc\""
+                        array set scan:ports [list $port $desc]
+                    }
+                } else {
+                    # -- no existing scan:ports config
+                    debug 1 "\002update:install:\002 using \002sample config\002 for port scanner (port: $sport -- desc: $sdesc)"
+                    array set scan:ports [list $sport $sdesc]
+                    puts $fd $line
+                }
+                set startports 0
+            } 
+        } elseif {[regexp -- {^set addrbl\(([^\)]+)\)\s+"?([^\"]*)"?.*$} $line -> srbl svalue]} {
+            # -- check for existing config for this DNSBL
+            if {$startrbls} {
+                # -- first port entry
+                if {[array names scan:rbls] ne ""} {
+                    # -- existing scan:ports config; add all RBLs but only do this on the first loop
+                    foreach rbl [array names scan:rbls] {
+                        lassign [array get scan:rbls $rbl] rbl value
+                        lassign $value desc score auto;
+                        debug 1 "\002update:install:\002 using \002existing\002 DNSBL config (port: $rbl -- desc: $desc)"
+                        puts $fd "set addrbl($srbl) \"[list $desc] $score $auto\""
+                        array set scan:rbls [list $rbl [list $desc] $score $auto]
+                    }
+                } else {
+                    # -- no existing scan:rbls config
+                    lassign $svalue desc score auto;
+                    debug 1 "\002update:install:\002 using \002sample config\002 for DNSBL scanner (port: $srbl -- desc: $sdesc)"
+                    array set scan:rbls [list $srbl [list $sdesc] $score $auto]
+                    puts $fd $line
+                }
+                set startrbls 0
+            } 
+        } elseif {[regexp -- {^set addplugin\(([^\)]+)\)\s+"?([^\"]*)"?.*$} $line -> plugin file]} {
+            # -- handle plugins
+            if {$startplugins} {
+                # -- first plugin entry
+                if {[info exists files] && $files ne ""} {
+                    # -- existing plugins config; add all plugins but only do this on the first loop
+                    foreach plugin [array names plugins] {
+                        lassign [array get plugins $plugin] plugin file
+                        debug 1 "\002update:install:\002 using \002existing\002 plugin config (plugin: $plugin -- file: $file)"
+                        puts $fd "set addplugin($plugin) \"$file\""
+                        array set plugins [list $plugin $file]
+                    }
+                } else {
+                    # -- no existing plugins config
+                    debug 1 "\002update:install:\002 using \002sample config\002 for plugins (plugin: $plugin -- file: $file)"
+                    array set plugins [list $plugin $file]
+                    puts $fd $line
+                }
+                set startplugins 0
             }
 
         } else {
             puts $fd $line
-            debug 4 "\002update:install:\002 WARNING: unknown line in sample config: $line -- not comment or blank line"
+            debug 4 "\002update:install:\002 \002WARNING:\002 adding unknown line from sample config: $line -- not comment or blank line"
         }
     }; # -- end of foreach line
+
     close $fd
-    debug 0 "\002update:install:\002 config file updated with $linecount lines (\002$new\002 \002new\002 config settings, \002$changed\002 values retained, \002$unchanged\002 unchanged)"
+    debug 0 "\002update:install:\002 config file updated with $linecount lines (\002$new\002 \002new\002 config settings, \
+        \002$changed\002 values retained, \002$unchanged\002 unchanged)"
+    if {$new eq 1} { set settext "setting" } else { set settext "settings" }
+    if {$new ne 0} { debug 0 "\002update:install:\002 \002$new\002 new config $settext: [join $newsettings]\002" }
 
     # -- create backups
     debug 0 "\002update:install:\002 creating backup of previous script files and db"
@@ -16093,12 +16169,20 @@ proc update:install {update} {
     set runtime [expr [unixtime] - $start]
     debug 0 "\002update:install:\002 script \002installation complete\002 (\002runtime:\002 $runtime secs\002)"
     if {$debug} { set mode "tested" } else { set mode "complete" }
-    update:note "\002Armour\002 script \002v$ver\002 (\002revision:\002 $rev) installation $mode (\002runtime:\002 $runtime secs\
-        -- \002new config settings:\002 $new)" $ghdata
+
+    # -- form the note
+    set out "\002Armour\002 script \002v$ver\002 (\002revision:\002 $rev) installation $mode (\002runtime:\002 $runtime secs"
+    set note $out
+    if {$new ne 0} { append note " -- \002$new new config $settext:\002 [join $newsettings]\)" } else { append note "\)" }
+
+    # -- send note to all global 500 users
+    update:note $out $ghdata
+
+    # -- send response back to client, if called from 'update install' command
     lassign $response type target
     if {$target ne ""} {
-        reply $type $target "script \002[cfg:get version]\002 (\002revision:\002 [cfg:get revision])\
-            installation $mode (\002runtime:\002 $runtime secs -- \002new config settings:\002 $new)"
+        reply $type $target "$out\)"
+        if {$new ne 0} { reply $type $target "\002info:\002 check \002$new\002 new config $settext: \002[join $newsettings ", "]\002" }
     }
 
     # -- remove the lock file
@@ -16161,33 +16245,6 @@ proc update:every {interval script} {
     }
     # TODO: Need better handling of errorInfo etc...
     return -code $rc $result
-}
-
-# -- glob-r to recursively search directories and match files (incl. hidden ones)
-# https://wiki.tcl-lang.org/page/glob
-# TODO: not being used; consider deleting
-proc update:glob-r {{dir .}} {
-    set res {}
-    foreach i [lsort [glob -nocomplain -dir $dir *]] {
-        if {[file type $i] eq {directory}} {
-            eval lappend res [arm::update:glob-r $i]
-        } else {
-            lappend res $i
-        }
-    }
-    set res
-}
-
-# -- get size of directory
-# TODO: not being used; consider deleting
-proc update:dirsize {dir} {
-    set files [arm::update:glob-r $dir]
-    set total 0
-    foreach file $files {
-        set size [file size $file]
-        set total [expr $size + $total]
-    }
-    return $total
 }
 
 # -- create backup directory if it doesn't exist
@@ -16256,6 +16313,26 @@ proc reply {type target text} {
 # -- create service host regex (for umode +x)
 set cfg(xregex) "(\[^.\]+).[cfg:get xhost:ext *]"
 regsub -all {\.} [cfg:get xregex *] {\\.} cfg(xregex)
+
+
+# -- load scan ports
+if {[info exists addport]} {
+    foreach entry [array names addport] {
+        lassign [array get addport $entry] port desc
+        array set scan:ports [list $port $desc]
+        debug 3 "\[@\] Armour: loaded port scan: port: $port -- desc: $desc"
+    }
+}
+
+# -- load scan ports
+if {[info exists addrbl]} {
+    foreach entry [array names addrbl] {
+        lassign [array get addrbl $entry] rbl value
+        lassign $value desc score auto
+        array set scan:rbls [list $rbl$ [list $desc] $auto]
+        debug 3 "\[@\] Armour: loaded DNSBL scan: RBL: $rbl -- desc: $desc -- score: $score -- auto: $auto"
+    }
+}
 
 
 # -- load lists into memory
@@ -16385,7 +16462,12 @@ utimer [expr [cfg:get queue:secure *] / 2] arm::voice:stack; # -- offset the voi
 flud:queue; 
 
 # -- load dronebl package if required
-if {[cfg:get dronebl] eq 1} { source ./armour/packages/libdronebl.tcl }
+if {[cfg:get dronebl] eq 1} { 
+    namespace eval dronebl {
+        set rpckey $arm::cfg(dronebl:key)
+    }
+    source ./armour/packages/libdronebl.tcl 
+}
 
 # -- start autologin
 init:autologin
@@ -16397,19 +16479,14 @@ init:autologin
 
 
 # ------------------------------------------------------------------------------------------------
-# script loader
+# plugin loader
 # ------------------------------------------------------------------------------------------------
-set data [split $arm::files \n]
-foreach script $data {
-    # -- only load wanted scripts
-    set i [lindex $script 0]
-    if {[regexp -- {.tcl$} $i] && [string index $i 0] != "#"} {
-        # -- capture any errors to not crash the bot (safety)
-        putlog "\002\[A\]\002 \[@\] Armour: loading $i ..."
-        catch {source $i} error
-        if {$error ne ""} {
-            putloglev d * "\002(Armour load error)\002:$i\: $::errorInfo"
-        }
+foreach plugin [array names addplugin] {
+    lassign $plugin name file
+    arm::debug 0 "Armour: loading plugin $name ... (file: $file)"
+    catch {source $file} error
+    if {$error ne ""} {
+        arm::debug 0 "\002(plugin load error)\002:$name\: $::errorInfo"
     }
 }
 # ------------------------------------------------------------------------------------------------

@@ -470,10 +470,10 @@ set cfg(dnsbl:remote) 0
 # <rbl> {<desc> <score> <onlymanual>}
 # - score must be + or - with a score of >0 constituting a hit
 # - if 'onlymanual' is set, RBL is only checked when 'scanrbl' command is used but not in auto scans
-array set scan:rbls {
-  dnsbl.dronebl.org { {DroneBL}  +1.0 1 }
-  rbl.ircbl.org     { {IRCBL}    +1.0 0 }
-}
+# format to add:
+# set addrbl(<rbl>) "{<description>} <score> <onlymanual>"
+set addrbl(dnsbl.dronebl.org) "{DroneBL} +1.0 1"
+set addrbl(rbl.ircbl.org) "{IRCBL} +1.0 0"
 
 # -- enable port scanner? (0|1) [1]
 set cfg(portscan) 1
@@ -485,17 +485,15 @@ set cfg(portscan:reason) "Armour: possible insecure host unintended for IRC -- p
 set cfg(portscan:remote) 0
 
 # -- scanports and description
-array set scan:ports {
-  21    {ftp}
-  22    {ssh}
-  23    {telnet}
-  25    {smtp}
-  80    {www}
-  554   {rtsp}
-  7070  {realserver}
-  31337 {31337/tcp}
-  10000 {webmin}
-}
+# -- add an 'addport' line for each port to scan, in the format of:
+# set addport(<port> "<description>"
+set addport(21) "ftp"
+set addport(22) "ssh"
+set addport(25) "smtp"
+set addport(80) "www"
+set addport(7070) "realserver"
+set addport(31337) "31337/tcp"
+set addport(10000) "webmin"
 
 # -- minimum port match before action - [1]
 set cfg(portscan:min) 2
@@ -932,9 +930,7 @@ set cfg(dronebl) 0
 # -- DroneBL RPC Key (www.dronebl.org)
 # - caution: you are responsible for DroneBL submissions with this key
 # - allocate access with care 
-namespace eval dronebl {
-    set rpckey ""
-}
+set cfg(dronebl:key) ""
 
 # -- level required for DroneBL submission [500]
 set cfg(dronebl:lvl) 500
@@ -1038,32 +1034,26 @@ set addcmd(update)      {  arm       500        pub msg dcc  }
 
 
 # ------------------------------------------------------------------------------------------------
-# end of command levels
+# PLUGINS
 # ------------------------------------------------------------------------------------------------
 
 # -- optional plugins to load
-# -- to load plugins, uncomment their line after editing the config parameters in each file
-set files {
-    # -- plugins (optional)
-    #./armour/plugins/quote.tcl          # -- quote plugin
-    #./armour/plugins/trakka/trakka.tcl  # -- trakka plugin
-    #./armour/plugins/smsbot.tcl         # -- smsglobal plugin
-    #./armour/plugins/tell.tcl           # -- tell plugin
-    #./armour/plugins/push.tcl           # -- pushover plugin
-    #./armour/plugins/email.tcl          # -- email plugin
-}
-# ------------------------------------------------------------------------------------------------
-# end of configuration
-# ------------------------------------------------------------------------------------------------
-
+# -- to load plugins, uncomment their line after editing any config parameters in each file
+#set addplugin(quote) "./armour/plugins/quote.tcl";           # -- quote management
+#set addplugin(tell) "./armour/plugins/tell.tcl";             # -- tell
+#set addplugin(trakka) "./armour/plugins/trakka/trakka.tcl";  # -- trakka
+#set addplugin(smsbot) "./armour/plugins/smsbot.tcl";         # -- SMS (via smsglobal.com)
+#set addplugin(push) "./armour/plugins/push.tcl";             # -- push (via pushover.net)
+#set addplugin(email) "./armour/plugins/email.tcl";           # -- email
 
 
 # ------------------------------------------------------------------------------------------------
-}
-# end of namespace; scripts must be loaded afterwards, to avoid nested namespaces 
+# END OF CONFIGURATION
+# ------------------------------------------------------------------------------------------------
+
+
+# ------------------------------------------------------------------------------------------------
+}; # -- end of namespace
 # ------------------------------------------------------------------------------------------------
 source ./armour/armour.tcl; # -- do not edit
 # ------------------------------------------------------------------------------------------------
-
-
-
