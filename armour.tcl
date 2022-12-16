@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Fri Dec 16 09:08:20 PST 2022
+# armour.tcl v4.0 autobuild completed on: Fri Dec 16 09:50:45 PST 2022
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -16106,13 +16106,13 @@ proc update:install {update} {
                         lassign $value desc score auto;
                         debug 1 "\002update:install:\002 using \002existing\002 DNSBL config (port: $rbl -- desc: $desc)"
                         puts $fd "set addrbl($srbl) \"[list $desc] $score $auto\""
-                        array set scan:rbls $rbl [list [list $desc] $score $auto]
+                        array set scan:rbls [list $rbl [list "$desc" $score $auto]]
                     }
                 } else {
                     # -- no existing scan:rbls config
                     lassign $svalue desc score auto;
                     debug 1 "\002update:install:\002 using \002sample config\002 for DNSBL scanner (port: $srbl -- desc: $sdesc)"
-                    array set scan:rbls [list $srbl [list $sdesc] $score $auto]
+                    array set scan:rbls  [list $srbl [list "$sdesc" $score $auto]]
                     puts $fd $line
                 }
                 set startrbls 0
@@ -16333,7 +16333,7 @@ if {[info exists addrbl]} {
     foreach entry [array names addrbl] {
         lassign [array get addrbl $entry] rbl value
         lassign $value desc score auto
-        array set scan:rbls $rbl [list [list $desc] $score $auto]
+        array set scan:rbls [list $rbl [list "$desc" $score $auto]]
         debug 3 "\[@\] Armour: loaded DNSBL scan: RBL: $rbl -- desc: $desc -- score: $score -- auto: $auto"
     }
 }
