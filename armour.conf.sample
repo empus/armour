@@ -472,8 +472,9 @@ set cfg(dnsbl:remote) 0
 # - if 'onlymanual' is set, RBL is only checked when 'scanrbl' command is used but not in auto scans
 # format to add:
 # set addrbl(<rbl>) "{<description>} <score> <onlymanual>"
-set addrbl(dnsbl.dronebl.org) "{DroneBL} +1.0 1"
-set addrbl(rbl.ircbl.org) "{IRCBL} +1.0 0"
+set addrbl(dnsbl.dronebl.org) "{DroneBL} +1.0 0"
+set addrbl(rbl.ircbl.org) "{IRCBL} +1.0 1"
+set addrbl(rbl.undernet.org) "{Undernet} +1.0 1"
 
 # -- enable port scanner? (0|1) [1]
 set cfg(portscan) 1
