@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Fri Dec 16 09:50:45 PST 2022
+# armour.tcl v4.0 autobuild completed on: Sat Dec 17 07:12:18 PST 2022
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -4910,7 +4910,7 @@ proc arm:cmd:scanrbl {0 1 2 3 {4 ""}  {5 ""}} {
 
     if {$host == ""} { reply $stype $starget "\002usage:\002 scanrbl <host|ip>"; return; }
 
-    set response [rbl:score $host 1]; # -- onlymanual=1 flag
+    set response [rbl:score $host 1]; # -- manual flag
 
     set ip [lindex $response 0]
     set response [join $response]
@@ -5588,7 +5588,7 @@ proc arm:cmd:version {0 1 2 3 {4 ""}  {5 ""}} {
     if {$success eq 1} {
 
         if {$status eq "current"} {
-            set out "current vs \002$branch\002 branch"
+            set out "current with \002$branch\002 branch"
         } elseif {$status eq "newer"} {
             set out "newer than \002$branch\002 branch"
         } elseif {$status eq "outdated"} {
@@ -6896,6 +6896,7 @@ proc arm:cmd:showlog {0 1 2 3 {4 ""}  {5 ""}} {
 
 # -- cmd: note
 # -- send notes between users
+proc arm:cmd:notes {0 1 2 3 {4 ""} {5 ""}} { userdb:cmd:note $0 $1 $2 $3 $4 $5 }
 proc arm:cmd:note {0 1 2 3 {4 ""}  {5 ""}} {
     variable cfg;
     lassign [proc:setvars $0 $1 $2 $3 $4 $5] type stype target starget nick uh hand source chan arg 
@@ -13643,8 +13644,8 @@ proc rbl:score {ip {manual "0"}} {
     set desc ""; set point ""; set info ""; set therbl "";
     foreach rbl [array names scan:rbls] {
         set onlymanual [lindex [get:val scan:rbls $rbl] 2]
-        #putlog "\002rbl:score\002: rbl: $rbl -- manual: $manual -- onlymanual: $onlymanual"
-        if {!$manual && $onlymanual} { continue; }; # -- discard if this RBL is for manual scans only
+        putlog "\002rbl:score\002: rbl: $rbl -- manual: $manual -- onlymanual: $onlymanual"
+        if {!$manual && $onlymanual} { putlog "discard"; continue; }; # -- discard if this RBL is for manual scans only
         set lookup "$rip.$rbl"
         set response [dns:lookup $lookup A]; # -- the actual DNS resolution
         if {$response eq "error"} { continue; }
@@ -15479,7 +15480,7 @@ proc update:cron {minute hour day month weekday} {
 
     # -- check for update
     set branch [cfg:get update:branch]
-    lassign [update:check $branch $debug] success ghdata output
+    lassign [update:check $branch $debug "auto"] success ghdata output
     if {$success eq "0"} {
         # -- http error
         debug 0 "\002update:cron:\002 update check failed (error: [lrange $data 1 end])"
@@ -15495,6 +15496,7 @@ proc update:cron {minute hour day month weekday} {
         set newversion [dict get $ghdata newversion]
         set newrevision [dict get $ghdata newrevision]
         set branch [dict get $ghdata branch]
+        dict set ghdata isauto 1; # -- mark this as an automatic update
     }
 
     # -- check for available update
@@ -15544,16 +15546,18 @@ proc arm:cmd:update {0 1 2 3 {4 ""} {5 ""}} {
     # -- allow '-t' to be used to specify test mode (debug), even if not set in config
     if {[lsearch $arg "-t"] >= 0} { 
         debug 0 "\002update:\002 debug mode overriden to be \002enabled\002"
+        set modetext "test"
         set debug 1 
     } else {
         set debug [cfg:get update:debug]
+        if {$debug} { set modetext "debug" } else { set modetext "" }
         debug 0 "\002update:\002 debug mode obtained from config: \002$debug\002"
     }
 
     debug 0 "\002cmd:update:\002 action: \002$action\002 -- branch: \002$branch\002 (arg: $arg)"
 
     # -- get the data
-    lassign [update:check $branch $debug] success ghdata output
+    lassign [update:check $branch $debug $modetext] success ghdata output
     if {$success eq "0"} {
         # -- error
         set error [join $ghdata]
@@ -15574,6 +15578,12 @@ proc arm:cmd:update {0 1 2 3 {4 ""} {5 ""}} {
         set filecount [dict get $ghdata filecount]
     }
 
+    # -- set force mode value
+    if {[lsearch $arg "-f"] >= 0} { 
+        if {[file isfile ./armour/backup/.lock]} { exec rm -f ./armour/backup/.lock }
+        if {[file isfile ./armour/backup/.install]} { exec rm -f ./armour/backup/.install }
+    }
+
     # -- check for available update
     if {$action eq "check" || $action eq "c"} {
         reply $type $target $output; # -- send the output to the user
@@ -15587,7 +15597,7 @@ proc arm:cmd:update {0 1 2 3 {4 ""} {5 ""}} {
         
         # -- ensure script is not already downloading
         if {[file isfile ./armour/backup/.lock]} {
-            reply $type $target "\002error:\002 script download is already in progress, please try again later."
+            reply $type $target "\002error:\002 script download is already in progress, please try again later or use \002-f\002 to force."
             return;
         }
 
@@ -15602,7 +15612,7 @@ proc arm:cmd:update {0 1 2 3 {4 ""} {5 ""}} {
 
         # -- ensure script is not already downloading
         if {[file isfile ./armour/backup/.lock]} {
-            reply $type $target "\002error:\002 script download is in progress, please try again later."
+            reply $type $target "\002error:\002 script download is in progress, please try again later or use \002-f\002 to force."
             return;
         } else { exec touch ./armour/backup/.lock }
 
@@ -15647,11 +15657,11 @@ proc arm:cmd:update {0 1 2 3 {4 ""} {5 ""}} {
         set runtime [expr [unixtime] - $start]
         # -- TODO: fix versions and revisions
         debug 0 "\002cmd:update:\002 script \restore complete\002 (\002runtime:\002 $runtime secs\002)"
-        if {$debug} { set mode "tested" } else { set mode "complete" }
-        update:note "\002Armour\002 script \002v$ver\002 (\002revision:\002 $rev) restore $mode (\002runtime:\002 $runtime)" $ghdata
+        if {$debug} { set text "tested" } else { set text "complete" }
+        update:note "\002Armour\002 script \002v$ver\002 (\002revision:\002 $rev) restore $text (\002runtime:\002 $runtime)" $ghdata
 
         reply $type $target "script \002[cfg:get version]\002 (\002revision:\002 [cfg:get revision])\
-            installation $mode (\002runtime:\002 $runtime secs -- \002new config settings:\002 $new)"
+            installation $text (\002runtime:\002 $runtime secs -- \002new config settings:\002 $new)"
 
         # -- remove the lock file
         debug 0 "\002cmd:update:\002 removing lock file"
@@ -15662,7 +15672,7 @@ proc arm:cmd:update {0 1 2 3 {4 ""} {5 ""}} {
             putnow "QUIT :Loading Armour \002[cfg:get version] (revision: \002[cfg:get revision]\002)"
             restart; # -- restart eggdrop to ensure full script load
         } else {
-            reply $type $target "\002info:\002 debug mode enabled, restore not actually applied."
+            reply $type $target "\002info:\002 $modetext mode enabled, restore not installed."
         }
 
     } elseif {$action eq "branches" || $action eq "b"} {
@@ -15725,9 +15735,10 @@ proc update:github {url desc type target} {
 # -- storing tokens in plaintext within github repositories result in automatic expiry of the access token
 
 # -- check for update
-proc update:check {branch {debug 0}} {
+proc update:check {branch {debug "0"} {mode ""}} {
     variable github
-    debug 0 "\002update:check:\002 checking for updates -- branch: $banch -- debug: $debug"
+
+    debug 0 "\002update:check:\002 checking for updates -- branch: $branch -- debug: $debug"
     set url "https://raw.githubusercontent.com/empus/armour/${branch}/.version"
     http::register https 443 [list ::tls::socket -tls1.2 true]
     http::config -useragent "mozilla" 
@@ -15769,7 +15780,7 @@ proc update:check {branch {debug 0}} {
         }
     }
 
-    debug 4 "\002update:check:\002 retrieved version info from github (version: $gversion -- revision: $grevision)"
+    debug 4 "\002update:check:\002 retrieved version info from github (version: $gversion -- revision: $grevision -- files: $filecount)"
     set version [cfg:get version]
     set revision [cfg:get revision]
     regsub -all {v} $version "" version
@@ -15785,8 +15796,9 @@ proc update:check {branch {debug 0}} {
     dict set ghdata branch $branch
     dict set ghdata filecount $filecount
     dict set ghdata debug $debug
+    dict set ghdata modetext $mode
+    dict set ghdata isauto 0
     set output ""; set sendnote 0
-    debug 0 "\002update:check:\002 version: $version -- revision: $revision -- gversion: $gversion -- grevision: $grevision"
     if {$version eq $gversion} {
         # -- same version
         if {$revision < $grevision} {
@@ -15829,13 +15841,17 @@ proc update:note {note ghdata} {
         return;
     }
 
+    set isauto [dict get $ghdata isauto]
+
     # -- check for automatic upgrades
-    if {[cfg:get update:auto] eq 1} {
-        # -- automatic upgrades enabled
-        append note " -- commencing automatic upgrade."
-        update:install
-    } else {
-        append note " -- to install, use: \002update install\002"
+    if {$isauto} {
+        if {[cfg:get update:auto] eq 1} {
+            # -- automatic upgrades enabled
+            append note " -- commencing automatic upgrade."
+            update:install
+        } elseif {
+            append note " -- to install, use: \002update install\002"
+        }
     }
 
     db:connect
@@ -15861,10 +15877,10 @@ proc update:note {note ghdata} {
             set imatch "script \002v$ver\002 (\002revision:\002 $rev)"
             set dmatch "script \002v$ver\002 update downloaded"
             set exist [db:query "SELECT id FROM notes WHERE from_u='Armour' AND to_u='$to_user' \
-                AND note LIKE '%$imatch%' OR note LIKE '%$dmatch%'"]
+                AND note LIKE '%$imatch%' AND note NOT LIKE '%$dmatch%'"]
             if {$exist ne ""} {
                 # -- note already exists, don't send it twice
-                debug 0 "\002update:note:\002 note already exists for $to_user ($to_nick![getchanhost $to_nick])"
+                debug 0 "\002update:note:\002 note already exists for user $to_user"
                 db:close
                 continue;
             }
@@ -15904,8 +15920,9 @@ proc update:download {ghdata} {
     # TODO: consider doing this with total bytes instead of number of files (see: update:dirsize proc)
     global armupdate
     dict set armupdate start $start
-    dict set armupdate filecount 80; # TODO: remove hard-coded value
     dict set armupdate ghdata $ghdata
+    #dict set armupdate filecount [dict get $ghdata filecount]
+    dict set armupdate filecount 109; # -- TODO: remove hardcoded filecount
     dict set armupdate response [list $type $target]
     update:every 500 {
         global armupdate
@@ -15927,8 +15944,6 @@ proc update:download {ghdata} {
 
 # -- install the downloaded script
 proc update:install {update} {
-    variable scan:rbls;  # -- configured RBLs to scan
-    variable scan:ports; # -- configured ports to scan
 
     if {![file isfile ./armour/backup/.lock]} {
         # -- prevent loops
@@ -15936,6 +15951,15 @@ proc update:install {update} {
         return
     }
 
+    set start [dict get $update start]; set end [unixtime]
+    set ghdata [dict get $update ghdata]
+    set gversion [dict get $ghdata gversion]
+    set grevision [dict get $ghdata grevision]
+    set filecount [dict get $ghdata filecount]
+    set debug [dict get $ghdata debug]
+    set modetext [dict get $ghdata modetext]
+    set dirfiles [dict get $update dirfiles]
+ 
     if {![file isfile ./armour/backup/.install]} {
         exec touch ./armour/backup/.install
     } else {
@@ -15950,13 +15974,6 @@ proc update:install {update} {
         catch { exec mv armour.tbz2 ./armour/backup }
     }
 
-    variable userdb
-    set start [dict get $update start]; set end [unixtime]
-    set ghdata [dict get $update ghdata]
-    set gversion [dict get $ghdata gversion]
-    set grevision [dict get $ghdata grevision]
-    set debug [dict get $ghdata debug]
-    set dirfiles [dict get $update dirfiles]
     arm::debug 0 "\002update:install:\002 script \002v$gversion\002 update downloaded (\002$dirfiles\002 files downloaded in \002[expr {$end - $start}] secs\002)"
     arm::update:note "\002Armour\002 script \002v$gversion\002 update downloaded (\002$dirfiles\002 files downloaded in \002[expr {$end - $start}] secs\002)" $ghdata
     debug 0 "\002update:install:\002 begin script installation"
@@ -15966,9 +15983,9 @@ proc update:install {update} {
     set dbname $::arm::dbname;
     set confname $::arm::confname;
 
-    # -- TODO: remove after dev testing
-    if {[file isfile ./armour/armour.conf.sample.TEMP]} { 
-        exec cp ./armour/armour.conf.sample.TEMP ./armour/backup/armour-$start/armour.conf.sample
+    # -- use test sample config file for development testing
+    if {[file isfile ./armour/armour.conf.sample.TEST]} { 
+        exec cp ./armour/armour.conf.sample.TEST ./armour/backup/armour-$start/armour.conf.sample
     }
 
     # -- backup current db
@@ -15981,20 +15998,157 @@ proc update:install {update} {
     debug 0 "\002update:install:\002 backing up config file: $conffile -> ${conffile}.bak.$start"
     if {!$debug} { exec cp $conffile ${conffile}.bak.$start }
 
-    # -- read new sample config
+    # -- compare existing config with new sample config and retain existing settings
     set sampleconf "./armour/backup/armour-$start/armour.conf.sample"
-    debug 0 "\002update:install:\002 processing config file: $sampleconf"
+    set newconf "./armour/backup/armour-$start/${confname}.conf"
+    set merge [update:config $sampleconf $newconf $ghdata] 
+    set new [dict get $merge new]
+    set exist [dict get $merge exist]
+    set settext [dict get $merge settext]
+    set newsettings [dict get $merge newsettings]
+    set newports [dict get $merge newports]
+    set newportcount [dict get $merge newportcount]
+    set newporttext [dict get $merge newporttext]
+    set existports [dict get $merge existports]
+    set existportcount [dict get $merge existportcount]
+    set existporttext [dict get $merge existporttext]
+    set newrbls [dict get $merge newrbls]
+    set newrblcount [dict get $merge newrblcount]
+    set newrbltext [dict get $merge newrbltext]
+    set existrbls [dict get $merge existrbls]
+    set existrblcount [dict get $merge existrblcount]
+    set existrbltext [dict get $merge existrbltext]
+    set newplugins [dict get $merge newplugins]
+    set newplugintext [dict get $merge newplugintext]
+    set newplugincount [dict get $merge newplugincount]
+    set existplugins [dict get $merge existplugins]
+    set existplugincount [dict get $merge existplugincount]
+    set existplugintext [dict get $merge existplugintext]
+
+    exec echo [dict get $merge] > ./armour/tmp.txt
+
+    # -- create backups
+    debug 0 "\002update:install:\002 creating backup of previous script files and db"
+    set backupts [unixtime]
+    debug 0 "\002update:install:\002 creating backup directory: ./armour/backup/backup-$backupts"
+    exec mkdir ./armour/backup/backup-$backupts
+
+    # -- do the backup file copies
+    update:copy ./armour ./armour/backup/backup-$backupts $debug
+
+    # -- rename most recent version specific script file, or use armour.tcl
+    set file [lindex [lsort -decreasing [exec find ./armour/backup/armour-$start -maxdepth 1 -name armour-*.tcl]] 0]
+    if {$file ne ""} {
+        debug 0 "\002update:install:\002 renaming version specific script file: $file -> ./armour/backup/armour-$start/armour.tcl"
+        exec mv $file ./armour/backup/armour-$start/armour.tcl
+    }
+ 
+    # -- copy new files into place
+    # note that removed or renamed files should be handled during migrations (db:upgrade proc)
+    update:copy ./armour/backup/armour-$start ./armour $debug
+
+    set runtime [expr [unixtime] - $start]
+    debug 0 "\002update:install:\002 script \002installation complete\002 (\002runtime:\002 $runtime secs\002)"
+    if {$debug} { set text "tested" } else { set text "complete" }
+
+    # -- form the note
+    set ver $gversion
+    set rev $grevision
+    set out "\002Armour\002 script \002v$ver\002 (\002revision:\002 $rev) installation $text (\002runtime:\002 $runtime secs -- \002files:\002 $filecount"
+    set note $out; set noteextra ""
+    if {$new ne 0} { lappend noteextra "retained \002$exist\002 settings -- found \002$new new config\002 $settext: [join $newsettings]" }
+    #if {$existportcount ne 0} { lappend noteextra "\002$existportcount existing $existporttext:\002 [join $existports]" }
+    if {$newportcount ne 0} { lappend noteextra "\002$newportcount new scan $newporttext:\002 [join $newports]" }
+    #if {$existrblcount ne 0} { lappend noteextra "\002$existrblcount existing $existrbltext:\002 [join $existrbls]" }
+    if {$newrblcount ne 0} { lappend noteextra "\002$newrblcount new $newrbltext:\002 [join $newrbls]" }
+    #if {$existplugincount ne 0} { lappend noteextra "\002$existplugincount existing $existplugintext:\002 [join $existplugins]" }
+    if {$newplugincount ne 0} { lappend noteextra "\002$newplugincount new $newplugintext found:\002 [join $newplugins]" }
+    if {$noteextra ne ""} { append note " -- [join $noteextra " -- "]" }
+    append note "\)"
+    debug 0 "\002update:install:\002 sending note: $note"
+
+    # -- send note to all global 500 users
+    update:note $note $ghdata
+
+    # -- send response back to client, if called from 'update install' command
+    lassign $response type target
+    if {$target ne ""} {
+        reply $type $target "$out\)"
+        if {$new ne 0} { reply $type $target "\002info:\002 retained \002$exist\002 non-default settings -- check \002$new\002 new config $settext ([join $newsettings ", "])" }
+        
+        set prefix "\002info:\002"; set add ""
+        #if {$existportcount ne 0} { lappend add "retained \002$existportcount\002 existing \002$existporttext\002 ([join $existports ", "])" }
+        if {$existportcount ne 0} { lappend add "retained \002$existportcount\002 existing scan \002$existporttext\002" }
+        if {$newportcount ne 0} { lappend add "found \002$newportcount\002 available new scan \002$newporttext\002 ([join $newports ", "])" }
+        if {$add ne ""} { reply $type $target "$prefix [join $add " -- "]" }
+
+        set add ""
+        #if {$existrblcount ne 0} { lappend add "retained \002$existrblcount\002 existing \002$existrbltext\002 ([join $existrbls ", "])" }
+        if {$existrblcount ne 0} { lappend add "retained \002$existrblcount\002 existing \002$existrbltext\002" }
+        if {$newrblcount ne 0} { lappend add "found \002$newrblcount\002 available new \002$newrbltext\002 ([join $newrbls ", "])" }
+        if {$add ne ""} { reply $type $target "$prefix [join $add " -- "]" }
+
+        set add ""
+        if {$existplugincount ne 0} { lappend add "retained \002$existplugincount\002 existing \002$existplugintext\002" }
+        #if {$existplugincount ne 0} { lappend add "retained \002$existplugincount\002 existing \002$existplugintext\002 ([join $existplugins ", "])" }
+        if {$newplugincount ne 0} { lappend add "found \002$newplugincount\002 available new \002$newplugintext\002 ([join $newplugins ", "])" }
+        if {$add ne ""} { reply $type $target "$prefix [join $add " -- "]" }
+    }
+
+    # -- remove the lock file
+    debug 0 "\002update:install:\002 removing lock files"
+    catch { exec rm ./armour/backup/.lock }
+    catch { exec rm ./armour/backup/.install }
+
+    if {!$debug} {
+        # -- wait 10 seconds to restart, so all lines can be output
+        utimer 10 "putnow \"QUIT :Loading Armour \002v$ver (revision: \002$rev\002)\"; restart; "
+    } else {
+        reply $type $target "\002info:\002 debug mode enabled, update not installed."
+    }
+}
+
+# -- compare existing config to sample config and retain existing settings
+proc update:config {sampleconf newconf ghdata} {
+    variable cfg;        # -- config settings
+    variable userdb;     # -- userdb commands
+    variable scan:rbls;  # -- configured RBLs to scan
+    variable addrbl;     # -- configured RBLs to add
+    variable scan:ports; # -- configured ports to scan
+    variable addport;    # -- configured ports to add
+    variable addplugin;  # -- configured plugins to add
+    variable files;      # -- configured plugin files (legacy config for migration)
+
+    # -- read new sample config
+    debug 0 "\002update:config:\002 processing config file: $sampleconf"
     set fd [open $sampleconf r]
     set confdata [read $fd]
     set lines [split $confdata \n]
     close $fd
+
     # -- new conf file
-    set newconf "./armour/backup/armour-$start/${confname}.conf"
     set fd [open $newconf w]
 
-    set linecount 0; set unchanged 0; set changed 0; set new 0; set newsettings [list]; set startports 1; set startrbls 1; set startfiles 1;
+    set linecount 0; set unchanged 0; set changed 0; set new 0; set newsettings [list]; 
+
+    # -- existing & new ports
+    set startports 1; set ports ""; 
+    set newports ""; set newportcount 0; set newporttext ""; 
+    set existports ""; set existportcount 0; set existporttext "";
+
+    # -- existing c& new rbls
+    set startrbls 1; set rbls "";  
+    set newrbls ""; set newrblcount 0; set newrbltext ""; 
+    set existrbls ""; set existrblcount 0; set existrbltext "";
+
+    # -- existing & new plugins
+    set startplugins 1; set plugins ""; 
+    set existplugins ""; set existplugincount 0; set existplugintext "";
+    set newplugins ""; set newplugincount 0; set newplugintext "";
+
+
     # -- print the header with version
-    debug 4 "\002update:install:\002 prefixing new config file with version info"
+    debug 4 "\002update:config:\002 prefixing new config file with version info"
     set ver [dict get $ghdata gversion]
     set rev [dict get $ghdata grevision]
     regsub -all {^(\d{4})(\d{2})(\d{2})(\d{2})} $rev {\1-\2-\3} nicerev; # -- convert to YYYY-MM-DD
@@ -16013,9 +16167,11 @@ proc update:install {update} {
 
         if {[regexp {^#} $line] || $line eq "" || $line eq "\r" || [regexp {^\}} $line] || [regexp {^source} $line] \
             || [regexp {^\s*$} $line] || [regexp {^if} $line] || [regexp {^set realname} $line] || [regexp {^namespace eval arm} $line]} {
-            # -- output comments, blank lines, if statements, script loads, and closing braces
-            puts $fd $line
-            continue
+            if {![regexp {^\#set addplugin} $line]} {
+                # -- output comments, blank lines, if statements, script loads, and closing braces
+                puts $fd $line
+                continue
+            }
         }
         if {[regexp {^set cfg\(([^\)]+)\)\s+"?([^\"]*)"?.*$} $line -> var val]} {
             # -- set new config value
@@ -16025,11 +16181,11 @@ proc update:install {update} {
             if {$curval eq $val} {
                 # -- value is unchanged
                 incr unchanged
-                debug 5 "\002update:install:\002 unchanged config value: $var = $val"
+                debug 5 "\002update:config:\002 unchanged config value: $var = $val"
                 puts $fd $line
             } else {
                 incr changed
-                debug 1 "\002update:install:\002 using existing config value: $var = $curval"
+                debug 1 "\002update:config:\002 using existing config value: $var = $curval"
                 regsub -all {\[} $curval {\\[} curval
                 regsub -all {\]} $curval {\\]} curval
                 puts $fd "set cfg($var) \"$curval\""
@@ -16058,15 +16214,15 @@ proc update:install {update} {
                 if {!$usenew} {
                     # -- use existing config
                     set bindlist [join $bindlist " "]
-                    debug 1 "\002update:install:\002 existing command config: $cmd (types: $bindlist -- level: $req)"
+                    debug 1 "\002update:config:\002 existing command config: $cmd (types: $bindlist -- level: $req)"
                     puts $fd "set addcmd($cmd)		\{	$plugin		$req		$bindlist \}$rest"
                 } else {
                     # -- use new config
-                    debug 1 "\002update:install:\002 new command config: $cmd (type: $bind -- level: $lvl)"
+                    debug 1 "\002update:config:\002 new command config: $cmd (type: $bind -- level: $lvl)"
                     puts $fd $line
                 }
             } else {
-                debug 0 "\002update:install:\002 \002WARNING:\002 adding unknown command config: $line"
+                debug 0 "\002update:config:\002 \002WARNING:\002 adding unknown command config: $line"
                 puts $fd $line
             }
 
@@ -16077,130 +16233,168 @@ proc update:install {update} {
 
         } elseif {[regexp -- {^set addport\(([^\)]+)\)\s+"?([^\"]*)"?.*$} $line -> sport sdesc]} {
             # -- check for existing config for this port
-            if {$startports} {
-                # -- first port entry
-                if {[array names scan:ports] ne ""} {
-                    # -- existing scan:port config; add all ports but only do this on the first loop
+            # -- first port entry
+            if {[array names scan:ports] ne ""} {
+                if {$startports} {
+                    # -- existing scan:ports config; add all ports but only do this once
                     foreach port [array names scan:ports] {
                         lassign [array get scan:ports $port] port desc
-                        debug 1 "\002update:install:\002 using \002existing\002 portscan config (port: $port -- desc: $desc)"
+                        if {[info exists addport($port)]} { continue; }; # -- skip ports already added
+                        debug 1 "\002update:config:\002 using \002existing\002 portscan config (port: $port -- desc: $desc)"
                         puts $fd "set addport($port) \"$desc\""
+                        set addport($port) $desc
                         array set scan:ports [list $port $desc]
+                        lappend existports $port; incr existportcount
                     }
-                } else {
-                    # -- no existing scan:ports config
-                    debug 1 "\002update:install:\002 using \002sample config\002 for port scanner (port: $sport -- desc: $sdesc)"
+                    set startports 0;
+                }
+            }
+            if {![info exists addport($sport)]} {
+                # -- no existing scan:ports config
+                debug 1 "\002update:config:\002 using \002sample config\002 for port scanner (port: $sport -- desc: $sdesc)"
+                if {[string index $line 0] ne "#"} {
                     array set scan:ports [list $sport $sdesc]
-                    puts $fd $line
+                    set addport($sport) $sdesc
+                    lappend newports $sport; incr newportcount
                 }
-                set startports 0
-            } 
-        } elseif {[regexp -- {^set addrbl\(([^\)]+)\)\s+"?([^\"]*)"?.*$} $line -> srbl svalue]} {
+                puts $fd $line
+            }
+        
+        } elseif {[regexp -- {^\#?set addrbl\(([^\)]+)\)\s+"?([^\"]*)"?.*$} $line -> srbl svalue]} {
             # -- check for existing config for this DNSBL
-            if {$startrbls} {
-                # -- first port entry
-                if {[array names scan:rbls] ne ""} {
-                    # -- existing scan:ports config; add all RBLs but only do this on the first loop
-                    foreach rbl [array names scan:rbls] {
-                        lassign [array get scan:rbls $rbl] rbl value
+            debug 1 "\002update:config:\002 checking sample \002DNSBL\002 line: srbl: $srbl -- svalue: $svalue"
+            # -- first port entry
+            if {[array names scan:rbls] ne ""} {
+                if {$startrbls} {
+                    # -- existing scan:rbls config; add all RBLs but only do this once
+                    foreach entry [array names scan:rbls] {
+                        lassign [array get scan:rbls $entry] rbl value
+                        debug 1 "\002update:config:\002 looping existing scan:rbls \002DNSBL\002 entry: rbl: $rbl -- value: $value"
+                        if {[info exists addrbl($rbl)]} { continue; }; # -- skip RBLs already added
                         lassign $value desc score auto;
-                        debug 1 "\002update:install:\002 using \002existing\002 DNSBL config (port: $rbl -- desc: $desc)"
-                        puts $fd "set addrbl($srbl) \"[list $desc] $score $auto\""
+                        debug 1 "\002update:config:\002 using \002existing\002 DNSBL config (port: $rbl -- desc: $desc)"
+                        puts $fd "set addrbl($rbl) \"[list $desc] $score $auto\""
                         array set scan:rbls [list $rbl [list "$desc" $score $auto]]
+                        set addrbl($rbl) $value
+                        lappend existrbls $rbl; incr existrblcount
                     }
-                } else {
-                    # -- no existing scan:rbls config
-                    lassign $svalue desc score auto;
-                    debug 1 "\002update:install:\002 using \002sample config\002 for DNSBL scanner (port: $srbl -- desc: $sdesc)"
-                    array set scan:rbls  [list $srbl [list "$sdesc" $score $auto]]
-                    puts $fd $line
+                    set startrbls 0;
+                } 
+            }
+            if {![info exists addrbl($srbl)]} {
+                # -- no existing scan:rbls config
+                lassign $svalue desc score auto;
+                debug 1 "\002update:config:\002 using \002sample config\002 for DNSBL scanner (port: $srbl -- desc: $value)"
+                if {[string index $line 0] ne "#"} {
+                    array set scan:rbls [list $srbl [list "$desc" $score $auto]]
+                    set addrbl($srbl) $svalue
+                    lappend newrbls $srbl; incr newrblcount
                 }
-                set startrbls 0
-            } 
-        } elseif {[regexp -- {^set addplugin\(([^\)]+)\)\s+"?([^\"]*)"?.*$} $line -> plugin file]} {
+                puts $fd $line
+            }
+            
+        } elseif {[regexp -- {^\#?set addplugin\(([^\)]+)\)\s+"?([^\"]*)"?.*$} $line -> plugin file]} {
             # -- handle plugins
-            if {$startplugins} {
-                # -- first plugin entry
-                if {[info exists files] && $files ne ""} {
-                    # -- existing plugins config; add all plugins but only do this on the first loop
-                    foreach plugin [array names plugins] {
-                        lassign [array get plugins $plugin] plugin file
-                        debug 1 "\002update:install:\002 using \002existing\002 plugin config (plugin: $plugin -- file: $file)"
-                        puts $fd "set addplugin($plugin) \"$file\""
-                        array set plugins [list $plugin $file]
+            # -- first plugin entry
+            if {[info exists files] && $files ne ""} {
+                # -- old plugin config (v4.0 alpha already set)
+                if {$startplugins} {
+                    # -- existing plugins config; add all plugins but only do this once
+                    foreach entry [split $files "\n"] {
+                        set efile [lindex $entry 0]
+                        if {$efile eq "" || [string match "# *" $file]} { continue }; # -- skip blank lines and comments
+                        set eplugin ""; regexp {([^.]+)\.tcl$} [file tail $efile] -> eplugin
+                        if {[info exists addplugin($eplugin)]} { continue; }; # -- skip plugins already added
+                        if {$eplugin eq ""} { continue; }
+                        putlog "update:config: looping plugin plugin: $eplugin -- file: $efile"
+                        incr existplugincount; lappend existplugins $eplugin
+                        if {[regexp {^\#} $efile]} {
+                            # -- commented plugin
+                            debug 1 "\002update:config:\002 adding \002existing commented\002 plugin config (plugin: $eplugin -- file: [string trimleft $efile "#"])"
+                            puts $fd "\#set addplugin($eplugin) \"[string trimleft $efile "#"]\""
+                            set addplugin($eplugin) [string trimleft $efile "#"]
+                            continue 
+                        } else {
+                            debug 1 "\002update:config:\002 using \002existing enabled\002 plugin config (plugin: $eplugin -- file: $efile)"
+                            puts $fd "set addplugin($eplugin) \"$efile\""
+                            set addplugin($eplugin) $efile
+                        }
                     }
-                } else {
-                    # -- no existing plugins config
-                    debug 1 "\002update:install:\002 using \002sample config\002 for plugins (plugin: $plugin -- file: $file)"
-                    array set plugins [list $plugin $file]
-                    puts $fd $line
+                    set startplugins 1;
                 }
-                set startplugins 0
+            }
+            if {![info exists addplugin($plugin)]} {
+                # -- no existing plugins config
+                incr newplugincount; lappend newplugins $plugin;
+                set addplugin($plugin) $file
+                debug 1 "\002update:config:\002 using \002sample config\002 for plugin (plugin: $plugin -- file: $file)"
+                puts $fd $line
             }
 
         } else {
             puts $fd $line
-            debug 4 "\002update:install:\002 \002WARNING:\002 adding unknown line from sample config: $line -- not comment or blank line"
+            debug 4 "\002update:config:\002 \002WARNING:\002 added unknown line from sample config: $line -- not comment or blank line"
         }
     }; # -- end of foreach line
 
     close $fd
-    debug 0 "\002update:install:\002 config file updated with $linecount lines (\002$new\002 \002new\002 config settings, \
+    debug 0 "\002update:config:\002 config file updated with $linecount lines (\002$new\002 \002new\002 config settings,\
         \002$changed\002 values retained, \002$unchanged\002 unchanged)"
+
+    # - count of settings
     if {$new eq 1} { set settext "setting" } else { set settext "settings" }
-    if {$new ne 0} { debug 0 "\002update:install:\002 \002$new\002 new config $settext: [join $newsettings]\002" }
+    if {$new ne 0} { debug 0 "\002update:config:\002 \002$new\002 new config $settext: [join $newsettings]\002" }
 
-    # -- create backups
-    debug 0 "\002update:install:\002 creating backup of previous script files and db"
-    set backupts [unixtime]
-    debug 0 "\002update:install:\002 creating backup directory: ./armour/backup/backup-$backupts"
-    exec mkdir ./armour/backup/backup-$backupts
+    # -- count of ports
+    if {$existportcount eq 1} { set existporttext "port" } else { set existporttext "ports" }
+    if {$existportcount ne 0} { debug 0 "\002update:config:\002 \002$existportcount\002 existing $existporttext: [join $existports]\002" }
+    if {$newportcount eq 1} { set newporttext "port" } else { set newporttext "ports" }
+    if {$newportcount ne 0} { debug 0 "\002update:config:\002 \002$newportcount\002 new $newporttext: [join $newports]\002" }
 
-    # -- do the backup file copies
-    update:copy ./armour ./armour/backup/backup-$backupts $debug
+    # -- count of RLBLs
+    if {$existrblcount eq 1} { set existrbltext "RBL" } else { set existrbltext "RBLs" }
+    if {$existrblcount ne 0} { debug 0 "\002update:config:\002 \002$new\002 existing $existrbltext: [join $existrbls]\002" }
+    if {$newrblcount eq 1} { set newrbltext "RBL" } else { set newrbltext "RBLs" }
+    if {$newrblcount ne 0} { debug 0 "\002update:config:\002 \002$newrblcount\002 new $existrbltext: [join $newrbls]\002" }
 
-    # -- rename most recent version specific script file, or use armour.tcl
-    set file [lindex [lsort -decreasing [exec find ./armour/backup/armour-$start -maxdepth 1 -name armour-*.tcl]] 0]
-    if {$file ne ""} {
-        debug 0 "\002update:install:\002 renaming version specific script file: $file -> ./armour/backup/armour-$start/armour.tcl"
-        exec mv $file ./armour/backup/armour-$start/armour.tcl
-    }
- 
-    # -- copy new files into place
-    # note that removed or renamed files should be handled during migrations (db:upgrade proc)
-    update:copy ./armour/backup/armour-$start ./armour $debug
+    # -- count  of plugins
+    if {$existplugincount eq 1} { set existplugintext "plugin" } else { set existplugintext "plugins" }
+    if {$existplugincount ne 0} { debug 0 "\002update:config:\002 \002$existplugincount\002 existing $existplugintext: [join $existplugins]\002" }
+    if {$newplugincount eq 1} { set newplugintext "plugin" } else { set newplugintext "plugins" }
+    if {$newplugincount ne 0} { debug 0 "\002update:config:\002 \002$newplugincount\002 new $newplugintext: [join $newplugins]\002" }
 
-    set runtime [expr [unixtime] - $start]
-    debug 0 "\002update:install:\002 script \002installation complete\002 (\002runtime:\002 $runtime secs\002)"
-    if {$debug} { set mode "tested" } else { set mode "complete" }
+    # -- return the results
+    dict set merge new $new
+    dict set merge settext $settext
+    dict set merge newsettings $newsettings
+    dict set merge exist $changed
 
-    # -- form the note
-    set out "\002Armour\002 script \002v$ver\002 (\002revision:\002 $rev) installation $mode (\002runtime:\002 $runtime secs"
-    set note $out
-    if {$new ne 0} { append note " -- \002$new new config $settext:\002 [join $newsettings]\)" } else { append note "\)" }
+    # -- RBLs
+    dict set merge newrbls $newrbls
+    dict set merge newrblcount $newrblcount
+    dict set merge newrbltext $newrbltext
+    dict set merge existrbls $existrbls
+    dict set merge existrblcount $existrblcount
+    dict set merge existrbltext $existrbltext
 
-    # -- send note to all global 500 users
-    update:note $out $ghdata
+    # -- ports
+    dict set merge newports $newports
+    dict set merge newportcount $newportcount
+    dict set merge newporttext $newporttext
+    dict set merge existports $existports
+    dict set merge existportcount $existportcount
+    dict set merge existporttext $existporttext
 
-    # -- send response back to client, if called from 'update install' command
-    lassign $response type target
-    if {$target ne ""} {
-        reply $type $target "$out\)"
-        if {$new ne 0} { reply $type $target "\002info:\002 check \002$new\002 new config $settext: \002[join $newsettings ", "]\002" }
-    }
+    # -- plugins
+    dict set merge newplugins $newplugins
+    dict set merge newplugincount $newplugincount
+    dict set merge newplugintext $newplugintext
+    dict set merge existplugins $existplugins
+    dict set merge existplugincount $existplugincount
+    dict set merge existplugintext $existplugintext
 
-    # -- remove the lock file
-    debug 0 "\002update:install:\002 removing lock file"
-    catch { exec rm ./armour/backup/.lock }
-    catch { exec rm ./armour/backup/.install }
+    return $merge
 
-    if {!$debug} {
-        #reply $type $target "restarting..."
-        putnow "QUIT :Loading Armour \002[cfg:get version] (revision: \002[cfg:get revision]\002)"
-        restart; # -- restart eggdrop to ensure full script load
-    } else {
-        reply $type $target "\002info:\002 debug mode enabled, update not actually applied."
-    }
 }
 
 # -- copy files from one directory to another
@@ -16486,7 +16680,7 @@ init:autologin
 # plugin loader
 # ------------------------------------------------------------------------------------------------
 foreach plugin [array names addplugin] {
-    lassign $plugin name file
+    lassign [array get addplugin $plugin] name file
     arm::debug 0 "Armour: loading plugin $name ... (file: $file)"
     catch {source $file} error
     if {$error ne ""} {
