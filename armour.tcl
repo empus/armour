@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Sat Dec 17 11:30:37 PST 2022
+# armour.tcl v4.0 autobuild completed on: Sat Dec 17 12:49:15 PST 2022
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -257,6 +257,9 @@ bind msg -|- whois *msg:whois
 bind msg m|- reset *msg:reset
 bind msg -|- op *msg:op 
 bind msg -|- go *msg:go
+bind msg -|- notes *msg:notes
+bind msg m|- save *msg:save
+bind msg o|o key *msg:key
 
 # -- strip eggdrop bare by disabling default commands
 if {[arm::cfg:get lockegg *]} {
@@ -277,6 +280,9 @@ if {[arm::cfg:get lockegg *]} {
      unbind msg m|- reset *msg:reset
      unbind msg -|- op *msg:op 
      unbind msg -|- go *msg:go
+     unbind msg -|- notes *msg:notes
+     unbind msg m|- save *msg:save
+     unbind msg o|o key *msg:key
 
 
 # ---- DCC BINDS
@@ -15470,7 +15476,7 @@ proc update:cron {minute hour day month weekday} {
 
     # -- flush periodic script backups older than N days
     set flush [cfg:get update:flush]
-    set flushed 0
+    set flushed 0; set flushdirs ""
     # -- find staging script and backup directories last modified >N days ago
     set stagingdirs [exec find ./armour/backup -maxdepth 1 -name armour-* -type d -mtime +$flush]
     set backupdirs [exec find ./armour/backup -maxdepth 1 -name backup-* -type d -mtime +$flush]
@@ -15478,7 +15484,7 @@ proc update:cron {minute hour day month weekday} {
         if {[string match "armour-*" $scriptdir]} { set dirtype "new script staging" } \
         else { set dirtype "old script backup" }
         if {!$debug} {
-            incr flushed
+            incr flushed; lappend flushdirs $scriptdir
             exec rm -rf $scriptdir
             debug 0 "\002update:cron:\002 deleted $dirtype directory: \002$scriptdir\002"
         } else {
@@ -15486,7 +15492,7 @@ proc update:cron {minute hour day month weekday} {
         }
     }
     if {$flushed > 0} {
-        set out "deleted \002$flushed\002 backup and staging directories (older than \002$flush\002 days)"
+        set out "deleted \002$flushed\002 backup and staging directories (older than \002$flush\002 days): [join $flushdirs]"
         debug 0 "\002update:cron:\002 $out"
         update:note "\002Armour\002 $out" ""
     }
@@ -15509,12 +15515,7 @@ proc update:cron {minute hour day month weekday} {
         set output [join $output]
         set version [dict get $ghdata version]
         set revision [dict get $ghdata revision]
-        set gversion [dict get $ghdata gversion]
-        set grevision [dict get $ghdata grevision]
         set update [dict get $ghdata update]
-        set newversion [dict get $ghdata newversion]
-        set newrevision [dict get $ghdata newrevision]
-        set branch [dict get $ghdata branch]
         dict set ghdata isauto 1; # -- mark this as an automatic update
     }
 
@@ -15757,6 +15758,8 @@ proc update:github {url desc type target} {
 proc update:check {branch {debug "0"} {mode ""}} {
     variable github
 
+    set start [unixtime]
+
     debug 0 "\002update:check:\002 checking for updates -- branch: $branch -- debug: $debug"
     set url "https://raw.githubusercontent.com/empus/armour/${branch}/.version"
     http::register https 443 [list ::tls::socket -tls1.2 true]
@@ -15804,6 +15807,7 @@ proc update:check {branch {debug "0"} {mode ""}} {
     set revision [cfg:get revision]
     regsub -all {v} $version "" version
     set ordered [lsort -decreasing "$version $gversion"]
+    dict set ghdata start $start
     dict set ghdata version $version
     dict set ghdata revision $revision
     dict set ghdata gversion $gversion
@@ -15866,9 +15870,14 @@ proc update:note {note ghdata} {
     if {$isauto} {
         if {[cfg:get update:auto] eq 1} {
             # -- automatic upgrades enabled
-            append note " -- commencing automatic upgrade."
-            update:install
-        } elseif {
+            if {![string match "*installation complete*" $note]} { append note " -- commencing automatic upgrade." }
+            debug 4 "\002update:note:\002 automatic upgrade enabled -- \002commencing install\002"
+            dict set update ghdata $ghdata
+            set start [dict get $ghdata start]
+            set dirfiles [string trimleft [exec find ./armour/backup/armour-$start | wc -l]]
+            dict set update dirfiles $dirfiles
+            update:install $update
+        } else {
             append note " -- to install, use: \002update install\002"
         }
     }
@@ -15922,13 +15931,13 @@ proc update:download {ghdata} {
     set filecount [dict get $ghdata filecount]
     set gversion [dict get $ghdata gversion]
     set grevision [dict get $ghdata grevision]
+    set start [dict get $ghdata start]
     lassign [dict get $ghdata response] type target
 
     # -- begin automatic script install
     debug 0 "\002update:install:\002 starting automatic script install (branch: $branch)"
 
     # -- create lock file to prevent concurrent downloads (incl. from multiple bots from same eggdrop directory)
-    set start [unixtime]
     exec touch ./armour/backup/.lock
     exec echo $start > ./armour/backup/.lock
 
@@ -15970,8 +15979,8 @@ proc update:install {update} {
         return
     }
 
-    set start [dict get $update start]; set end [unixtime]
     set ghdata [dict get $update ghdata]
+    set start [dict get $ghdata start]; set end [unixtime]
     set gversion [dict get $ghdata gversion]
     set grevision [dict get $ghdata grevision]
     set filecount [dict get $ghdata filecount]
@@ -16360,9 +16369,7 @@ proc update:config {sampleconf newconf ghdata} {
                         set efile [lindex $entry 0]
                         if {$efile eq "" || [string match "# *" $file]} { continue }; # -- skip blank lines and comments
                         set eplugin ""; regexp {([^.]+)\.tcl$} [file tail $efile] -> eplugin
-                        #if {[info exists addplugin($eplugin)]} { continue; }; # -- skip plugins already added
                         if {$eplugin eq ""} { continue; }
-                        #putlog "update:config: looping plugin plugin: $eplugin -- file: $efile"
                         incr existplugincount; lappend existplugins $eplugin
                         if {[regexp {^\#} $efile]} {
                             # -- commented plugin

@@ -111,13 +111,15 @@ set cfg(debug:type) "putloglev"
 # ------------------------------------------------------------------------------------------------
 
 # -- run hourly check for new script updates? (0|1) - [1]
-set cfg(update) 0
+# -- notes are sent to global level 500 users when updates are found
+set cfg(update) 1
 
 # -- send notes to global 500 users when new script versions are found? (0|1) - [1]
 set cfg(update:notes) 1
 
 # -- automatically update script when new updates are found? (0|1) - [0]
-# -- notes are sent to global level 500 users when updates are found
+# -- notes are sent to global level 500 users when updates are installed
+# -- requires cfg(update) to be enabled
 set cfg(update:auto) 0
 
 # -- github branch to check and apply updates from - [master]
