@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Sat Dec 17 07:15:24 PST 2022
+# armour.tcl v4.0 autobuild completed on: Sat Dec 17 11:04:07 PST 2022
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -15059,8 +15059,20 @@ proc ctcp:version {nick uhost hand dest keyword args} {
 
 # -- sending join data to external scripts for integration
 proc integrate {nick uhost hand chan extra} {
+
+    set intprocs [cfg:integrate:procs]
+
+    # -- check for trakka plugin, and add if found
+    if {[info commands *trakka*] ne ""} {
+        if {"trakka:int:join" ni $intprocs} { 
+            debug 0 "\002arm:integrate:\002 adding trakka:int:join to integrate procs"
+            append intprocs " trakka:int:join"
+        }
+    }
+    set intprocs [string trimleft $intprocs " "]
+
     # -- pass join arguments to other standalone scripts
-    foreach proc [cfg:get integrate:procs $chan] {
+    foreach proc $intprocs {
         debug 0 "arm:integrate: passing data to external script proc $proc: $nick $uhost $hand $chan $extra"
         $proc $nick $uhost $hand $chan $extra
     }
@@ -15502,7 +15514,7 @@ proc update:cron {minute hour day month weekday} {
     # -- check for available update
     if {$update eq 0} {
         debug 0 "\002update:cron:\002 no update available. currently running \002version:\002 $version (\002revision:\002 $revision)"
-        return;
+        #return;
     }
 
     # -- updated version available
@@ -16078,18 +16090,18 @@ proc update:install {update} {
         
         set prefix "\002info:\002"; set add ""
         #if {$existportcount ne 0} { lappend add "retained \002$existportcount\002 existing \002$existporttext\002 ([join $existports ", "])" }
-        if {$existportcount ne 0} { lappend add "retained \002$existportcount\002 existing scan \002$existporttext\002" }
+        #if {$existportcount ne 0} { lappend add "retained \002$existportcount\002 existing scan \002$existporttext\002" }
         if {$newportcount ne 0} { lappend add "found \002$newportcount\002 available new scan \002$newporttext\002 ([join $newports ", "])" }
         if {$add ne ""} { reply $type $target "$prefix [join $add " -- "]" }
 
         set add ""
         #if {$existrblcount ne 0} { lappend add "retained \002$existrblcount\002 existing \002$existrbltext\002 ([join $existrbls ", "])" }
-        if {$existrblcount ne 0} { lappend add "retained \002$existrblcount\002 existing \002$existrbltext\002" }
+        #if {$existrblcount ne 0} { lappend add "retained \002$existrblcount\002 existing \002$existrbltext\002" }
         if {$newrblcount ne 0} { lappend add "found \002$newrblcount\002 available new \002$newrbltext\002 ([join $newrbls ", "])" }
         if {$add ne ""} { reply $type $target "$prefix [join $add " -- "]" }
 
         set add ""
-        if {$existplugincount ne 0} { lappend add "retained \002$existplugincount\002 existing \002$existplugintext\002" }
+        #if {$existplugincount ne 0} { lappend add "retained \002$existplugincount\002 existing \002$existplugintext\002" }
         #if {$existplugincount ne 0} { lappend add "retained \002$existplugincount\002 existing \002$existplugintext\002 ([join $existplugins ", "])" }
         if {$newplugincount ne 0} { lappend add "found \002$newplugincount\002 available new \002$newplugintext\002 ([join $newplugins ", "])" }
         if {$add ne ""} { reply $type $target "$prefix [join $add " -- "]" }
@@ -16101,8 +16113,11 @@ proc update:install {update} {
     catch { exec rm ./armour/backup/.install }
 
     if {!$debug} {
-        # -- wait 10 seconds to restart, so all lines can be output
-        utimer 10 "putnow \"QUIT :Loading Armour \002v$ver (revision: \002$rev\002)\"; restart; "
+        # -- delete the staging directory
+        exec rm -rf ./armour/backup/armour-$start
+
+        # -- wait 5 seconds to restart, so all lines can be output
+        utimer 5 "putnow \"QUIT :Loading Armour \002v$ver (revision: \002$rev\002)\"; restart; "
     } else {
         reply $type $target "\002info:\002 debug mode enabled, update not installed."
     }
@@ -16233,101 +16248,139 @@ proc update:config {sampleconf newconf ghdata} {
 
         } elseif {[regexp -- {^set addport\(([^\)]+)\)\s+"?([^\"]*)"?.*$} $line -> sport sdesc]} {
             # -- check for existing config for this port
-            # -- first port entry
-            if {[array names scan:ports] ne ""} {
-                if {$startports} {
+            debug 4 "\002update:config:\002 checking sample \002port\002 line: srbl: $sport -- svalue: $sdesc -- scan:ports: [array names scan:ports]"
+            if {$startports} {
+                # -- first handling of ports
+                if {[info exists addport]} {
+                    # -- add all existing v4.x plugin configs
+                    foreach p [array names addport] {
+                        debug 1 "\002update:config:\002 writing \002existing\002 addport($p) entry -- value: $addport($p)"
+                        incr existportcount; lappend existports $p
+                        puts $fd "set addport($p) $addport($p)"
+                    }
+                } elseif {[array names scan:ports] ne ""} {
+                     # -- old ports config (v4.x-alpha)
+                    # -- TODO: delete this block when support is dropped for this old config method
+
                     # -- existing scan:ports config; add all ports but only do this once
-                    foreach port [array names scan:ports] {
-                        lassign [array get scan:ports $port] port desc
-                        if {[info exists addport($port)]} { continue; }; # -- skip ports already added
+                    foreach entry [array names scan:ports] {
+                        lassign [array get scan:ports $entry] port desc
+                        #if {[info exists addport($port)]} { continue; }; # -- skip ports already added
                         debug 1 "\002update:config:\002 using \002existing\002 portscan config (port: $port -- desc: $desc)"
                         puts $fd "set addport($port) \"$desc\""
                         set addport($port) $desc
                         array set scan:ports [list $port $desc]
                         lappend existports $port; incr existportcount
                     }
-                    set startports 0;
-                }
+                    
+                }; # -- END of old config var support
+                set startports 0; # -- only do this once
             }
             if {![info exists addport($sport)]} {
                 # -- no existing scan:ports config
-                debug 1 "\002update:config:\002 using \002sample config\002 for port scanner (port: $sport -- desc: $sdesc)"
+                debug 1 "\002update:config:\002 writing unknown \002sample config\002 for port scanner (port: $sport -- desc: $sdesc)"
                 if {[string index $line 0] ne "#"} {
                     array set scan:ports [list $sport $sdesc]
                     set addport($sport) $sdesc
-                    lappend newports $sport; incr newportcount
                 }
+                lappend newports $sport; incr newportcount
                 puts $fd $line
             }
         
         } elseif {[regexp -- {^\#?set addrbl\(([^\)]+)\)\s+"?([^\"]*)"?.*$} $line -> srbl svalue]} {
             # -- check for existing config for this DNSBL
-            debug 1 "\002update:config:\002 checking sample \002DNSBL\002 line: srbl: $srbl -- svalue: $svalue"
-            # -- first port entry
-            if {[array names scan:rbls] ne ""} {
-                if {$startrbls} {
+            debug 4 "\002update:config:\002 checking sample \002DNSBL\002 line: srbl: $srbl -- svalue: $svalue"
+            if {$startrbls} {
+                # -- first handling of RBLs
+                if {[info exists addrbl]} {
+                    # -- add all existing v4.x plugin configs
+                    foreach r [array names addrbl] {
+                        debug 1 "\002update:config:\002 writing RBLs \002existing\002 addrbl($r) entry -- value: $addrbl($r)"
+                        incr existrblcount; lappend existrbls $r
+                        puts $fd "set addrbl($r) $addrbl($r)"
+                    }
+                } elseif {[array names scan:rbls] ne ""} {
+                    # -- old RBLs config (v4.x-alpha)
+                    # -- TODO: delete this block when support is dropped for this old config method
+
                     # -- existing scan:rbls config; add all RBLs but only do this once
                     foreach entry [array names scan:rbls] {
                         lassign [array get scan:rbls $entry] rbl value
-                        debug 1 "\002update:config:\002 looping existing scan:rbls \002DNSBL\002 entry: rbl: $rbl -- value: $value"
-                        if {[info exists addrbl($rbl)]} { continue; }; # -- skip RBLs already added
+                        #debug 4 "\002update:config:\002 looping existing scan:rbls \002DNSBL\002 entry: rbl: $rbl -- value: $value"
+                        #if {[info exists addrbl($rbl)]} { continue; }; # -- skip RBLs already added
                         lassign $value desc score auto;
-                        debug 1 "\002update:config:\002 using \002existing\002 DNSBL config (port: $rbl -- desc: $desc)"
+                        debug 1 "\002update:config:\002 writing \002existing\002 DNSBL config (port: $rbl -- desc: $desc)"
                         puts $fd "set addrbl($rbl) \"[list $desc] $score $auto\""
                         array set scan:rbls [list $rbl [list "$desc" $score $auto]]
                         set addrbl($rbl) $value
+                        #lappend addrbls $rbl
                         lappend existrbls $rbl; incr existrblcount
                     }
-                    set startrbls 0;
-                } 
+            
+                }; # -- END of old config var support
+                set startrbls 0; # -- only do this once
             }
             if {![info exists addrbl($srbl)]} {
                 # -- no existing scan:rbls config
                 lassign $svalue desc score auto;
-                debug 1 "\002update:config:\002 using \002sample config\002 for DNSBL scanner (port: $srbl -- desc: $value)"
+                debug 1 "\002update:config:\002 writing unknown \002sample config\002 for DNSBL scanner (port: $srbl -- desc: $value)"
                 if {[string index $line 0] ne "#"} {
                     array set scan:rbls [list $srbl [list "$desc" $score $auto]]
                     set addrbl($srbl) $svalue
-                    lappend newrbls $srbl; incr newrblcount
                 }
+                lappend newrbls $srbl; incr newrblcount
                 puts $fd $line
             }
             
         } elseif {[regexp -- {^\#?set addplugin\(([^\)]+)\)\s+"?([^\"]*)"?.*$} $line -> plugin file]} {
             # -- handle plugins
-            # -- first plugin entry
-            if {[info exists files] && $files ne ""} {
-                # -- old plugin config (v4.0 alpha already set)
-                if {$startplugins} {
+            if {$startplugins} {
+                # -- first handling of plugins
+                if {[info exists addplugin]} {
+                    # -- add all existing v4.x plugin configs
+                    foreach p [array names addplugin] {
+                        set pfile $addplugin($p)
+                        debug 1 "\002update:config:\002 writing plugin existing addplugin($p) plugin: $p -- file: $pfile"
+                        incr existplugincount; lappend existplugins $p
+                        puts $fd "set addplugin($p) $pfile"
+                    }
+                } elseif {[info exists files] && $files ne ""} {
+                    # -- old plugin config (v4.x-alpha)
+                    # -- TODO: delete this block when support is dropped for this old config method
+
                     # -- existing plugins config; add all plugins but only do this once
                     foreach entry [split $files "\n"] {
                         set efile [lindex $entry 0]
                         if {$efile eq "" || [string match "# *" $file]} { continue }; # -- skip blank lines and comments
                         set eplugin ""; regexp {([^.]+)\.tcl$} [file tail $efile] -> eplugin
-                        if {[info exists addplugin($eplugin)]} { continue; }; # -- skip plugins already added
+                        #if {[info exists addplugin($eplugin)]} { continue; }; # -- skip plugins already added
                         if {$eplugin eq ""} { continue; }
-                        putlog "update:config: looping plugin plugin: $eplugin -- file: $efile"
+                        #putlog "update:config: looping plugin plugin: $eplugin -- file: $efile"
                         incr existplugincount; lappend existplugins $eplugin
                         if {[regexp {^\#} $efile]} {
                             # -- commented plugin
-                            debug 1 "\002update:config:\002 adding \002existing commented\002 plugin config (plugin: $eplugin -- file: [string trimleft $efile "#"])"
+                            debug 1 "\002update:config:\002 writing \002existing commented\002 plugin config (plugin: $eplugin -- file: [string trimleft $efile "#"])"
                             puts $fd "\#set addplugin($eplugin) \"[string trimleft $efile "#"]\""
                             set addplugin($eplugin) [string trimleft $efile "#"]
                             continue 
                         } else {
-                            debug 1 "\002update:config:\002 using \002existing enabled\002 plugin config (plugin: $eplugin -- file: $efile)"
+                            debug 1 "\002update:config:\002 writing \002existing enabled\002 plugin config (plugin: $eplugin -- file: $efile)"
                             puts $fd "set addplugin($eplugin) \"$efile\""
                             set addplugin($eplugin) $efile
                         }
-                    }
-                    set startplugins 1;
+                    }; # -- END of old config var support
+
                 }
+                set startplugins 0; # -- only do this once
+
             }
             if {![info exists addplugin($plugin)]} {
                 # -- no existing plugins config
+                debug 1 "\002update:config:\002 writing unknown \002sample config\002 for plugin (plugin: $plugin -- file: $file)"
+                if {[string index $line 0] ne "#"} {
+                    set addplugin($plugin) $file
+                }
                 incr newplugincount; lappend newplugins $plugin;
-                set addplugin($plugin) $file
-                debug 1 "\002update:config:\002 using \002sample config\002 for plugin (plugin: $plugin -- file: $file)"
                 puts $fd $line
             }
 
@@ -16679,8 +16732,8 @@ init:autologin
 # ------------------------------------------------------------------------------------------------
 # plugin loader
 # ------------------------------------------------------------------------------------------------
-foreach plugin [array names addplugin] {
-    lassign [array get addplugin $plugin] name file
+foreach plugin [array names arm::addplugin] {
+    lassign [array get arm::addplugin $plugin] name file
     arm::debug 0 "Armour: loading plugin $name ... (file: $file)"
     catch {source $file} error
     if {$error ne ""} {
