@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Sat Dec 17 11:04:07 PST 2022
+# armour.tcl v4.0 autobuild completed on: Sat Dec 17 11:30:37 PST 2022
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -50,6 +50,13 @@ proc ::bgerror {message} {
     } 
     putloglev 1 * "\002(bgError)\002: errorCode: $::errorCode" 
     putloglev 1 * "-"
+}
+
+# -- safety net to ensure the *.conf is loaded directly from eggdrop
+if {![info exists cfg]} {
+    debug 0 "Armour: \002(!CONFIG ERROR!)\002 -- the Armour \002*.conf\002 file must be loaded directly\
+         from eggdrop, \002not\002 the \002armour.tcl\002 file!"
+    die "Armour: eggdrop must load the Armour *.conf file, not the armour.tcl file!"
 }
 
 # -- override some eggdrop settings based on ircd type
@@ -16256,7 +16263,7 @@ proc update:config {sampleconf newconf ghdata} {
                     foreach p [array names addport] {
                         debug 1 "\002update:config:\002 writing \002existing\002 addport($p) entry -- value: $addport($p)"
                         incr existportcount; lappend existports $p
-                        puts $fd "set addport($p) $addport($p)"
+                        puts $fd "set addport($p) \"$addport($p)\""
                     }
                 } elseif {[array names scan:ports] ne ""} {
                      # -- old ports config (v4.x-alpha)
@@ -16297,7 +16304,7 @@ proc update:config {sampleconf newconf ghdata} {
                     foreach r [array names addrbl] {
                         debug 1 "\002update:config:\002 writing RBLs \002existing\002 addrbl($r) entry -- value: $addrbl($r)"
                         incr existrblcount; lappend existrbls $r
-                        puts $fd "set addrbl($r) $addrbl($r)"
+                        puts $fd "set addrbl($r) \"$addrbl($r)\""
                     }
                 } elseif {[array names scan:rbls] ne ""} {
                     # -- old RBLs config (v4.x-alpha)
@@ -16342,7 +16349,7 @@ proc update:config {sampleconf newconf ghdata} {
                         set pfile $addplugin($p)
                         debug 1 "\002update:config:\002 writing plugin existing addplugin($p) plugin: $p -- file: $pfile"
                         incr existplugincount; lappend existplugins $p
-                        puts $fd "set addplugin($p) $pfile"
+                        puts $fd "set addplugin($p) \"$pfile\""
                     }
                 } elseif {[info exists files] && $files ne ""} {
                     # -- old plugin config (v4.x-alpha)
