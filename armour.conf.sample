@@ -489,7 +489,7 @@ set cfg(portscan:remote) 0
 
 # -- scanports and description
 # -- add an 'addport' line for each port to scan, in the format of:
-# set addport(<port> "<description>"
+# set addport(<port>) "<description>"
 set addport(21) "ftp"
 set addport(22) "ssh"
 set addport(25) "smtp"

@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Sat Dec 17 12:49:15 PST 2022
+# armour.tcl v4.0 autobuild completed on: Sun Dec 18 10:11:45 PST 2022
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -11389,6 +11389,12 @@ proc userdb:cmd:modchan {0 1 2 3 {4 ""}  {5 ""}} {
     
     if {![userdb:isAllowed $nick $cmd $chan $type]} { return; }
 
+    # -- disallow settings for global channel
+    if {$chan eq "*"} { 
+        reply $stype $starget "\002error:\002 settings cannot be changed for global channel \002*\002"
+        return;
+    }
+
     # -- command: modchan
     set usage 0
     if {$ttype eq "" || $value eq ""} { set usage 1 }
@@ -11405,12 +11411,13 @@ proc userdb:cmd:modchan {0 1 2 3 {4 ""}  {5 ""}} {
     elseif {[string match "oper*" $ttype]} { set ttype "operop" } \
     elseif {$ttype eq "quote"} { set ttype "quote" } \
     elseif {$ttype eq "quoterand"} { set ttype "quoterand" } \
+    elseif {$ttype eq "correct"} { set ttype "correct" } \
     elseif {$ttype eq "tweet"} { set ttype "tweet" } \
     elseif {$ttype eq "tweetquote"} { set ttype "tweetquote" } \
     else { set usage 1 }
     
     if {$usage} {
-        reply $stype $starget "\002usage:\002 modchan ?<chan|*> <mode|url|desc|autotopic|strictop|strictvoice|trakka|operop|quote|quoterand|tweet|tweetquote> <value>";
+        reply $stype $starget "\002usage:\002 modchan ?chan? <mode|url|desc|autotopic|strictop|strictvoice|trakka|correct|operop|quote|quoterand|tweet|tweetquote> <value>";
         return;
     }
 
@@ -11421,13 +11428,21 @@ proc userdb:cmd:modchan {0 1 2 3 {4 ""}  {5 ""}} {
         return;
     }
     set chan $tchan; # -- ensure correct case
+
+    # -- if setting 'correct' on, ensure 'quote' plugin is loaded
+    if {$ttype eq "correct" && $value eq "on"} {
+        if {[info commands quote:cron] eq ""} {
+            reply $type $target "\002error:\002 the \002quote\002 plugin must be loaded (enabling line tracking)."
+            return;
+        }
+    }
     
     # -- modify the chan setting!
     set lvalue [string tolower $value]
     set db_value [string tolower $value]
     set ltype $ttype
     
-    if {$ttype in "strictop strictvoice trakka operop"} {
+    if {$ttype in "strictop strictvoice trakka operop quote quoterand correct tweet tweetquote"} {
         set value $lvalue
         if {$lvalue ne "on" && $lvalue ne "off"} {
             reply $type $target "\002(\002error\002)\002 value must be: on or off."
@@ -15073,10 +15088,11 @@ proc ctcp:version {nick uhost hand dest keyword args} {
 # -- sending join data to external scripts for integration
 proc integrate {nick uhost hand chan extra} {
 
-    set intprocs [cfg:integrate:procs]
+    set intprocs [cfg:get integrate:procs]
 
     # -- check for trakka plugin, and add if found
-    if {[info commands *trakka*] ne ""} {
+
+    if {[info commands *trakka:int:join*] ne ""} {
         if {"trakka:int:join" ni $intprocs} { 
             debug 0 "\002arm:integrate:\002 adding trakka:int:join to integrate procs"
             append intprocs " trakka:int:join"
@@ -15759,6 +15775,8 @@ proc update:check {branch {debug "0"} {mode ""}} {
     variable github
 
     set start [unixtime]
+
+    if {$branch eq ""} { set branch "master" }
 
     debug 0 "\002update:check:\002 checking for updates -- branch: $branch -- debug: $debug"
     set url "https://raw.githubusercontent.com/empus/armour/${branch}/.version"

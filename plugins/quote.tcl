@@ -33,8 +33,8 @@ set quote(chan) "#channel"
 # -- debug level (0-3) - [1]
 set quote(debug) 3
 
-# -- how long to remember last spoken lines in a channel? (secs) - 600
-set cfg(lastspeak:mins) 3600
+# -- how long to remember last spoken lines in a channel? (mins) - 180
+set cfg(lastspeak:mins) 180
 
 # -- recently spoken lines in the last N seconds should be avoided (secs) - 2
 set cfg(lastspeak:ts) 2
@@ -49,9 +49,9 @@ bind cron - {0 * * * *} arm::quote:cron
 # 2:	integrated to Armour
 set quote(mode) 2
 
-# -----------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------------
 # command				plugin		level req.	binds
-# -----------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------------
 set addcmd(quote)	{	quote		0			pub msg dcc	}
 set addcmd(q)		{	quote		0			pub msg dcc	}; # -- command shortcut
 
@@ -93,9 +93,7 @@ proc quote:cmd:quote {0 1 2 3 {4 ""}  {5 ""}} {
 	variable lastspeak; # -- tracks the last line a nick spoke in a chan (by 'chan,nick')
 	lassign [proc:setvars $0 $1 $2 $3 $4 $5] type stype target starget nick uh hand source chan arg
     set cmd "quote"
-	
-	quote:debug 1 "quote:cmd:quote: $arg"
-	
+		
 	# -- check for integration mode
 	if {$quote(mode) eq 2} {
 		# -- ensure user has required access for command
@@ -166,7 +164,7 @@ proc quote:cmd:quote {0 1 2 3 {4 ""}  {5 ""}} {
 		if {[lindex $arg 2] eq "-more"} { set more 1 } else { set more 0 }
 		# -- TODO: put the timeago script locally, for standalone mode
 		set added [userdb:timeago $timestamp]
-		putlog "\002quote:\002 tquote: $tquote"
+		#putlog "\002quote:\002 tquote: $tquote"
 		set lines [split [join $tquote] \n]
 		foreach line $lines {
 			quote:reply $type $target "\002\[id:\002 $id\002\]\002 [join $line]"
@@ -362,7 +360,7 @@ proc quote:cmd:quote {0 1 2 3 {4 ""}  {5 ""}} {
 		set tquote [string trimleft $tquote "  "]; # -- strip leading spaces
 		set tquote [string trimright $tquote "\\n"]; # -- strip trailing newlines
 
-		putlog "\002quote\002: tquote: $tquote"
+		#putlog "\002quote\002: tquote: $tquote"
 
 		# -- force the normal add
 		set what "add"
@@ -601,6 +599,37 @@ proc quote:cmd:quote {0 1 2 3 {4 ""}  {5 ""}} {
 	}
 }
 
+# -- find the most recent line that matches a correction regex
+proc quote:correct {chan regex} {
+	global botnick;
+	variable lastspeak; # -- tracks the last line a nick spoke in a chan (by 'chan,nick')
+	variable dbchans;   # -- dict for db channels
+
+	set cid [dict keys [dict filter $dbchans script {id dictData} { expr {[dict get $dictData chan] eq $chan} }]]
+	if {$cid eq ""} { return; }; # -- channel not registered
+	if {[dict exists $dbchans $cid correct]} {
+		set correct [dict get $dbchans $cid correct]
+		if {$correct eq "off" || $correct eq ""} { return; }; # -- 'correct' channel setting not on
+	} else { return; }; # -- 'correct' channel setting not on
+
+	if {![regexp {^s/([^\/]*)/([^\/]*)/$} $regex -> match new]} { return; }; # -- must be a correction regex
+	if {$new ne ""} { set new "\002$new\002" }
+	set chanlines [lsort -decreasing [array names lastspeak $chan,*]]
+	foreach entry $chanlines {
+		#debug 4 "quote:correct: checking line: $lastspeak($entry)"
+		set line $lastspeak($entry)
+		if {[lindex $line 0] eq "<$botnick>"} { continue; }; # -- skip bot lines
+		if {[regexp {^<[^>]+> s/} $line]} { continue; }; # -- skip correction prvimsg lines
+		if {[regsub -all $match $line $new newline]} {
+			#debug 4 "quote:correct: match found (chan: $chan -- regex: $regex) -- line: $line"
+			debug 1 "quote:correct: line in $chan replaced with: $newline"
+			return $newline
+		}
+	}
+	debug 1 "quote:correct: no match found (chan: $chan -- regex: $regex)"
+	return; # -- no match found
+}
+
 # -- cronjob to output regular random quotes
 proc quote:cron {minute hour day month weekday} { 
 	variable dbchans; # -- dict containing channel data
@@ -615,7 +644,7 @@ proc quote:cron {minute hour day month weekday} {
 		set randid [quote:db:query "SELECT id FROM quotes WHERE cid='$cid' ORDER BY RANDOM() LIMIT 1"]
 		set query "SELECT quote FROM quotes WHERE id='$randid' AND cid='$cid'"
 		set quote [join [quote:db:query $query]]
-		putlog "\002quote:cron\002 sending periodic random quote to $chan: $quote"
+		debug 1 "\002quote:cron\002 sending periodic random quote to $chan: $quote"
 		set lines [split [join $quote] \n]
 		foreach line $lines {
 			quote:reply msg $chan "\002\[id:\002 $randid\002\]\002 [join $line]"
@@ -657,6 +686,14 @@ proc quote:escape {value} {
 
 # -- remember the last line a nick spoke in a given channel (privmsg)
 proc quote:pubm {nick uhost hand chan text} {
+	# -- check for correction regex
+	if {[regexp {^s/([^\/]*)/([^\/]*)/$} $text]} {
+		set newline [quote:correct $chan $text]
+		if {$newline ne ""} {
+			quote:reply msg $chan "\002correction,\002 $newline"
+			return;
+		}
+	}
 	quote:addspeak $nick $uhost $hand [string tolower $chan] "<$nick> $text";
 }
 
@@ -665,16 +702,25 @@ proc quote:action {nick uhost hand dest keyword text} {
 	# -- only process channel actions 
 	if {[string index $dest 0] ne "#"} { return; }
 	set action "* $nick $text"
+
+	# -- check for correction regex
+	if {[regexp {^s/([^\/]*)/([^\/]*)/$} $action]} {
+		set newline [quote:correct $chan $action]
+		if {$newline ne ""} {
+			quote:reply msg $chan "\002correction,\002 $newline"
+			return;
+		}
+	}
 	quote:addspeak $nick $uhost $hand [string tolower $dest] $action
 }
 
 # -- remember the last line a nick spoke in a given channel
 proc quote:addspeak {nick uhost hand chan text} {
+	variable dbchans; # -- dict with database channels
+	set cid [dict keys [dict filter $dbchans script {id dictData} { expr {[dict get $dictData chan] eq $chan} }]]
+	if {$cid eq ""} { return; }; # -- channel not registered
+
 	set snick [split $nick]
-	if {![quote:isEnabled $chan]} { return; }; # -- only continue if setting is on
-	# -- only track for registered channels
-	set cid [db:get id channels chan $chan]
-	if {$cid eq ""} { return;}
 	variable lastspeak;          # -- tracks the last line a nick spoke in a chan (by 'chan,nick')
 	set ts [clock milliseconds]; # -- track when spoken, to have race condition mitigation when someone does 'quote add last <nick>' and they very recently spoke something else
 	set lastspeak($chan,$ts,$snick) $text
@@ -693,7 +739,7 @@ proc quote:isEnabled {chan} {
 
 # -- load sqlite (or at least try)
 if {[catch {package require sqlite3} fail]} {
-	putlog "\[@\] error loading sqlite3 library.  unable to load Armour SQL DB functions."
+	debug 0 "error loading sqlite3 library.  unable to load Armour SQL DB functions."
 	return false
 }
 
