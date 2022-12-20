@@ -119,7 +119,7 @@ proc tell:cmd:tell {0 1 2 3 {4 ""}  {5 ""}} {
         tell:debug 3 "tell:cmd:tell adding tell to: $to prefix: $prefix timed: $timed delayed: $delayed priv: $priv what: $what"
     } else {
         # -- return syntax
-        tell:reply $stype $starget "\002usage:\002 tell <who> ?<when>? (that|to|about) <something>"
+        tell:reply $stype $starget "\002usage:\002 tell <nick> ?<when>? (that|to|about) <text>"
         return;
     }
     

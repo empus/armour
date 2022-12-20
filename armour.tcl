@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Sun Dec 18 10:11:45 PST 2022
+# armour.tcl v4.0 autobuild completed on: Tue Dec 20 08:25:27 PST 2022
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -2177,12 +2177,14 @@ bind evnt - init-server arm::auth:server:init
 
 
 if {[info commands "*auth:success"] eq ""} {
-    if {[string tolower [cfg:get auth:mech *]] eq "gnuworld"} {
+    set mech [cfg:get auth:mech *]
+    if {[string tolower $mech] eq "gnuworld"} {
         # -- gnuworld auth service
         bind notc - "AUTHENTICATION SUCCESSFUL*" arm::auth:success
         bind notc - "Sorry, You are already authenticated as *" arm::auth:success
         bind notc - "AUTHENTICATION FAIL*" arm::auth:fail
-    } elseif {[string tolower [cfg:get auth:mech *]] eq "nickserv"} {
+
+    } elseif {[string tolower $mech] eq "nickserv"} {
         # -- nickserv auth service
         # Freenode:
         bind notc - "You are now identified for *" arm::auth:success
@@ -3654,12 +3656,18 @@ proc arm:cmd:conf {0 1 2 3 {4 ""}  {5 ""}} {
     lassign [db:get id,user users curnick $nick] uid user
     # -- end default proc template
     
-    if {$arg eq "" || [llength $arg] < 2} { reply $stype $starget "usage: conf ?chan? <setting|mask> \[-out\]"; return; }
+    if {$arg eq ""} { reply $stype $starget "usage: conf ?chan? <setting|mask> \[-out\]"; return; }
     set chan [lindex $arg 0]
-    if {[string index $chan 0] ne "#" && $chan eq "*"} { set chan "*" }; # -- default to global if not given
+    if {[string index $chan 0] ne "#" && $chan ne "*"} { 
+        # -- default to global if not given
+        set chan "*" 
+        set rest [lrange $arg 0 end]
+    } else {
+        set rest [lrange $arg 1 end]
+    }
     set cid [db:get id channels chan $chan]
     if {$cid eq ""} { reply $type $target "\002error:\002 channel $chan is not registered."; return; }
-    set rest [lrange $arg 1 end]
+    
     set var ""; set length [llength $rest]; set out 0;
     if {$length eq "1"} {
         if {[string match "*:*" $rest]} {
@@ -3737,6 +3745,8 @@ proc arm:cmd:cmds {0 1 2 3 {4 ""} {5 ""}} {
     lassign [proc:setvars $0 $1 $2 $3 $4 $5] type stype target starget nick uh hand source chan arg 
     
     set cmd "cmds"
+    set hint [cfg:get help:web *]
+    if {$hint eq ""} { set hint 0 }
 
     # -- ensure user has required access for command
     if {![userdb:isAllowed $nick $cmd $chan $type]} { return; }
@@ -3792,6 +3802,7 @@ proc arm:cmd:cmds {0 1 2 3 {4 ""} {5 ""}} {
         foreach l $lvls {
             reply $ntype $ntarget "\002Level $l:\002 [lsort -dictionary [join $levels($l)]]"
         }
+        if {$hint eq 1} { reply $ntype $ntarget "\002hint:\002 for web documentation, see: https://armour.empus.net/cmd" }
         # -- create log entry for command use
         log:cmdlog BOT * 1 $user $uid [string toupper $cmd] [join $arg] $source "" "" ""
         return;
@@ -3818,7 +3829,8 @@ proc arm:cmd:cmds {0 1 2 3 {4 ""} {5 ""}} {
 
     # -- send the command list
     reply $stype $starget "\002commands:\002 [lsort -unique -dictionary [join $cmdlist]]"
-    
+    if {$hint eq 1} { reply $stype $starget "\002hint:\002 for web documentation, see: https://armour.empus.net/cmd" }
+
     # -- create log entry for command use
     log:cmdlog BOT * 1 $user $uid [string toupper $cmd] [join $arg] $source "" "" ""
     
@@ -3835,6 +3847,12 @@ proc arm:cmd:help {0 1 2 3 {4 ""} {5 ""}} {
     lassign [proc:setvars $0 $1 $2 $3 $4 $5] type stype target starget nick uh hand source chan arg 
     
     set cmd "help"
+
+    # -- web documentation links
+    set hint [cfg:get help:web *]
+    if {$hint eq ""} { set hint 0 }
+    set webonly [cfg:get help:webonly *]
+    if {$webonly eq ""} { set webonly 0 }
         
     # -- ensure user has required access for command
     if {![userdb:isAllowed $nick $cmd $chan $type]} { return; }
@@ -3845,7 +3863,11 @@ proc arm:cmd:help {0 1 2 3 {4 ""} {5 ""}} {
     set command [string tolower [lindex $arg 0]]
     if {$command eq "help" || $command eq ""} {
         reply $stype $starget "\002usage:\002 help \[command\]"; 
-        reply $stype $starget "\002hint:\002 for a command list, \002try:\002 'cmds \[level\]' or 'cmds levels' for per level summary."
+        set out "\002hint:\002 for a command list, \002try:\002 'cmds \[level\]'"
+        if {!$hint} { append out " or 'cmds levels' for per level summary" } else {
+            append out ", 'cmds levels' for per level summary, or view: https://armour.empus.net/cmd"
+        }
+        reply $stype $starget $out
         return; 
     }
         
@@ -3886,19 +3908,22 @@ proc arm:cmd:help {0 1 2 3 {4 ""} {5 ""}} {
         set fd [open $file r]
         set data [read $fd]
         set lines [split $data \n]
+        set count 1
         foreach line $lines {
+            if {$webonly && $count ne 1} { continue }; # -- skip if only weblinks, except for first line (command usage)
             # -- string replacements:
             # - %LEVEL% level required
             # - %B%     bold text
             regsub -all {%LEVEL%} $line $req line
             regsub -all {%B%} $line \x02 line
             reply $stype $starget $line
+            incr count
         }
         close $fd
+        if {$hint eq 1} { reply $stype $starget "\002hint:\002 for web documentation, see: https://armour.empus.net/cmd/$command" }
+        # -- create log entry for command use
+        log:cmdlog BOT * 1 $user $uid [string toupper $cmd] [join $arg] $source "" "" ""
     }
-    
-    # -- create log entry for command use
-    log:cmdlog BOT * 1 $user $uid [string toupper $cmd] [join $arg] $source "" "" ""
 }
 
 
@@ -5952,6 +5977,8 @@ proc arm:cmd:add {0 1 2 3 {4 ""}  {5 ""}} {
     set cmd "add"
     lassign [db:get id,user users curnick $nick] uid user
     
+    putlog "cmd:add: type: $type -- chan: $chan cmd: $cmd -- -- nick: $nick -- arg: $arg"
+
     # -- deal with the optional channel argument
     set first [lindex $arg 0]; set ischan 0
     if {[string index $first 0] eq "#" || [string index $first 0] eq "*"} {
@@ -5967,9 +5994,7 @@ proc arm:cmd:add {0 1 2 3 {4 ""}  {5 ""}} {
     set cid [db:get id channels chan $chan]
     if {![userdb:isAllowed $nick $cmd $chan $type]} { return; }
     set log "$chan [join $arg]"; set log [string trimright $log " "]
-    
-    putlog "\002arm:cmd:add: chan: $chan\002"
-    
+        
     # -- catch method
     set usage 0;
     set method [string tolower $method]
@@ -8134,7 +8159,8 @@ proc raw:endofwho {server cmd text} {
     foreach cgroup [array names scan:list "data,*"] {
         lassign [split $cgroup ,] data lchan
         foreach i [get:val scan:list data,$lchan] {
-            lassign $i nick chan full clicks ident ip host xuser rname
+            lassign $i nick chan full clicks ident ip host xuser
+            set rname [lindex $i 8]
             if {$nick ni $leavelist} {
                 set lchan [join [lindex [split $cgroup ,] 1]]
                 set rname [list $rname]
@@ -8525,10 +8551,10 @@ proc scan {nick chan full clicks ident ip host xuser rname} {
     debug 3 "\002scan: received: chan: $chan -- nick: $nick -- ident: $ident -- host: $host -- ip: $ip -- xuser: $xuser -- rname: $rname\002"
     
     # -- helpful debugging to find source of superfluous scans
-    if {![info exists scan:list(who,$lchan)]} { set scan:list(who,$lchan) "" } else { debug 4 "scan:continue scan:list(who,$lchan): [get:val scan:list who,$lchan]" }
-    if {![info exists scan:list(data,$lchan)]} { set scan:list(data,$lchan) "" } else { debug 4 "scan:continue scan:list(data,$lchan): [get:val scan:list data,$lchan]" }
-    if {![info exists scan:list(nicks,$lchan)]} { set scan:list(nicks,$lchan) "" } else { debug 4 "scan:continue scan:list(nicks,$lchan): [get:val scan:list nicks,$lchan]" }
-    if {![info exists scan:list(leave,$lchan)]} { set scan:list(leave,$lchan) "" } else { debug 4 "scan:continue scan:list(leave,$lchan): [get:val scan:list leave,$lchan]" }
+    if {![info exists scan:list(who,$lchan)]} { set scan:list(who,$lchan) "" } else { debug 4 "scan: scan:list(who,$lchan): [get:val scan:list who,$lchan]" }
+    if {![info exists scan:list(data,$lchan)]} { set scan:list(data,$lchan) "" } else { debug 4 "scan: scan:list(data,$lchan): [get:val scan:list data,$lchan]" }
+    if {![info exists scan:list(nicks,$lchan)]} { set scan:list(nicks,$lchan) "" } else { debug 4 "scan: scan:list(nicks,$lchan): [get:val scan:list nicks,$lchan]" }
+    if {![info exists scan:list(leave,$lchan)]} { set scan:list(leave,$lchan) "" } else { debug 4 "scan: scan:list(leave,$lchan): [get:val scan:list leave,$lchan]" }
 
     # -- remove click tracking for the nick & chan
     if {[info exists nick:clickchan($clicks)]} { unset nick:clickchan($clicks) }
@@ -10302,6 +10328,7 @@ proc flud:queue {} {
 
     #debug 3 "flud:queue: starting..."
 
+    if {![info exists dbchans]} { after [cfg:get queue:flud *] arm::flud:queue; return; }
     set cids [dict keys $dbchans]
     
     foreach cid $cids {
@@ -13775,6 +13802,9 @@ package require json
 package require http
 package require md5
 
+# -- www.textcaptcha.com API URL
+set cfg(captcha:url) "http://api.textcaptcha.com/${cfg(captcha:id)}.json"
+
 # -- warning: there is currently an issue using https
 #package require tls
 #::http::register https 443 ::tls::socket
@@ -14116,7 +14146,11 @@ package require Tcl 8.6
 package require http 2
 package require tls 1.7
 
+# -- ircbl.org addition address
+set cfg(ircbl:url:add) "https://ircbl.org/addrbl";
 
+# -- ircbl.org removal address
+set cfg(ircbl:url:del) "https://ircbl.org/delrbl";
 
 # -- run the test
 proc ircbl:query:coro {cmd ip type {comment ""}} {
@@ -14229,10 +14263,8 @@ putlog "\[@\] Armour: loaded IRCBL support functions."
 namespace eval arm {
 # ------------------------------------------------------------------------------------------------
 
-# -- load the command
-#                       plugin   level req.   binds enabled  
-set addcmd(ipqs)     {  ipqs     1            pub msg dcc    }
-
+# -- IPQS addition API endpoint
+set cfg(ipqs:url) "https://www.ipqualityscore.com/api/json/ip"
 
 # -- prerequisites (Tcllibc)
 package require Tcl 8.6
@@ -15488,6 +15520,7 @@ source ./armour/packages/github.tcl
 
 # -- cronjob to run periodic update check
 proc update:cron {minute hour day month weekday} {
+    variable ghdata
     set debug [cfg:get update:debug]
 
     # -- flush periodic script backups older than N days
@@ -16357,7 +16390,7 @@ proc update:config {sampleconf newconf ghdata} {
             if {![info exists addrbl($srbl)]} {
                 # -- no existing scan:rbls config
                 lassign $svalue desc score auto;
-                debug 1 "\002update:config:\002 writing unknown \002sample config\002 for DNSBL scanner (port: $srbl -- desc: $value)"
+                debug 1 "\002update:config:\002 writing unknown \002sample config\002 for DNSBL scanner (port: $srbl -- desc: $svalue)"
                 if {[string index $line 0] ne "#"} {
                     array set scan:rbls [list $srbl [list "$desc" $score $auto]]
                     set addrbl($srbl) $svalue

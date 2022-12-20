@@ -240,6 +240,12 @@ set cfg(jump) 1
 # -- send help and syntax responses from public commands via /notice? (0|1) - [0]
 set cfg(help:notc) 0
 
+# -- also sent web documentation links in help command responses? (0|1)? - [1]
+set cfg(help:web) 1
+
+# -- only output usage and web links in help responses? (0|1)? - [1]
+set cfg(help:webonly) 1
+
 # -- stack voice modes when in secure mode? - [0|1]
 # -- this will slow down voicing of new users, by the time set in cfg(stack:secs)
 set cfg(stackvoice) 1
@@ -532,9 +538,6 @@ set cfg(captcha) 0
 # -- www.textcaptcha.com ID
 set cfg(captcha:id) "your@emailaddress.com"
 
-# -- www.textcaptcha.com API URL
-set cfg(captcha:url) "http://api.textcaptcha.com/${cfg(captcha:id)}.json"
-
 # -- send an opnotice when a question is sent to a user? (0|1) - [1]
 set cfg(captcha:opnotc) 1
 
@@ -585,28 +588,25 @@ set cfg(captcha:ack:ops) 1
 # This section relates to the use of ipqualityscore.com lookups for potentially malicious clients
 
 # -- IPQS enable? (0|1) - [0]
-set cfg(ipqs) 0;
-
-# -- IPQS addition API endpoint
-set cfg(ipqs:url) "https://www.ipqualityscore.com/api/json/ip";
+set cfg(ipqs) 0
 
 # -- IPQS API key
-set cfg(ipqs:key) "you-key-here";
+set cfg(ipqs:key) "you-key-here"
 
 # -- IPQS only match clients with ~ in ident? (0|1) - [1]
-set cfg(ipqs:onlynoident) 1;
+set cfg(ipqs:onlynoident) 1
 
 # -- IPQS minimum fraud score required before action is taken (0-100) - [85]
-set cfg(ipqs:minscore) 85;
+set cfg(ipqs:minscore) 90
 
 # -- IPQS action (in mode=secure) -- kick|kickban|warn - [kick]
-set cfg(ipqs:action:secure) "kick";
+set cfg(ipqs:action:secure) "kick"
 
 # -- IPQS action (in mode=on) -- kick|kickban|warn - [kickban]
-set cfg(ipqs:action:on) "kickban";
+set cfg(ipqs:action:on) "kickban"
 
 # -- IPQS ban duration (secs) - [3600]
-set cfg(ipqs:duration) 3600;
+set cfg(ipqs:duration) 3600
 
 
 # ------------------------------------------------------------------------------------------------
@@ -616,12 +616,6 @@ set cfg(ipqs:duration) 3600;
 
 # -- ircbl.org enable
 set cfg(ircbl) 0;
-
-# -- ircbl.org addition address
-set cfg(ircbl:url:add) "https://ircbl.org/addrbl";
-
-# -- ircbl.org removal address
-set cfg(ircbl:url:del) "https://ircbl.org/delrbl";
 
 # -- ircbl.org key
 set cfg(ircbl:key) "your-key-here";
@@ -887,7 +881,8 @@ set cfg(integrate:procs) ""
 # - provides server level flood protection
 # - leave empty for no /SILENCE
 # -- WARNING: if CAPTCHA is being used, SILENCE should be disabled (to allow captcha responses)
-set cfg(silence) "+*!*@* +~*!*@*.users.undernet.org +~*!*@undernet.org +~*!*@172.16.4.0/24"
+#set cfg(silence) "+*!*@* +~*!*@*.users.undernet.org"; # -- only allow messages from authed users
+set cfg(silence) ""
 
 
 
@@ -991,15 +986,9 @@ set addcmd(ack)         {  trakka    1          pub msg dcc  }
 set addcmd(score)       {  trakka    1          pub msg dcc  }
 set addcmd(nudge)       {  trakka    1          pub msg dcc  }
 set addcmd(idle)        {  arm       1          pub msg dcc  }
+set addcmd(ipqs)        {  ipqs      1          pub msg dcc  }
 set addcmd(mode)        {  arm       100        pub msg dcc  }
 set addcmd(add)         {  arm       100        pub msg dcc  }
-set addcmd(a)           {  arm       100        pub msg dcc  }; # -- shortcut: add
-set addcmd(mod)         {  arm       100        pub msg dcc  }
-set addcmd(m)           {  arm       100        pub msg dcc  }; # -- shortcut: mod
-set addcmd(rem)         {  arm       100        pub msg dcc  }
-set addcmd(r)           {  arm       100        pub msg dcc  }; # -- shortcut: rem
-set addcmd(black)       {  arm       100        pub msg dcc  }
-set addcmd(b)           {  arm       100        pub msg dcc  }; # -- shortcut: black
 set addcmd(op)          {  arm       100        pub msg dcc  }
 set addcmd(deop)        {  arm       100        pub msg dcc  }
 set addcmd(voice)       {  arm       100        pub msg dcc  }
@@ -1011,9 +1000,15 @@ set addcmd(kb)          {  arm       100        pub msg dcc  }; # -- shortcut: k
 set addcmd(unban)       {  arm       100        pub msg dcc  }
 set addcmd(topic)       {  arm       100        pub msg dcc  }
 set addcmd(invite)      {  arm       100        pub msg dcc  }
+set addcmd(a)           {  arm       200        pub msg dcc  }; # -- shortcut: add
+set addcmd(mod)         {  arm       200        pub msg dcc  }
+set addcmd(m)           {  arm       200        pub msg dcc  }; # -- shortcut: mod
+set addcmd(rem)         {  arm       200        pub msg dcc  }
+set addcmd(r)           {  arm       200        pub msg dcc  }; # -- shortcut: rem
+set addcmd(black)       {  arm       200        pub msg dcc  }
+set addcmd(b)           {  arm       200        pub msg dcc  }; # -- shortcut: black
 set addcmd(chanscan)    {  arm       200        pub msg dcc  }
 set addcmd(newuser)     {  userdb    400        pub msg dcc  }
-set addcmd(deluser)     {  userdb    400        pub mdg dcc  }
 set addcmd(adduser)     {  userdb    400        pub msg dcc  }
 set addcmd(remuser)     {  userdb    400        pub msg dcc  }
 set addcmd(userlist)    {  userdb    400        pub msg dcc  }
@@ -1021,7 +1016,7 @@ set addcmd(usearch)     {  userdb    400        pub msg dcc  }
 set addcmd(chanlist)    {  userdb    400        pub msg dcc  }
 set addcmd(moduser)     {  userdb    400        pub msg dcc  }
 set addcmd(say)         {  arm       400        pub msg dcc  }
-set addcmd(jump)        {  arm       400        pub msg dcc  }
+set addcmd(jump)        {  arm       450        pub msg dcc  }
 set addcmd(load)        {  arm       450        pub msg dcc  }
 set addcmd(reload)      {  arm       450        pub msg dcc  }
 set addcmd(restart)     {  arm       450        pub msg dcc  }
@@ -1029,6 +1024,7 @@ set addcmd(rehash)      {  arm       450        pub msg dcc  }
 set addcmd(addchan)     {  userdb    450        pub msg dcc  }
 set addcmd(remchan)     {  userdb    450        pub msg dcc  }
 set addcmd(modchan)     {  userdb    450        pub msg dcc  }
+set addcmd(deluser)     {  userdb    450        pub mdg dcc  }
 set addcmd(do)          {  userdb    500        pub msg dcc  }
 set addcmd(die)         {  arm       500        pub msg dcc  }
 set addcmd(conf)        {  arm       500        pub msg dcc  }
