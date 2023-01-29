@@ -1,0 +1,2 @@
+%B%command:%B% modchan -- %B%level:%B% %LEVEL% -- %B%usage:%B% modchan ?chan? <mode|url|desc|autotopic|strictop|strictvoice|trakka|correct|operop|quote|quoterand|tweet|tweetquote> <value>
+modifies channel settings. 'mode' is the channel mode (or can be set with command 'mode').  settings 'desc' and 'url' are string values.  all others are 'on' & 'off' settings.

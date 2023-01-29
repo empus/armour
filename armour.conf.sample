@@ -312,18 +312,6 @@ set cfg(note:level) 1
 # -- command chans (comma delimited)
 set cfg(chan:nocmd) "#foo"
 
-# -- autologin chan list
-# - for periodic /who check of channel (leave blank to disable)
-#
-# - If the below channel list (comma delimited) includes the primary cfg(chan:def) channel,
-# - there is a risk of a race condition.  This can occur if autologin returns endofwho before an
-# - existing scan is complete on a nick.  The scenario results in a false positive joinflood.
-# - The risk is increased on networks like IRCnet/EFnet who do not support extended /WHO (such as
-# - Undernet or other ircu-derived ircds).    For safety, use a chanlist below which excludes the
-# - primary channel. Use only backchannele, or even leave this option empty.  Autologin will still
-# - occur when a user joins a channel (even if not umode +x).
-set cfg(chan:login) ""
-
 # -- autologin /who cycle (secs) - [60]
 # -- how frequently to check the channel list for people who authenticated to X after joining
 # - only if enabled above

@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Tue Dec 20 08:25:27 PST 2022
+# armour.tcl v4.0 autobuild completed on: Sun Jan 29 05:42:52 PST 2023
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -3802,7 +3802,7 @@ proc arm:cmd:cmds {0 1 2 3 {4 ""} {5 ""}} {
         foreach l $lvls {
             reply $ntype $ntarget "\002Level $l:\002 [lsort -dictionary [join $levels($l)]]"
         }
-        if {$hint eq 1} { reply $ntype $ntarget "\002hint:\002 for web documentation, see: https://armour.empus.net/cmd" }
+        if {$hint eq 1} { reply $ntype $ntarget "\002hint:\002 for web documentation, see: \002https://armour.bot/cmd\002" }
         # -- create log entry for command use
         log:cmdlog BOT * 1 $user $uid [string toupper $cmd] [join $arg] $source "" "" ""
         return;
@@ -3829,7 +3829,7 @@ proc arm:cmd:cmds {0 1 2 3 {4 ""} {5 ""}} {
 
     # -- send the command list
     reply $stype $starget "\002commands:\002 [lsort -unique -dictionary [join $cmdlist]]"
-    if {$hint eq 1} { reply $stype $starget "\002hint:\002 for web documentation, see: https://armour.empus.net/cmd" }
+    if {$hint eq 1} { reply $stype $starget "\002hint:\002 for web documentation, see: \002https://armour.bot/cmd\002" }
 
     # -- create log entry for command use
     log:cmdlog BOT * 1 $user $uid [string toupper $cmd] [join $arg] $source "" "" ""
@@ -3863,9 +3863,9 @@ proc arm:cmd:help {0 1 2 3 {4 ""} {5 ""}} {
     set command [string tolower [lindex $arg 0]]
     if {$command eq "help" || $command eq ""} {
         reply $stype $starget "\002usage:\002 help \[command\]"; 
-        set out "\002hint:\002 for a command list, \002try:\002 'cmds \[level\]'"
-        if {!$hint} { append out " or 'cmds levels' for per level summary" } else {
-            append out ", 'cmds levels' for per level summary, or view: https://armour.empus.net/cmd"
+        set out "\002hint:\002 for a command list, \002try:\002 '\002cmds \[level\]\002'"
+        if {!$hint} { append out " or '\002cmds levels\002' for per level summary" } else {
+            append out ", '\002cmds levels\002' for per level summary, or view: \002https://armour.bot/cmd\002"
         }
         reply $stype $starget $out
         return; 
@@ -3920,7 +3920,7 @@ proc arm:cmd:help {0 1 2 3 {4 ""} {5 ""}} {
             incr count
         }
         close $fd
-        if {$hint eq 1} { reply $stype $starget "\002hint:\002 for web documentation, see: https://armour.empus.net/cmd/$command" }
+        if {$hint eq 1} { reply $stype $starget "\002hint:\002 for web documentation, see: \002https://armour.bot/cmd/$command\002" }
         # -- create log entry for command use
         log:cmdlog BOT * 1 $user $uid [string toupper $cmd] [join $arg] $source "" "" ""
     }
@@ -10571,6 +10571,9 @@ proc userdb:msg:inituser {nick uhost hand arg} {
         if {[string tolower $defchan] ni $chanlist} { channel add $defchan }
     }
 
+    # -- load channels
+    db:load:chan
+
     reply notc $nick "newuser created. please login: /msg $botnick login $user $randpass"
     reply notc $nick "and then change password: /msg $botnick newpass <newpassword>"
     
@@ -16784,6 +16787,19 @@ if {[cfg:get dronebl] eq 1} {
     }
     source ./armour/packages/libdronebl.tcl 
 }
+
+# -- autologin chan list
+# - for periodic /who check of channel (leave blank to disable)
+#
+# - If the below channel list (comma delimited) includes the primary cfg(chan:def) channel,
+# - there is a risk of a race condition.  This can occur if autologin returns endofwho before an
+# - existing scan is complete on a nick.  The scenario results in a false positive joinflood.
+# - The risk is increased on networks like IRCnet/EFnet who do not support extended /WHO (such as
+# - Undernet or other ircu-derived ircds).    For safety, use a chanlist below which excludes the
+# - primary channel. Use only backchannele, or even leave this option empty.  Autologin will still
+# - occur when a user joins a channel (even if not umode +x).
+# -- TODO: remove autologin timer cycle code completely? Unless a better solution is found
+set cfg(chan:login) ""
 
 # -- start autologin
 init:autologin
