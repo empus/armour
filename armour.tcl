@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Sun Jan 29 05:42:52 PST 2023
+# armour.tcl v4.0 autobuild completed on: Thu Feb 16 07:26:07 PST 2023
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -3688,7 +3688,7 @@ proc arm:cmd:conf {0 1 2 3 {4 ""}  {5 ""}} {
     # -- check the var
     set count 0;
     if {[cfg:get $var $chan] ne ""} {
-        reply $type $target "\002setting:\002 cfg($var) -- value: [cfg:get $var $chan]"
+        reply $type $target "\002setting:\002 cfg($var) -- \002value:\002 [cfg:get $var $chan]"
     } else {
         # -- return those that do match?
         set thelist ""
@@ -7385,7 +7385,17 @@ proc raw:join {nick uhost hand chan} {
     set nick:exempt($lchan,$snick) 0; set exempt 0;
 
     # -- check if returning from netsplit?
-    set splitval [get:val data:netsplit $nick!$uhost]
+    # special handling: https://github.com/empus/armour/issues/130
+    set splitkey [array names data:netsplit "$nick!$ident@*"]
+    if {$splitkey ne ""} {
+        set oldhost [lindex [split $splitkey @] 1]
+        if {[string match "*.[cfg:get xhost:ext]" $oldhost]} {
+            # -- user was previously umode +x
+            set splitval [get:val data:netsplit $splitkey]
+            set splitvar $splitkey
+        }
+    } else { set splitval [get:val data:netsplit $nick!$uhost]; set splitvar $nick!$uhost }
+
     if {$splitval ne ""} {
         # -- check if timeago is not more than netsplit memory timeout
         if {[expr ([clock seconds] - $splitval) * 60] >= [cfg:get split:mem *]} {
@@ -7395,7 +7405,7 @@ proc raw:join {nick uhost hand chan} {
         } else {
                 debug 0 "raw:join: $nick returned after 'netsplit' after timeout period (split [userdb:timeago $splitval] ago), not exempt from scans..."
         }
-        unset data:netsplit($nick!$uhost)
+        unset data:netsplit($splitvar)
     } else {
         debug 0 "raw:join: $nick joined and data:netsplit($nick!$uhost) doesn't exist or is empty... continuing"
     }
@@ -8209,14 +8219,22 @@ proc raw:endofwho {server cmd text} {
 # - let the ops do the rest (ie. voicing existing users if they also set +m)
 proc mode:add:D {nick uhost hand chan mode target} {
     global botnick
-    variable chan:mode; # -- stores the operational mode of a channel (by chan)
+    variable dbchans;
+    variable chan:mode; # -- stores the operational mode of a channel (by chan); TODO: deprecated?
+    variable voicecache; # -- cache of voiced users prior to floodnet lock using +D and secure mode
     set lchan [string tolower $chan]
-    if {![info exists chan:mode($lchan)] || $nick eq $botnick} { return; }
+    if {![info exists chan:mode($lchan)] || ($nick eq $botnick && ![info exists voicecache($chan)])} { return; }
     # -- only react if configured to do so
     if {[cfg:get mode:auto]} {
         debug 0 "mode:add:D: mode: $mode in $chan, enabled mode 'secure'"
         set chan:mode($lchan) "secure"
-        reply pub $chan "changed mode to: secure"
+        set cid [dict keys [dict filter $dbchans script {id dictData} { 
+            expr {[string tolower [dict get $dictData chan]] eq [string tolower $chan]} 
+        }]]
+        dict set dbchans $cid mode secure;  # -- dict: channel mode
+        if {![info exists voicecache($chan)]} {
+            reply pub $chan "changed mode to: secure"
+        }
         # -- start '/names -d' timer
         # -- kill any existing mode:secure timers
         foreach utimer [utimers] {
@@ -8232,14 +8250,23 @@ proc mode:add:D {nick uhost hand chan mode target} {
 # -- manual set of -D
 proc mode:rem:D {nick uhost hand chan mode target} {
     global botnick
-    variable chan:mode;  # -- stores the operational mode of a channel (by chan)
+    variable dbchans
+    variable chan:mode;  # -- stores the operational mode of a channel (by chan); TODO: deprecated?
+    variable voicecache; # -- cache of voiced users prior to floodnet lock using +D and secure mode
     set lchan [string tolower $chan]
-    if {![info exists chan:mode($lchan)] || $nick eq $botnick} { return; }
+    if {![info exists chan:mode($lchan)] || ($nick eq $botnick && ![info exists voicecache($chan)])}  { return; }
     # -- only react if configured to do so
     if {[cfg:get mode:auto]} {
         debug 0 "mode:rem:D: mode: $mode in $chan, disabled mode 'secure' (enabled mode 'on')"
-        set chan:mode($lchan) "on"
-        reply pub $chan "changed mode to: on"
+        set chan:mode($lchan) "on";    # -- TODO: deprecated?
+        set cid [dict keys [dict filter $dbchans script {id dictData} { 
+            expr {[string tolower [dict get $dictData chan]] eq [string tolower $chan]} 
+        }]]
+        dict set dbchans $cid mode on;  # -- dict: channel mode
+        if {![info exists voicecache($chan)]} {
+            # -- only report if not automatically removing mode after a floodnet detection window expiry
+            reply pub $chan "changed mode to: on"
+        } else { unset voicecache($chan) }; # -- served its purpose
         # -- kill any existing arm:secure timers
         foreach utimer [utimers] {
             set thetimer [lindex $utimer 1]
@@ -8254,8 +8281,8 @@ proc mode:rem:D {nick uhost hand chan mode target} {
 proc mode:add:d {nick uhost hand chan mode target} {
     global botnick
     variable cfg
-    variable data:moded;  # -- tracks a channel that has recently set mode -D+d (by chan)
-    variable chan:mode;   # -- stores the operational mode of a channel (by chan)
+    variable data:moded;  # -- tracks a channel that has recently set mode -D+d (by chan); TODO: deprecaded?
+    variable chan:mode;   # -- stores the operational mode of a channel (by chan); TODO: deprecated?
     set lchan [string tolower $chan]
     if {![info exists chan:mode($lchan)] || $nick eq $botnick} { return; }
     # -- notify chan of hidden clients
@@ -8273,7 +8300,7 @@ proc mode:add:d {nick uhost hand chan mode target} {
 proc mode:rem:d {nick uhost hand chan mode target} {
     global botnick
     variable cfg
-    variable data:moded;  # -- tracks a channel that has recently set mode -D+d (by chan)
+    variable data:moded;  # -- tracks a channel that has recently set mode -D+d (by chan); TODO: deprecated?
     # -- notify chan of visible clients
     set lchan [string tolower $chan]
     if {![info exists chan:mode($lchan)] || $nick eq $botnick} { return; }
@@ -10325,6 +10352,9 @@ proc flud:queue {} {
     variable chanlock;   # -- tracking active channel lock (by chan)
     variable dbchans;    # -- dict: list of channel entries
     variable kreason;    # -- kick reason (by chan,nick)
+    variable dbchans;
+    variable voicecache: # -- cache of existing voiced users when lock uses +D and secure mode
+    
 
     #debug 3 "flud:queue: starting..."
 
@@ -10357,6 +10387,21 @@ proc flud:queue {} {
                 set lockmode [cfg:get chanlock:mode $chan]
                 if {[string match "+*" $lockmode]} {
                     set lockmode [string range $lockmode 1 end] 
+                }
+                # -- only use mode +D if ircu based ircd (e.g., Undernet, Quakenet)
+                if {[cfg:get ircd] eq 1} {
+                    if {[string match "*D* $lockmode]} {
+                        # -- set secure mode
+                        dict set dbchans $id mode $mode;  # -- dict: channel mode
+                        set voicecache($chan) [list]
+                        set clist [chanlist $chan]
+                        foreach n $clist {
+                            if {[isvoice $n $chan]} { lappend voicecache($chan) $n }
+                        }
+                    }
+
+                } else {
+                    regsub "D" $lockmode "" lockmode; # -- remove 'D' from lockmode
                 }
                 # -- count the modes
                 set mcount [string length $lockmode]   
@@ -16636,6 +16681,7 @@ regsub -all {\.} [cfg:get xregex *] {\\.} cfg(xregex)
 
 # -- load scan ports
 if {[info exists addport]} {
+    if {[info exists scan:ports]} { array unset scan:ports }; # -- replace all existing
     foreach entry [array names addport] {
         lassign [array get addport $entry] port desc
         array set scan:ports [list $port $desc]
@@ -16645,6 +16691,7 @@ if {[info exists addport]} {
 
 # -- load scan ports
 if {[info exists addrbl]} {
+    if {[info exists scan:rbls]} { array unset scan:rbls }; # -- replace all existing
     foreach entry [array names addrbl] {
         lassign [array get addrbl $entry] rbl value
         lassign $value desc score auto
@@ -16787,6 +16834,9 @@ if {[cfg:get dronebl] eq 1} {
     }
     source ./armour/packages/libdronebl.tcl 
 }
+
+# -- set bot realname
+set realname $cfg(realname) 
 
 # -- autologin chan list
 # - for periodic /who check of channel (leave blank to disable)
