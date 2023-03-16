@@ -468,7 +468,6 @@ set cfg(dnsbl:remote) 0
 # - if 'onlymanual' is set, RBL is only checked when 'scanrbl' command is used but not in auto scans
 # format to add:
 # set addrbl(<rbl>) "{<description>} <score> <onlymanual>"
-set addrbl(zen.spamhaus.org) "{Spamhaus Zen} +1.0 0"; # -- auto scanner (and manual)
 set addrbl(dnsbl.dronebl.org) "DroneBL +1.0 0";       # -- auto scanner (and manual)
 set addrbl(sbl.cymru.com) "{Cymru SBL} +1.0 0";       # -- auto scanner (and manual)
 set addrbl(pbl.cymru.com) "{Cymru PBL} +1.0 0";       # -- auto scanner (and manual)
@@ -476,6 +475,7 @@ set addrbl(mbl.cymru.com) "{Cymru MBL} +1.0 0";       # -- auto scanner (and man
 set addrbl(bbl.cymru.com) "{Cymru BBL} +1.0 0";       # -- auto scanner (and manual)
 set addrbl(rbl.ircbl.org) "IRCBL +1.0 1";             # -- only manual scans as Undernet uses network-wide
 set addrbl(rbl.undernet.org) "{Undernet} +1.0 1";     # -- only manual scans as Undernet uses network-wide
+#set addrbl(zen.spamhaus.org) "{Spamhaus Zen} +1.0 0"; # -- auto scanner (and manual); must not use public nameservers
 
 # -- enable port scanner? (0|1) [1]
 set cfg(portscan) 1

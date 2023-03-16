@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Thu Feb 16 07:26:07 PST 2023
+# armour.tcl v4.0 autobuild completed on: Wed Mar 15 19:28:17 PDT 2023
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -724,7 +724,12 @@ if {[cfg:get char:nick *] || [cfg:get char:glob *]} {
                 debug 3 "arm:pubm:binds: processing command: $second (text: [lrange $text 2 end])"
                 # -- should only be one result here, take the first anyway as safety
                 set res [lindex [info commands *:cmd:$second] 0]
-                if {$res ne ""} {
+                if {$res eq ""} {
+                    if {$second eq "login"} {
+                        # -- public channel login (with no other params, for self-login)
+                        coroexec arm::userdb:pub:login $nick $uhost $hand $chan [lrange [split $text] 2 end]
+                    }
+                } else {
                     # -- result is proc name, redirect to command proc
                     coroexec $res pub $nick $uhost $hand $chan [lrange [split $text] 2 end]
                     return;
@@ -764,7 +769,7 @@ namespace eval arm {
 # ------------------------------------------------------------------------------------------------
 
 # -- this revision is used to match the DB revision for use in upgrades and migrations
-set cfg(revision) "2022121400"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
+set cfg(revision) "2023031600"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
 set cfg(version) "v4.0";        # -- script version
 
 # -- load sqlite (or at least try)
@@ -4628,9 +4633,9 @@ proc arm:cmd:asn {0 1 2 3 {4 ""}  {5 ""}} {
     set desc [lindex $string 4]
     set desc [string trimleft $desc " "]
     
-    debug 1 "arm:cmd:asn: asn lookup for $ip is: $asn (desc: $desc bgp: $bgp country: $country registry: $registry allocation: $allocation info: http://www.robtex.com/as/as${asn}.html)"
+    debug 1 "arm:cmd:asn: asn lookup for $ip is: $asn (desc: $desc bgp: $bgp country: $country registry: $registry allocation: $allocation info: http://bgp.he.net/AS${asn})"
     
-    reply $type $target "\002(\002ASN\002)\002 for $ip is $asn \002(desc:\002 $desc -- \002bgp:\002 $bgp -- \002country:\002 $country -- \002registry:\002 $registry -- \002allocation:\002 $allocation -- \002info:\002 http://www.robtex.com/as/as${asn}.html\002)\002"
+    reply $type $target "\002(\002ASN\002)\002 for $ip is $asn \002(desc:\002 $desc -- \002bgp:\002 $bgp -- \002country:\002 $country -- \002registry:\002 $registry -- \002allocation:\002 $allocation -- \002info:\002 hhttp://bgp.he.net/AS${asn}\002)\002"
     
     # -- create log entry for command use
     set cid [db:get id channels chan $chan]
@@ -4731,7 +4736,7 @@ proc arm:cmd:mode {0 1 2 3 {4 ""}  {5 ""}} {
     
     set id [get:val chan:id $chan]; set cid $id
     if {$type ne "pub"} { set xtra " on $chan" } else { set xtra "" }
-    if {$mode eq ""} { reply $type $target "mode$xtra is: [get:val chan:modeid $id]"; return; }
+    if {$mode eq ""} { reply $type $target "mode$xtra is: [dict get $dbchans $id mode]"; return; }
     
     # -- prevent secure mode if ircd doesn't support it
     if {[cfg:get ircd $chan] eq 1} {
@@ -5475,7 +5480,7 @@ proc arm:cmd:restart {0 1 2 3 {4 ""}  {5 ""}} {
     # -- end default proc template
 
     set reason [lrange $arg 0 end]
-    if {$reason == ""} { set reason "requested by $nick!$uh ($user)" }
+    if {$reason eq ""} { set reason "requested by $nick!$uh ($user)" }
 
     # -- quit server connection gracefully first (so restart doesn't 'EOF')
     putnow "QUIT :restarting: $reason"
@@ -5557,6 +5562,7 @@ proc arm:cmd:say {0 1 2 3 {4 ""}  {5 ""}} {
     if {![userdb:isAllowed $nick $cmd $chan $type]} { return; }
     set msglist [join $msglist ,]
     if {$action} { set string "\001ACTION [lrange $arg $idx end]\002" } else { set string [lrange $arg $idx end] }
+    set string [join $string]
     if {$msglist eq "" || $string eq ""} { reply $stype $starget "\002usage:\002 say \[-a\] <chan|*> <string>"; return;  }
     
     set log "$chan [join $arg]"; set log [string trimright $log " "]
@@ -13663,6 +13669,7 @@ proc userdb:isInteger {arg} {
 
 # -- check if channel is valid?
 proc userdb:isValidchan {chan} {
+    variable dbchans; # -- dict of db channels
     set lchan [string tolower $chan]
 
     set cid [dict keys [dict filter $dbchans script {id dictData} { expr {[string tolower [dict get $dictData chan]] eq $lchan} }]]
