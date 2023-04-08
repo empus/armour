@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Sat Apr  8 08:47:29 PDT 2023
+# armour.tcl v4.0 autobuild completed on: Sat Apr  8 11:47:49 PDT 2023
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -114,7 +114,7 @@ proc cfg:get {setting {chan ""}} {
         routing:alert:perc      { set avoid 1; }
         routing:alert:count     { set avoid 1; }
     }
-    if {[string match "fn:platform:*" $setting] || [string match "fn:user:*" $setting]} { set avoid 1 }; # -- silence user-specific Fortnite settings
+    if {[string match "fn:platform:*" $setting] || [string match "fn:user:*" $setting] || [string match "fn:chan" $setting]} { set avoid 1 }; # -- silence noisy Fortnite settings
     
     if {!$avoid} { debug 4 "\002cfg:get:\002 retrieving config setting: \002cfg($setting)\002" }
     
@@ -770,7 +770,7 @@ namespace eval arm {
 # ------------------------------------------------------------------------------------------------
 
 # -- this revision is used to match the DB revision for use in upgrades and migrations
-set cfg(revision) "2023040900"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
+set cfg(revision) "2023040901"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
 set cfg(version) "v4.0";        # -- script version
 
 # -- load sqlite (or at least try)
@@ -15664,9 +15664,9 @@ proc arm:cmd:update {0 1 2 3 {4 ""} {5 ""}} {
     lassign $arg action branch
     if {$branch eq "" || $branch eq "-f" || $branch eq "-t"} { set branch [cfg:get update:branch] }; # -- revert to config branch (default of master)
 
-    if {$action ne "check" && $action ne "install" && $action ne "restore" && $action ne "branches" \
+    if {$action ne "check" && $action ne "install" && $action ne "info" && $action ne "restore" && $action ne "branches" \
         && $action ne "c" && $action ne "i" && $action ne "r" && $action ne "b"} {
-        reply $stype $starget "usage: update <check|install|restore|branches> \[branch\]"
+        reply $stype $starget "usage: update <check|info|install|restore|branches> \[branch\]"
         return;
     }
 
@@ -15805,7 +15805,7 @@ proc arm:cmd:update {0 1 2 3 {4 ""} {5 ""}} {
     } elseif {$action eq "branches" || $action eq "b"} {
         # -- list available branches
         lassign [update:github "https://api.github.com/repos/empus/armour/branches" "get branches" $type $target] success extra json
-        if {!$success} { return; }; # -- error
+        if {!$success} { reply $type $target "error."; return; }; # -- error
         set count 0
         foreach branch $json {
             incr count
@@ -15824,6 +15824,24 @@ proc arm:cmd:update {0 1 2 3 {4 ""} {5 ""}} {
         if {$count > 1} {
             reply $type $target "found \002$count\002 branches."
         } 
+    } elseif {$action eq "info"} {
+        # -- list available branches
+        lassign [update:github "https://api.github.com/repos/empus/armour/branches/$branch" "get branch info" $type $target] success extra json
+        if {!$success} { reply $type $target "error."; return; }; # -- error
+
+        set bname [dict get $json name]
+        set commit [dict get $json commit]
+        set sha [dict get $commit sha]
+        set url [dict get $commit url]
+        # -- get the commit details to show last commit timestamp
+        #lassign [update:github $url "get commit data" $type $target] success extra json
+        set scommit [dict get $commit commit]
+        set commitmsg [dict get $scommit message]
+        set author [dict get $scommit author]
+        set aname [dict get $author name]
+        set commitdate [dict get $author date]
+        reply $type $target "\002branch:\002 $bname -- \002message:\002 $commitmsg -- \002commit:\002 [userdb:timeago [clock scan $commitdate]] ago\
+             -- \002url:\002 https://github.com/empus/armour/commit/$sha"
     } 
 
     # -- create log entry for command use
@@ -15836,9 +15854,9 @@ proc update:github {url desc type target} {
     http::config -useragent "mozilla" 
     variable github
     set headers [list Accept application/json Authorization [list Bearer $github(token)]]
-    debug 0 "\002update:github:\002 headers: $headers"
+    #debug 0 "\002update:github:\002 headers: $headers"
     set errcode [catch {set tok [::http::geturl $url -headers $headers -timeout 10000]} error]
-    debug 0 "\002update:github:\002 errcode: $errcode -- error: $error"
+    if {$errcode ne 0} { debug 0 "\002update:github:\002 errcode: $errcode -- error: $error" }
     set success 1;
     # -- check for errors
     if {$errcode} { set success 0; set errout "error: $error" }
