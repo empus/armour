@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Sat Apr  8 11:47:49 PDT 2023
+# armour.tcl v4.0 autobuild completed on: Sat Apr  8 13:35:58 PDT 2023
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -770,7 +770,7 @@ namespace eval arm {
 # ------------------------------------------------------------------------------------------------
 
 # -- this revision is used to match the DB revision for use in upgrades and migrations
-set cfg(revision) "2023040901"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
+set cfg(revision) "2023040902"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
 set cfg(version) "v4.0";        # -- script version
 
 # -- load sqlite (or at least try)
@@ -5644,7 +5644,7 @@ proc arm:cmd:version {0 1 2 3 {4 ""}  {5 ""}} {
             set out "older than \002$branch\002 branch"
         } else { set out "unknown" }
 
-        if {[dict get $ghdata update]} { set extra "-- update \002available:\002 update install" } else { set extra "" }
+        if {[dict get $ghdata update]} { set extra " -- \002usage:\002 update info" } else { set extra "" }
         append extra ")"
 
         reply $type $target "\002version:\002 Armour $version (\002revision:\002 [cfg:get revision *]\
@@ -15833,15 +15833,13 @@ proc arm:cmd:update {0 1 2 3 {4 ""} {5 ""}} {
         set commit [dict get $json commit]
         set sha [dict get $commit sha]
         set url [dict get $commit url]
-        # -- get the commit details to show last commit timestamp
-        #lassign [update:github $url "get commit data" $type $target] success extra json
         set scommit [dict get $commit commit]
         set commitmsg [dict get $scommit message]
         set author [dict get $scommit author]
         set aname [dict get $author name]
         set commitdate [dict get $author date]
         reply $type $target "\002branch:\002 $bname -- \002message:\002 $commitmsg -- \002commit:\002 [userdb:timeago [clock scan $commitdate]] ago\
-             -- \002url:\002 https://github.com/empus/armour/commit/$sha"
+             -- \002url:\002 https://github.com/empus/armour/commit/$sha -- \002usage:\002 update install"
     } 
 
     # -- create log entry for command use
@@ -15957,7 +15955,7 @@ proc update:check {branch {debug "0"} {mode ""}} {
             dict set ghdata status "outdated"
             dict set ghdata newrevision 1
             set sendnote 1
-            set output "revision update (\002$grevision\002) of version \002v$version\002 available! \002current revision:\002 $revision"
+            set output "revision update (\002$grevision\002) of version \002v$version\002 available! (\002current revision:\002 $revision -- \002usage\002: update info)"
         } else {
             # -- local version is up to date
             dict set ghdata status "current"
@@ -15974,7 +15972,7 @@ proc update:check {branch {debug "0"} {mode ""}} {
         dict set ghdata update 1
         dict set ghdata newversion 1
         set sendnote 1
-        set output "version update (\002v$gversion\002) available! \002current version:\002 v$version"
+        set output "version update (\002v$gversion\002) available! (\002current version:\002 v$version -- \002usage\002: update info)"
     }
 
     if {$output ne ""} {
