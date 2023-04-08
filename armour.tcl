@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Wed Mar 15 19:28:17 PDT 2023
+# armour.tcl v4.0 autobuild completed on: Sat Apr  8 08:47:29 PDT 2023
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -673,6 +673,7 @@ proc loadcmds {} {
         proc arm:cmd:kb {0 1 2 3 {4 ""} {5 ""}} { coroexec arm:cmd:ban $0 $1 $2 $3 $4 $5 };        # -- cmd: ban
         proc arm:cmd:commands {0 1 2 3 {4 ""} {5 ""}} { coroexec arm:cmd:cmds $0 $1 $2 $3 $4 $5 }; # -- cmd: cmds
         proc arm:cmd:k {0 1 2 3 {4 ""} {5 ""}} { coroexec arm:cmd:kick $0 $1 $2 $3 $4 $5 };        # -- cmd: kick
+        proc arm:cmd:ub {0 1 2 3 {4 ""} {5 ""}} { coroexec arm:cmd:unban $0 $1 $2 $3 $4 $5 };      # -- cmd: unban
         proc arm:cmd:b {0 1 2 3 {4 ""} {5 ""}} { coroexec arm:cmd:black $0 $1 $2 $3 $4 $5 };       # -- cmd: black
         proc arm:cmd:a {0 1 2 3 {4 ""} {5 ""}} { coroexec arm:cmd:add $0 $1 $2 $3 $4 $5 };         # -- cmd: add
         proc arm:cmd:r {0 1 2 3 {4 ""} {5 ""}} { coroexec arm:cmd:rem $0 $1 $2 $3 $4 $5 };         # -- cmd: rem
@@ -769,7 +770,7 @@ namespace eval arm {
 # ------------------------------------------------------------------------------------------------
 
 # -- this revision is used to match the DB revision for use in upgrades and migrations
-set cfg(revision) "2023031600"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
+set cfg(revision) "2023040900"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
 set cfg(version) "v4.0";        # -- script version
 
 # -- load sqlite (or at least try)
@@ -2214,7 +2215,7 @@ set auth:succeed 0;  # -- stores whether auth has succeeded or not
 # -- ran just prior to connecting to server
 proc auth:server:connect {type} {
     global nick
-    variable cfg
+    global uservar
     variable data:authnick;  # -- stores the nickname to restore after login
     
     if {[cfg:get auth:user *] != "" && [cfg:get auth:pass *] != ""} {
@@ -2236,7 +2237,6 @@ proc auth:server:connect {type} {
 # -- connected to server
 proc auth:server:init {type} {
     global botnick
-    variable cfg
     if {[cfg:get auth:user *] ne "" && [cfg:get auth:pass *] ne ""} {
         # -- set umode +x?
         if {[cfg:get auth:hide *]} {
@@ -2247,7 +2247,9 @@ proc auth:server:init {type} {
         auth:attempt
     }
     # -- apply silence masks
-    foreach mask [cfg:get silence *] {
+    set masks [cfg:get silence *]
+    foreach mask $masks {
+        set mask [join $masks ,]
         putquick "SILENCE $mask"
         debug 0 "\@\] Armour: applied silence mask: $mask"
     }
@@ -2256,7 +2258,6 @@ proc auth:server:init {type} {
 
 # -- send the authentication attempt (shared by init:server and retries)
 proc auth:attempt {} {
-    variable cfg
     variable auth:succeed;  # -- stores whether auth has succeeded or not
     if {${auth:succeed}} { return; }
     # -- only use full nick@server host for auth, if service server is set
@@ -2292,7 +2293,6 @@ proc auth:attempt {} {
 # -- triggered when auth succeeds
 proc auth:success {nnick uhost hand text {dest ""}} {
     global nick
-    variable cfg
     variable auth:succeed;   # -- stores whether auth has succeeded or not
     variable data:authnick;  # -- stores the nickname to restore after login
     set auth:succeed 1
@@ -2307,7 +2307,6 @@ proc auth:success {nnick uhost hand text {dest ""}} {
 
 # -- triggered when auth fails
 proc auth:fail {nick uhost hand text {dest ""}} {
-    variable cfg
     if {$nick eq [cfg:get auth:serv:nick *]} {
         debug 0 "\[@\] Armour: authentication failed with [cfg:get auth:serv:nick *]"
         if {![cfg:get auth:wait *]} {
@@ -4277,7 +4276,7 @@ proc arm:cmd:kick {0 1 2 3 {4 ""}  {5 ""}} {
 proc arm:cmd:ban {0 1 2 3 {4 ""}  {5 ""}} {
     global botnick
     variable cfg;
-    lassign [proc:setvars $0 $1 $2 $3 $4 $5]  type stype target starget nick uh hand source chan arg 
+    lassign [proc:setvars $0 $1 $2 $3 $4 $5] type stype target starget nick uh hand source chan arg 
     
     set cmd "ban"
     
@@ -4366,7 +4365,7 @@ proc arm:cmd:ban {0 1 2 3 {4 ""}  {5 ""}} {
 proc arm:cmd:unban {0 1 2 3 {4 ""}  {5 ""}} {
     global botnick
     variable cfg
-    lassign [proc:setvars $0 $1 $2 $3 $4 $5]  type stype target starget nick uh hand source chan arg 
+    lassign [proc:setvars $0 $1 $2 $3 $4 $5] type stype target starget nick uh hand source chan arg 
 
     set cmd "unban"
     lassign [db:get id,user users curnick $nick] uid user
@@ -4633,9 +4632,9 @@ proc arm:cmd:asn {0 1 2 3 {4 ""}  {5 ""}} {
     set desc [lindex $string 4]
     set desc [string trimleft $desc " "]
     
-    debug 1 "arm:cmd:asn: asn lookup for $ip is: $asn (desc: $desc bgp: $bgp country: $country registry: $registry allocation: $allocation info: http://bgp.he.net/AS${asn})"
+    debug 1 "arm:cmd:asn: asn lookup for $ip is: $asn (desc: $desc bgp: $bgp country: $country registry: $registry allocation: $allocation info: https://bgp.he.net/AS${asn})"
     
-    reply $type $target "\002(\002ASN\002)\002 for $ip is $asn \002(desc:\002 $desc -- \002bgp:\002 $bgp -- \002country:\002 $country -- \002registry:\002 $registry -- \002allocation:\002 $allocation -- \002info:\002 hhttp://bgp.he.net/AS${asn}\002)\002"
+    reply $type $target "\002(\002ASN\002)\002 for $ip is $asn \002(desc:\002 $desc -- \002bgp:\002 $bgp -- \002country:\002 $country -- \002registry:\002 $registry -- \002allocation:\002 $allocation -- \002info:\002 https://bgp.he.net/AS${asn}\002)\002"
     
     # -- create log entry for command use
     set cid [db:get id channels chan $chan]
@@ -4846,8 +4845,14 @@ proc arm:cmd:mode {0 1 2 3 {4 ""}  {5 ""}} {
             }
         }
     }
-        
-    reply $type $target "done."
+
+    # -- give helpful context so user understands the mode change
+    switch -- $mode {
+        "on" { set confirm "done. automatic scanner \002enabled\002." }
+        "off" { set confirm "done. automatic scanner \002disabled\002." }
+        "secure" { set confirm "done. \002enabled\002 automatic scanner with \002secure\002 mode." }
+    }
+    reply $type $target $confirm
     
     if {$mode eq "secure"} {
         # -- start '/names -d' timer
@@ -4923,9 +4928,9 @@ proc arm:cmd:country {0 1 2 3 {4 ""}  {5 ""}} {
     set desc [lindex $string 4]
     set desc [string trimleft $desc " "]
     
-    debug 1 "arm:cmd:country: country lookup for $ip is: $country (desc: $desc bgp: $bgp country: $country registry: $registry allocation: $allocation info: http://www.robtex.com/as/as${asn}.html)"
+    debug 1 "arm:cmd:country: country lookup for $ip is: $country (desc: $desc bgp: $bgp country: $country registry: $registry allocation: $allocation info: https://bgp.he.net/AS${asn})"
     
-    reply $type $target "\002(\002country\002)\002 for $ip is $country \002(desc:\002 $desc -- \002asn:\002 $asn -- \002bgp:\002 $bgp -- \002registry:\002 $registry -- \002allocation:\002 $allocation -- \002info:\002 http://www.robtex.com/as/as${asn}.html\002)\002"
+    reply $type $target "\002(\002country\002)\002 for $ip is $country \002(desc:\002 $desc -- \002asn:\002 $asn -- \002bgp:\002 $bgp -- \002registry:\002 $registry -- \002allocation:\002 $allocation -- \002info:\002 https://bgp.he.net/AS${asn}\002)\002"
     
     # -- create log entry for command use
     log:cmdlog BOT * 1 $user $uid [string toupper $cmd] [join $arg] $source "" "" ""
@@ -10423,7 +10428,7 @@ proc flud:queue {} {
                 set num [expr 5 - $mcount]
                 set blist [join [lrange [get:val data:bans $chan] 0 $num]]
                 # -- unlock chan in N seconds (if serverqueue is cleared) - 20secs
-                flud:unlock $chan
+                if {[lsearch [utimers] *flud:unlock*] eq -1} { flud:unlock $chan }; # -- only if there's no existing timer
                 
             } else {
                 if {$length >= 6} { set modes "+bbbbbb" } else { set modes "+[string repeat "b" $length]" }
@@ -10471,7 +10476,7 @@ proc flud:queue {} {
         if {$size eq 0} {
             #debug 1 "flud:queue: server queue size is empty, unset floodnet track in [cfg:get chanlock:time $chan] secs"
             #utimer [cfg:get chanlock:time $chan] "arm::flud:unlock $chan"
-            flud:unlock $chan
+            if {[lsearch [utimers] *flud:unlock*] eq -1} { flud:unlock $chan }; # -- only if there's no existing timer
         }
 
     }; # -- end foreach chan
@@ -10502,7 +10507,7 @@ proc flud:unlock {chan} {
         }
     } else {
         # -- add another N seconds to the delay and check again
-        utimer [cfg:get chanlock:time $chan] "arm::flud:unlock $chan"
+        if {[lsearch [utimers] *flud:unlock*] eq -1} { utimer [cfg:get chanlock:time $chan] "arm::flud:unlock $chan" }; # -- only if there's no existing timer
     }
 }
 
@@ -13472,7 +13477,6 @@ proc userdb:userchan {$user} {
 # -- start autologin (who every 20s)
 proc userdb:init:autologin {} {
     global server
-    variable cfg
     # -- only continue if autologin chan set
     set chanlogin [cfg:get chan:login *]
     set chanlogin [join $chanlogin ,]
@@ -13570,9 +13574,6 @@ userdb:db:load
 
 # -- killtimers
 userdb:kill:timers
-
-# -- start autologin
-userdb:init:autologin
 
 # -- find the nearest index
 proc userdb:nearestindex {text index {char " "}} {
@@ -15291,7 +15292,9 @@ proc log:cmdlog {source chan chan_id user user_id cmd params bywho target target
     if {$params ne ""} { append xtra " $params" }
     if {$user ne ""} { append xtra " (\002user:\002 $user)" }
 
-    if {[cfg:get chan:report $chan] ne ""} { putquick "PRIVMSG [cfg:get chan:report $chan] :\002cmd:\002 [string tolower $cmd]$xtra" }
+    set reportchan [cfg:get chan:report $chan]
+
+    if {$reportchan ne ""} { putquick "PRIVMSG $reportchan :\002cmd:\002 [string tolower $cmd]$xtra" }
     return;
 }
 
@@ -16009,9 +16012,10 @@ proc update:note {note ghdata} {
             set ver [dict get $ghdata gversion]
             set rev [dict get $ghdata grevision]
             set imatch "script \002v$ver\002 (\002revision:\002 $rev)"
+            set imatch2 "script revision update (\002$rev\002) of version \002v$ver\002 available!"
             set dmatch "script \002v$ver\002 update downloaded"
             set exist [db:query "SELECT id FROM notes WHERE from_u='Armour' AND to_u='$to_user' \
-                AND note LIKE '%$imatch%' AND note NOT LIKE '%$dmatch%'"]
+                AND (note LIKE '%$imatch%' OR note LIKE '%$imatch2%') AND note NOT LIKE '%$dmatch%'"]
             if {$exist ne ""} {
                 # -- note already exists, don't send it twice
                 debug 0 "\002update:note:\002 note already exists for user $to_user"

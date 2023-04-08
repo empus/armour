@@ -123,7 +123,7 @@ set cfg(update:notes) 1
 set cfg(update:auto) 0
 
 # -- github branch to check and apply updates from - [master]
-set cfg(update:branch) "master"
+set cfg(update:branch) "4_0_beta"
 
 # -- automatically remove old script backups after N days - [7]
 set cfg(update:flush) 7
@@ -874,7 +874,7 @@ set cfg(integrate:procs) ""
 # - provides server level flood protection
 # - leave empty for no /SILENCE
 # -- WARNING: if CAPTCHA is being used, SILENCE should be disabled (to allow captcha responses)
-#set cfg(silence) "+*!*@* +~*!*@*.users.undernet.org"; # -- only allow messages from authed users
+#set cfg(silence) "+*!*@*,+~*!*@*.users.undernet.org"; # -- only allow messages from authed users
 set cfg(silence) ""
 
 
@@ -991,6 +991,7 @@ set addcmd(k)           {  arm       100        pub msg dcc  }; # -- shortcut: k
 set addcmd(ban)         {  arm       100        pub msg dcc  }
 set addcmd(kb)          {  arm       100        pub msg dcc  }; # -- shortcut: kickban
 set addcmd(unban)       {  arm       100        pub msg dcc  }
+set addcmd(ub)          {  arm       100        pub msg dcc  }; # -- shortcut: unban
 set addcmd(topic)       {  arm       100        pub msg dcc  }
 set addcmd(invite)      {  arm       100        pub msg dcc  }
 set addcmd(a)           {  arm       200        pub msg dcc  }; # -- shortcut: add
