@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Fri Sep  8 08:22:31 PDT 2023
+# armour.tcl v4.0 autobuild completed on: Fri Sep  8 08:33:22 PDT 2023
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -16594,7 +16594,7 @@ proc update:config {sampleconf newconf ghdata} {
             set curval [cfg:get $var]
             variable cfg
             if {![info exists cfg($var)]} { incr new; lappend newsettings $var; }; # -- new config setting
-            if {$curval eq $val || ![info exists cfg($var)]} {
+            if {$curval eq $val || [info exists cfg($var)] eq 0} {
                 # -- value is unchanged
                 incr unchanged
                 debug 5 "\002update:config:\002 unchanged config value: $var = $val"
