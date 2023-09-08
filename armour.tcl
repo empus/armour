@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Fri Sep  8 07:39:34 PDT 2023
+# armour.tcl v4.0 autobuild completed on: Fri Sep  8 08:22:31 PDT 2023
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -786,7 +786,7 @@ namespace eval arm {
 # ------------------------------------------------------------------------------------------------
 
 # -- this revision is used to match the DB revision for use in upgrades and migrations
-set cfg(revision) "2023090901"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
+set cfg(revision) "2023090902"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
 set cfg(version) "v4.0";        # -- script version
 
 # -- load sqlite (or at least try)
@@ -16594,7 +16594,7 @@ proc update:config {sampleconf newconf ghdata} {
             set curval [cfg:get $var]
             variable cfg
             if {![info exists cfg($var)]} { incr new; lappend newsettings $var; }; # -- new config setting
-            if {$curval eq $val} {
+            if {$curval eq $val || ![info exists cfg($var)]} {
                 # -- value is unchanged
                 incr unchanged
                 debug 5 "\002update:config:\002 unchanged config value: $var = $val"
