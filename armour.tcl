@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Sat Apr  8 13:35:58 PDT 2023
+# armour.tcl v4.0 autobuild completed on: Fri Sep  8 07:39:34 PDT 2023
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -116,6 +116,8 @@ proc cfg:get {setting {chan ""}} {
     }
     if {[string match "fn:platform:*" $setting] || [string match "fn:user:*" $setting] || [string match "fn:chan" $setting]} { set avoid 1 }; # -- silence noisy Fortnite settings
     
+    if {[string match "beer:debug" $setting] || [string match "beer:file" $setting] || [string match "beer:timer" $setting]} { set avoid 1 }; # -- Beer (fridge) webhook settings
+
     if {!$avoid} { debug 4 "\002cfg:get:\002 retrieving config setting: \002cfg($setting)\002" }
     
     # -- output the config file value for now
@@ -690,9 +692,8 @@ proc loadcmds {} {
 }
 # -- end of arm:loadcmds
 
-
-# -- allow use of nickname (with or without nick completion char ':') or global char '*' as control char
 if {[cfg:get char:nick *] || [cfg:get char:glob *]} {
+    # -- allow use of nickname (with or without nick completion char ':') or global char '*' as control char
     bind pubm - * arm::arm:pubm:binds
     proc arm:pubm:binds {nick uhost hand chan text} {
         variable cfg 
@@ -720,20 +721,35 @@ if {[cfg:get char:nick *] || [cfg:get char:glob *]} {
             if {$continue} {            
                 # -- initiating a command
                 set second [lindex $text 1]
-                if {[regexp -- {^[A-Za-z]+$} $second] eq 0} { return; }; # -- safety net, not a command
-                set second [string tolower $second]
-                debug 3 "arm:pubm:binds: processing command: $second (text: [lrange $text 2 end])"
-                # -- should only be one result here, take the first anyway as safety
-                set res [lindex [info commands *:cmd:$second] 0]
-                if {$res eq ""} {
-                    if {$second eq "login"} {
-                        # -- public channel login (with no other params, for self-login)
-                        coroexec arm::userdb:pub:login $nick $uhost $hand $chan [lrange [split $text] 2 end]
+
+                # -- check for openAI plugin and whether it is configured to use bot nickname as command prefix for 'ask' requests to ChatGPT
+                if {[info command ask:query] ne "" && [cfg:get ask:cmdnick] eq 1 && $first ne "*"} {
+                    if {$second ne "and"} {
+                        # -- send to openAI plugin for 'ask' command
+                        coroexec arm::arm:cmd:ask pub $nick $uhost $hand $chan [lrange [split $text] 1 end]
+                        return;
+                    } else {
+                        # -- send to openAI plugin for 'and' command
+                        coroexec arm::arm:cmd:and pub $nick $uhost $hand $chan [lrange [split $text] 2 end]
+                        return;
                     }
                 } else {
-                    # -- result is proc name, redirect to command proc
-                    coroexec $res pub $nick $uhost $hand $chan [lrange [split $text] 2 end]
-                    return;
+                    # -- openAI not loaded or not configured to use bot nickname as command prefix for 'ask' requests to ChatGPT
+                    set second [string tolower $second]
+                    if {[regexp -- {^[A-Za-z]+$} $second] eq 0} { return; }; # -- safety net, not a command
+                    debug 3 "arm:pubm:binds: processing command: $second (text: [lrange $text 2 end])"
+                    # -- should only be one result here, take the first anyway as safety
+                    set res [lindex [info commands *:cmd:$second] 0]
+                    if {$res eq ""} {
+                        if {$second eq "login"} {
+                            # -- public channel login (with no other params, for self-login)
+                            coroexec arm::userdb:pub:login $nick $uhost $hand $chan [lrange [split $text] 2 end]
+                        }
+                    } else {
+                        # -- result is proc name, redirect to command proc
+                        coroexec $res pub $nick $uhost $hand $chan [lrange [split $text] 2 end]
+                        return;
+                    }
                 }
             }
         } else {    
@@ -770,7 +786,7 @@ namespace eval arm {
 # ------------------------------------------------------------------------------------------------
 
 # -- this revision is used to match the DB revision for use in upgrades and migrations
-set cfg(revision) "2023040902"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
+set cfg(revision) "2023090901"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
 set cfg(version) "v4.0";        # -- script version
 
 # -- load sqlite (or at least try)
@@ -3642,6 +3658,34 @@ putlog "\[@\] Armour: loaded remote dnsbl & portscan procedures."
 namespace eval arm {
 # ------------------------------------------------------------------------------------------------
 
+# -- return description of config setting, from armour.conf.sample
+proc arm:conftest {var} {
+    # -- 10 lines should be enough
+    set data [exec grep -B10 "^set cfg\($var\)" ./armour/armour.conf.sample]
+    set count 1;
+    foreach line [split $data \n] {
+        set linelist($count) $line
+        incr count
+    }
+    set revlist [lsort -decreasing -integer [array names linelist]]
+    foreach i $revlist {
+        if {$linelist($i) eq ""} { break; }
+        set newlist($i) $linelist($i)
+    }
+    set asclist [lsort -increasing -integer [array names newlist]]
+    set count 1
+    foreach i $asclist {
+        set line [string trimleft $linelist($i) "# "]
+        set line [string trimleft $line "-- "]
+        if {[string match "set cfg($var) *" $line]} { break; }; # -- don't output setting
+        #if {$count eq 1} { set line "\002$line\002" }; # -- first line in bold
+        incr count
+        #putlog "line $i: $line"
+        lappend lines $line
+    }
+    return $lines
+}
+
 
 # -- commands
 
@@ -3660,7 +3704,7 @@ proc arm:cmd:conf {0 1 2 3 {4 ""}  {5 ""}} {
     lassign [db:get id,user users curnick $nick] uid user
     # -- end default proc template
     
-    if {$arg eq ""} { reply $stype $starget "usage: conf ?chan? <setting|mask> \[-out\]"; return; }
+    if {$arg eq ""} { reply $stype $starget "usage: conf ?chan? <setting|mask> \[-out|-desc\]"; return; }
     set chan [lindex $arg 0]
     if {[string index $chan 0] ne "#" && $chan ne "*"} { 
         # -- default to global if not given
@@ -3672,7 +3716,7 @@ proc arm:cmd:conf {0 1 2 3 {4 ""}  {5 ""}} {
     set cid [db:get id channels chan $chan]
     if {$cid eq ""} { reply $type $target "\002error:\002 channel $chan is not registered."; return; }
     
-    set var ""; set length [llength $rest]; set out 0;
+    set var ""; set length [llength $rest]; set out 0; set desc 0;
     if {$length eq "1"} {
         if {[string match "*:*" $rest]} {
             # -- var is colon notation
@@ -3683,6 +3727,9 @@ proc arm:cmd:conf {0 1 2 3 {4 ""}  {5 ""}} {
         if {[lindex $rest [expr $length - 1]] eq "-out"} {
             set var [join [lrange $rest 0 [expr $length - 2]] :]
             set out 1;
+        } elseif {[lindex $rest [expr $length - 1]] eq "-desc"} {
+            set var [join [lrange $rest 0 [expr $length - 2]] :]
+            set desc 1;
         } else {
             # -- spaced delimited
             set var [join $rest :]
@@ -3692,7 +3739,22 @@ proc arm:cmd:conf {0 1 2 3 {4 ""}  {5 ""}} {
     # -- check the var
     set count 0;
     if {[cfg:get $var $chan] ne ""} {
-        reply $type $target "\002setting:\002 cfg($var) -- \002value:\002 [cfg:get $var $chan]"
+        if {!$desc} {
+            # -- don't show config var description 
+            reply $type $target "\002setting:\002 cfg($var) -- \002value:\002 [cfg:get $var $chan]"
+        } else {
+            # -- show description of config setting
+            set lines [arm:conftest $var]
+            set i 1
+            foreach line $lines {
+                # -- format lines
+                if {$i eq 1} { set line "\002$line\002" } else {
+                    set line "  $line"
+                }
+                reply $type $target $line
+                incr i
+            }
+        }
     } else {
         # -- return those that do match?
         set thelist ""
@@ -7162,7 +7224,7 @@ proc arm:cmd:note {0 1 2 3 {4 ""}  {5 ""}} {
         reply $type $target "done."
     }
     # -- create log entry for NOTE command use
-    log:cmdlog BOT * 1 $user uid [string toupper $cmd] [join $arg] $source "" "" ""
+    log:cmdlog BOT * 1 $user $uid [string toupper $cmd] [join $arg] $source "" "" ""
 }
 
 
@@ -7210,9 +7272,10 @@ proc arm:cmd:queue {0 1 2 3 {4 ""}  {5 ""}} {
         reply $type $target "no channels in \002secure\002 mode found."
     } else {
         # -- create log entry
-        log:cmdlog BOT * 1 $user uid [string toupper $cmd] [join $arg] $source "" "" ""
+        log:cmdlog BOT * 1 $user $uid [string toupper $cmd] [join $arg] $source "" "" ""
     }
 }
+
 
 debug 0 "\[@\] Armour: loaded user commands"
 
@@ -10728,10 +10791,11 @@ proc userdb:cmd:info {0 1 2 3 {4 ""} {5 ""}} {
                 lappend shortlist [list "\002$setting:\002 $value"]
             }
         }
+
         # -- output the channel settings first
         while {$shortlist != ""} {
             # -- output 3 x settings per line
-            reply $type $target "[join [join [lrange $shortlist 0 7]]]"
+            reply $type $target "[join [join [lrange $shortlist 0 7] " -- "]]"
             set shortlist [lreplace $shortlist 0 7]
         }
         # -- now output the longer strings (url, description)
@@ -10841,6 +10905,12 @@ proc userdb:cmd:info {0 1 2 3 {4 ""} {5 ""}} {
         
         # -- second line
         reply $type $target $line2
+
+        # -- timezone 
+        set tz [db:get value settings setting tz uid $trgid]
+        if {$tz ne ""} {
+            reply $type $target "\002timezone:\002 $tz"
+        }
         
         if {$greet ne ""} {
             # -- output the onjoin greeting!
@@ -11495,22 +11565,44 @@ proc userdb:cmd:modchan {0 1 2 3 {4 ""}  {5 ""}} {
     elseif {[string match "strictv*" $ttype]} { set ttype "strictvoice" } \
     elseif {[string match "trak*" $ttype]} { set ttype "trakka" } \
     elseif {[string match "oper*" $ttype]} { set ttype "operop" } \
-    elseif {$ttype eq "quote"} { set ttype "quote" } \
-    elseif {$ttype eq "quoterand"} { set ttype "quoterand" } \
+    elseif {$ttype eq "quote"} { set ttype "quote"; set plug "quote" } \
+    elseif {$ttype eq "quoterand"} { set ttype "quoterand"; set plug "quote" } \
     elseif {$ttype eq "correct"} { set ttype "correct" } \
-    elseif {$ttype eq "tweet"} { set ttype "tweet" } \
-    elseif {$ttype eq "tweetquote"} { set ttype "tweetquote" } \
+    elseif {$ttype eq "tweet"} { set ttype "tweet"; set plug "twitter" } \
+    elseif {$ttype eq "tweetquote"} { set ttype "tweetquote"; set plug "twitter" } \
+    elseif {$ttype eq "openai"} { set ttype "openai"; set plug "openai" } \
     else { set usage 1 }
+
+    set setlist "mode|url|desc|autotopic|strictop|strictvoice||correct|operop"
+
+    # -- optional settings based on plugins
+    set plugin(quote) 0; set plugin(trakka) 0; set plugin(twitter) 0; set plugin(openai) 0;
+    if {[info commands quote:cron] ne ""} { set plugin(quote) 1; append setlist "|quote|quoterand" }; # -- quote
+    if {[info commands arm:cmd:tweet] ne ""} { set plugin(twitter) 1; append setlist "|tweet|tweetquote" }; # -- tweet
+    if {[info commands ask:query] ne ""} { set plugin(openai) 1; append setlist "|openai" }; # -- openai
+    set loadplugin 0
+    if {$ttype eq "quote" && $plugin(quote) eq 0} { set loadplugin 1 }
+    if {$ttype eq "quoterand" && $plugin(quote) eq 0} { set loadplugin 1 }
+    if {$ttype eq "tweet" && $plugin(twitter) eq 0} { set loadplugin 1 }
+    if {$ttype eq "tweetquote" && $plugin(twitter) eq 0} { set loadplugin 1 }
+    if {$ttype eq "openai" && $plugin(openai) eq 0} { set loadplugin 1 }
+
+    # -- error if plugin isn't even loaded
+    if {$loadplugin} {
+        reply $type $target "\002error:\002 the \002$plug\002 plugin must be loaded."
+        return;
+    }
     
+    # -- unknown setting, show usage
     if {$usage} {
-        reply $stype $starget "\002usage:\002 modchan ?chan? <mode|url|desc|autotopic|strictop|strictvoice|trakka|correct|operop|quote|quoterand|tweet|tweetquote> <value>";
+        reply $stype $starget "\002usage:\002 modchan ?chan? <$setlist> <value>";
         return;
     }
 
     # -- check if chan already exists
     lassign [db:get chan,id channels chan $chan] tchan cid
     if {$tchan eq ""} {
-        reply $type $target "error: channel $chan is not registered."
+        reply $type $target "\002error:\002 channel $chan is not registered."
         return;
     }
     set chan $tchan; # -- ensure correct case
@@ -11528,7 +11620,7 @@ proc userdb:cmd:modchan {0 1 2 3 {4 ""}  {5 ""}} {
     set db_value [string tolower $value]
     set ltype $ttype
     
-    if {$ttype in "strictop strictvoice trakka operop quote quoterand correct tweet tweetquote"} {
+    if {$ttype in "strictop strictvoice trakka operop quote quoterand correct tweet tweetquote openai"} {
         set value $lvalue
         if {$lvalue ne "on" && $lvalue ne "off"} {
             reply $type $target "\002(\002error\002)\002 value must be: on or off."
@@ -11544,7 +11636,7 @@ proc userdb:cmd:modchan {0 1 2 3 {4 ""}  {5 ""}} {
         set ltype "description"
     } elseif {$ttype in "autotopic"} {
         reply $type $target "\002(\002error\002)\002 not yet implemented."
-        return;    
+        return;
     }
     
     set cvalue [db:get value settings cid $cid setting $ttype]
@@ -12145,12 +12237,14 @@ proc userdb:cmd:moduser {0 1 2 3 {4 ""}  {5 ""}} {
     elseif {[string match "g*" $ttype] || [string match "w*" $ttype]} { set ttype "greet" } \
     elseif {[string match "x*" $ttype] || [string match "account" $ttype]} { set ttype "account" } \
     elseif {[string match "p*" $ttype]} { set ttype "password" } \
+    elseif {$ttype eq "tz"} { set ttype "tz" } \
+    elseif {$ttype eq "timezone"} { set ttype "tz" } \
     else { set usage 1 }
     
     if {[llength $arg] < 3 && $ttype ne "password"} { set usage 1 }
     
     if {$usage} {
-        reply $stype $target "\002usage:\002 moduser ?<chan|*>? <user> <level|automode|account|pass$xtra> <value>"
+        reply $stype $target "\002usage:\002 moduser ?<chan|*>? <user> <level|automode|account|pass|tz$xtra> <value>"
         return;
     }
 
@@ -12165,7 +12259,8 @@ proc userdb:cmd:moduser {0 1 2 3 {4 ""}  {5 ""}} {
     
     # -- only complain about missing access if not user centric attribute modification.
     if {$tlevel eq ""} {
-        if {($ttype ne "pass" && $ttype ne "email" && $ttype ne "lang" && $ttype ne "greet" && $ttype ne "account")} {
+        if {($ttype ne "pass" && $ttype ne "email" && $ttype ne "lang" && $ttype ne "tz" \
+            && $ttype ne "greet" && $ttype ne "account")} {
             reply $type $target "\002(\002error\002)\002 user \002$tuser\002 has no access on $chan.";
             return;
         }
@@ -12174,7 +12269,8 @@ proc userdb:cmd:moduser {0 1 2 3 {4 ""}  {5 ""}} {
     if {$tlevel >= $level && $globlevel ne 500 && $chan ne "*"} {
         # -- allow user to change own password && automode if level>=100
         if {[string tolower $tuser] eq [string tolower $user]} {
-            if {($ttype ne "pass" && $ttype ne "automode" && $ttype ne "email" && $ttype ne "lang" && $ttype ne "greet")} {
+            if {($ttype ne "pass" && $ttype ne "automode" && $ttype ne "email" && $ttype ne "lang" \
+                && $ttype ne "tz" && $ttype ne "greet")} {
                 reply $type $target "\002(\002error\002)\002 cannot modify user $ttype (target level equal to or above your own)";  
                 return;
             }
@@ -12330,6 +12426,50 @@ proc userdb:cmd:moduser {0 1 2 3 {4 ""}  {5 ""}} {
         return;
     }
 
+    if {$ttype eq "tz" || $ttype eq "timezone"} { 
+        set tz $tvalue
+        if {$tz eq ""} {
+            reply $type $target "\002usage:\002 moduser $tuser tz <timezone>"
+            return;
+        }
+        # -- check for valid tz
+        package require json
+        package require http
+        # list timezones: http://worldtimeapi.org/api/timezones
+        if {[catch "set tok [http::geturl http://worldtimeapi.org/api/timezones]" error]} {
+            debug 0 "\002userdb:cmd:moduser:\002 HTTP error: $error"
+            reply $type $target "\002error:\002 $error"
+            http::cleanup $tok
+            return;
+        }
+        set json [http::data $tok]
+        set data [json::json2dict $json]
+        putlog "data: $data"
+        set res [lsearch -nocase $data $tz]
+        if {$res eq -1} {
+            reply $type $target "\002error:\002 invalid timezone. see: http://worldtimeapi.org/api/timezones"
+            http::cleanup $tok
+            return;
+        }
+        http::cleanup $tok
+        set tz [lindex $data $res]; # -- corect the timezone case
+        set curtz [db:get value settings setting tz uid $tuid]
+        if [string match -nocase $curtz $tz] {
+            reply $type $target "\002(\002error\002)\002 timezone is already set to $curtz"
+            return;
+        }
+        db:connect
+        if {$curtz eq ""} {
+            # -- insert
+            db:query "INSERT INTO settings (setting,uid,value) VALUES ('tz','$tuid','$tz')"
+        } else {
+            # -- update
+            db:query "UPDATE settings SET value='$tz' WHERE setting='tz' AND uid=$tuid"
+        }
+        db:close
+        debug 0 "userdb:cmd:moduser: user $user ($source) modified $tuser's timezone to $tz"
+    }
+
     debug 1 "userdb:cmd:moduser: chan: $chan -- cid: $cid -- tuser: $tuser -- tuid: $tuid --\
             ttype: $ttype -- tvalue: $tvalue (user: $user)"
     reply $type $target "done."
@@ -12376,10 +12516,12 @@ proc userdb:cmd:set {0 1 2 3 {4 ""}  {5 ""}} {
     if {[string match "e*" $ttype]} { set ttype "email" } \
     elseif {[string match "la*" $ttype]} { set ttype "lang" } \
     elseif {[string match "p*" $ttype]} { set ttype "pass" } \
+    elseif {$ttype eq "tz"} { set ttype "tz" } \
+    elseif {$ttype eq "timezone"} { set ttype "tz" } \
     elseif {[string match "g*" $ttype]} { set ttype "greet" } \
     elseif {[string match "au*" $ttype]} { set ttype "automode" } \
     else {
-        reply $stype $starget "\002usage:\002 set ?chan? <lang|email|automode|pass${xtra}> <value>"
+        reply $stype $starget "\002usage:\002 set ?chan? <lang|email|automode|pass|tz${xtra}> <value>"
         return;
     }
     
@@ -12436,6 +12578,50 @@ proc userdb:cmd:set {0 1 2 3 {4 ""}  {5 ""}} {
         set encpass [userdb:encrypt $tvalue];     # -- encrypt password
         debug 0 "userdb:cmd:set: user $user ($nick![getchanhost $nick]) set password"
         userdb:user:set pass $encpass user $user; # -- make the change
+    }
+
+    if {$ttype eq "tz" || $ttype eq "timezone"} { 
+        set tz $tvalue
+        if {$tz eq ""} {
+            reply $type $target "\002usage:\002 set tz <timezone>"
+            return;
+        }
+        # -- check for valid tz
+        package require json
+        package require http
+        # list timezones: http://worldtimeapi.org/api/timezones
+        if {[catch "set tok [http::geturl http://worldtimeapi.org/api/timezones]" error]} {
+            debug 0 "\002userdb:cmd:set:\002 HTTP error: $error"
+            reply $type $target "\002error:\002 $error"
+            http::cleanup $tok
+            return;
+        }
+        set json [http::data $tok]
+        set data [json::json2dict $json]
+        putlog "data: $data"
+        set res [lsearch -nocase $data $tz]
+        if {$res eq -1} {
+            reply $type $target "\002error:\002 invalid timezone. see: http://worldtimeapi.org/api/timezones"
+            http::cleanup $tok
+            return;
+        }
+        http::cleanup $tok
+        set tz [lindex $data $res]; # -- corect the timezone case
+        set curtz [db:get value settings setting tz uid $uid]
+        if [string match -nocase $curtz $tz] {
+            reply $type $target "\002(\002error\002)\002 timezone is already set to $curtz"
+            return;
+        }
+        db:connect
+        if {$curtz eq ""} {
+            # -- insert
+            db:query "INSERT INTO settings (setting,uid,value) VALUES ('tz','$uid','$tz')"
+        } else {
+            # -- update
+            db:query "UPDATE settings SET value='$tz' WHERE setting='tz' AND uid=$uid"
+        }
+        db:close
+        debug 0 "userdb:cmd:set: user $user ($source) set timezone to $tz"
     }
         
     if {$ttype eq "email"} {    
@@ -12873,6 +13059,7 @@ proc userdb:login {nick uhost user {manual "0"} {chan ""}} {
         set gautomode [db:get automode levels cid 1 uid $uid]
         if {$automode eq "" || ($gautomode ne "" && $gautomode > $automode)} { set automode $gautomode }; # -- let global chan automode take precedence
         if {$chan eq 0 || $chan eq ""} { set tchan [join [db:get chan channels id $cid]] } else { set tchan $chan }; # -- otherwise, use the channel provided
+        if {$tchan eq "*"} { continue; }; # -- no automode for global chan
         switch -- $automode {
             0       { continue; }
             1       { set themode "+v"; }
@@ -13555,17 +13742,26 @@ proc userdb:deluser {user uid} {
         #debug 0 "userdb:deluser: deleting user IDB entries: $user (uid: $uid)"
         #db:query "DELETE FROM idb WHERE user_id=$uid"; # -- TODO: deal with IDBs? (schema needs updating to support multi-chan)
     }    
+
+    # -- deal with openai plugin
+    if {[info commands ask:query] ne ""} {
+        # -- training plugin loaded
+        db:query "DELETE FROM openai WHERE uid=$uid"
+        debug 3 "userdb:deluser: deleted user settings from openai plugin table (uid: $uid)"
+    }
+
     db:close
 
     # -- remove user from memory 
     dict unset dbusers $uid
     
     # -- deal with training plugin
-    if {[info commands arm::train:deluser] ne ""} {
+    if {[info commands train:deluser] ne ""} {
         # -- training plugin loaded
         debug 3 "userdb:deluser: passing user deletion request to training plugin (user: $user -- uid: $uid)"
         train:deluser $user $uid
     }
+
     debug 0 "userdb:deluser: deleted user: $user (id: $uid)"
 }
 
@@ -13706,8 +13902,71 @@ proc userdb:znc {nick uhost hand text} {
     }
 }
 
+# -- command: queue
+# usage: time <user>
+proc userdb:cmd:time {0 1 2 3 {4 ""}  {5 ""}} {
+    lassign [proc:setvars $0 $1 $2 $3 $4 $5] type stype target starget nick uh hand source chan arg 
+    
+    set cmd "time"
+    lassign [db:get id,user users curnick $nick] uid user
+    
+    set tuser [lindex $arg 0]; 
+    if {![userdb:isAllowed $nick $cmd $chan $type]} { return; }
+
+    # -- command: time
+    if {$tuser eq ""} {
+        reply $type $target "\002usage:\002 time <user>"
+        return;
+    }
+
+    # -- check if user exists
+    lassign [db:get id,user users user $tuser] tuid ttuser
+    if {$ttuser eq ""} {
+        reply $type $target "\002error:\002 user $tuser does not exist."
+        return;
+    } else { set tuser $ttuser }; # -- use the correct username case
+
+    # -- get user's timezone
+    lassign [db:get value settings setting tz uid $tuid] tz
+    if {$tz eq ""} {
+        reply $type $target "\002error:\002 no timezone set for $tuser."
+        return;
+    }
+
+    package require json
+    package require http
+    # list timezones: http://worldtimeapi.org/api/timezones
+    # output data for timezone: http://worldtimeapi.org/api/timezone/Australia/Sydney
+    if {[catch "set tok [http::geturl http://worldtimeapi.org/api/timezone/$tz]" error]} {
+        debug 0 "\002userdb:cmd:time:\002 HTTP error: $error"
+        reply $type $target "\002error:\002 $error"
+        http::cleanup $tok
+        return;
+    }
+
+    set json [http::data $tok]
+    set data [json::json2dict $json]
+    if {[dict exists $data error]} {
+        set err [dict get $data error]
+        debug 0 "\002userdb:cmd:time:\002 API error: $err"
+        reply $type $target "\002error:\002 $err"
+        http::cleanup $tok
+        return;
+    }
+    http::cleanup $tok
+    set unixtime [dict get $data unixtime]
+    set usertime [clock format $unixtime -timezone $tz]
+
+    reply $type $target "\002time\002 for $tuser is \002$usertime\002 ($tz)"
+
+    # -- create log entry
+    log:cmdlog BOT * $cid $user $uid [string toupper $cmd] [join $arg] $source "" "" ""
+
+}
+
 putlog "\[@\] Armour: loaded user database support."
 
+#
 }
 # -- end of namespace
 
@@ -15534,16 +15793,16 @@ debug 0 "\[@\] Armour: loaded support functions."
 # -- end namespace
 
 
-# ------------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------------------------
 # Armour: merged from arm-22_update.tcl
 #
 # script autoupdate
 #
 # Provides the ability for the bot to periodically check for new script updates
-# 'update' command to check, install, restore the last script backup, or list github branches
+# 'update' command to check, get commit info, install, restore the last script backup, or list github branches
 #
 # usage:
-#     update <check|install|restore|branches> [branch]
+#     update <check|info|install|restore|branches> [branch]
 #
 # Handling where multiple Armour bots run from a common eggdrop install directory:
 #
@@ -15561,9 +15820,9 @@ debug 0 "\[@\] Armour: loaded support functions."
 #   - age (in days) of old script backups to periodically delete (hourly)
 #   - debug mode to download and stage updates but not automatically apply them
 #
-# ------------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------------------------
 namespace eval arm {
-# ------------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------------------------
 
 package require tls
 package require http
@@ -16155,7 +16414,7 @@ proc update:install {update} {
     # -- compare existing config with new sample config and retain existing settings
     set sampleconf "./armour/backup/armour-$start/armour.conf.sample"
     set newconf "./armour/backup/armour-$start/${confname}.conf"
-    set merge [update:config $sampleconf $newconf $ghdata] 
+    set merge [update:config $sampleconf $newconf $ghdata]; # -- diff current and new sample config to merge settings 
     set new [dict get $merge new]
     set exist [dict get $merge exist]
     set settext [dict get $merge settext]
@@ -16179,7 +16438,7 @@ proc update:install {update} {
     set existplugincount [dict get $merge existplugincount]
     set existplugintext [dict get $merge existplugintext]
 
-    exec echo [dict get $merge] > ./armour/tmp.txt
+    #exec echo [dict get $merge] > ./armour/tmp.txt
 
     # -- create backups
     debug 0 "\002update:install:\002 creating backup of previous script files and db"
@@ -16401,7 +16660,7 @@ proc update:config {sampleconf newconf ghdata} {
                         puts $fd "set addport($p) \"$addport($p)\""
                     }
                 } elseif {[array names scan:ports] ne ""} {
-                     # -- old ports config (v4.x-alpha)
+                    # -- old ports config (v4.x-alpha)
                     # -- TODO: delete this block when support is dropped for this old config method
 
                     # -- existing scan:ports config; add all ports but only do this once

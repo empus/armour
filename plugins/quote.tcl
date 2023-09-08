@@ -191,7 +191,7 @@ proc quote:cmd:quote {0 1 2 3 {4 ""}  {5 ""}} {
 		set searchu [lindex $arg 2]
 		quote:debug 2 "quote:cmd:quote: search $search $searchu"
 		if {$search eq ""} {
-			quote:reply $stype $starget "usage: quote search <pattern> ?-user|-nick?"
+			quote:reply $stype $starget "usage: quote search <pattern> ?-user|-nick <source>?"
 			return;
 		}
 		# -- wrap the search in * for wildcard as a quote will never be one word
@@ -201,11 +201,13 @@ proc quote:cmd:quote {0 1 2 3 {4 ""}  {5 ""}} {
 		regsub -all {\*} $search {%} search
 		regsub -all {\?} $search {_} search
 		
-		set dbsearch [quote:db:escape $search]	
+		set dbsearch [quote:db:escape $search]
 		if {$searchu eq "-user"} {
-			set xtra "WHERE user LIKE '$dbsearch'"
+			set usearch [quote:db:escape [string tolower [lindex $arg 3]]]
+			set xtra "WHERE lower(quote) LIKE '[string tolower $dbsearch]' AND user LIKE '$usearch'"
 		} elseif {$searchu eq "-nick"} {
-			set xtra "WHERE lower(nick) LIKE '[string tolower $dbsearch]'"
+			set nsearch [quote:db:escape [string tolower [lindex $arg 3]]]
+			set xtra "WHERE lower(quote) LIKE '[string tolower $dbsearch]' AND lower(nick) LIKE '[string tolower $nsearch]'"
 		} else {
 			set xtra "WHERE lower(quote) LIKE '[string tolower $dbsearch]'"
 		}
@@ -634,7 +636,7 @@ proc quote:correct {chan regex} {
 proc quote:cron {minute hour day month weekday} { 
 	variable dbchans; # -- dict containing channel data
 
-	debug 0 "quote:cron: starting -- minute: $minute -- hour: $hour -- month: $month -- weekday: $weekday"
+	debug 0 "\002quote:cron:\002 starting -- minute: $minute -- hour: $hour -- month: $month -- weekday: $weekday"
 	quote:db:connect
 	# -- do for each channel where quoterand is enabled
 	set cids [quote:db:query "SELECT cid FROM settings WHERE setting='quoterand' AND value='on'"]
@@ -644,7 +646,7 @@ proc quote:cron {minute hour day month weekday} {
 		set randid [quote:db:query "SELECT id FROM quotes WHERE cid='$cid' ORDER BY RANDOM() LIMIT 1"]
 		set query "SELECT quote FROM quotes WHERE id='$randid' AND cid='$cid'"
 		set quote [join [quote:db:query $query]]
-		debug 1 "\002quote:cron\002 sending periodic random quote to $chan: $quote"
+		debug 1 "\002quote:cron\002 sending periodic random quote to $chan: [join $quote]"
 		set lines [split [join $quote] \n]
 		foreach line $lines {
 			quote:reply msg $chan "\002\[id:\002 $randid\002\]\002 [join $line]"
@@ -779,7 +781,7 @@ quote:db:query "CREATE TABLE IF NOT EXISTS quotes (\
 	uhost TEXT NOT NULL,\
 	user TEXT,\
 	timestamp INT NOT NULL,\
-	quote TEXT NOT NULL\,
+	quote TEXT NOT NULL,\
 	score INTEGER DEFAULT '0'
 	)"
 	

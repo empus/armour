@@ -930,6 +930,55 @@ set cfg(dronebl:lvl) 500
 set cfg(dronebl:type) 17
 
 
+# ------------------------------------------------------------------------------------------------
+# OPENAI
+# -- requires 'openai' plugin to be loaded
+# ------------------------------------------------------------------------------------------------
+
+# -- ChatGPT API URL
+set cfg(ask:url) "https://api.openai.com/v1/chat/completions"
+
+# -- ChatGPT API token
+# https://platform.openai.com/account/api-keys
+set cfg(ask:token) "YOUR-TOKEN-HERE"
+
+# -- ChatGPT API organization
+# https://platform.openai.com/account/org-settings
+set cfg(ask:org) "YOUR-ORG-HERE"
+
+# -- ChatGPT API model
+set cfg(ask:model) "gpt-3.5-turbo"
+
+# -- ChatGPT API temperature
+# The sampling temperature, between 0 and 1. Higher values like 0.8 will make the output more 
+# random, while lower values like 0.2 will make it more focused and deterministic. If set to 0, 
+# the model will use log probability to automatically increase the temperature until certain 
+# thresholds are hit.
+set cfg(ask:temp) "0.7"
+
+# -- ChatGPT system behaviour for all user requests
+# notes:
+#       * setting is always applied to all requests
+#       * per user per chan behaviour can be set with 'askmode' command
+#       * restricting output line count can help avoid floods or throttlings
+# examples:
+#   "Answer humorously."
+#   "Answer sarcastically."
+#   "Pretend to be a sarcastic politician."
+#   "Act like an idio."
+set cfg(ask:system) "Answer in 3 lines or less."
+
+# -- ChatGPT conversation memory after initial question (mins) - [60]
+set cfg(ask:mem) 60
+
+# -- send all queries to 'ask' when botnick is used? (0|1) - [1]
+# NOTE: this will prevent all other commands from using the botnick as a command prefix
+set cfg(ask:cmdnick) 1
+
+# -- allow channel ops to send queries even if not logged in? (0|1) - [1]
+set cfg(ask:ops) 1
+
+
 
 # ------------------------------------------------------------------------------------------------
 # COMMAND LEVELS
@@ -950,6 +999,9 @@ set cfg(dronebl:type) 17
 # command                  plugin   level req.  binds
 # ------------------------------------------------------------------------------------------------
 set addcmd(register)    {  userdb    0          pub msg dcc  }; # -- only if configured
+set addcmd(ask)         {  arm       1          pub msg dcc  }; # -- requires openai plugin
+set addcmd(askmode)     {  arm       1          pub msg dcc  }; # -- requires openai plugin
+set addcmd(and)         {  arm       1          pub msg dcc  }; # -- requires openai plugin
 set addcmd(access)      {  userdb    1          pub msg dcc  }
 set addcmd(cmds)        {  arm       1          pub msg dcc  }
 set addcmd(help)        {  arm       1          pub msg dcc  }
@@ -959,6 +1011,7 @@ set addcmd(i)           {  userdb    1          pub msg dcc  }; # -- shortcut: i
 set addcmd(verify)      {  userdb    1          pub msg dcc  }
 set addcmd(lang)        {  userdb    1          pub msg dcc  }
 set addcmd(set)         {  userdb    1          pub msg dcc  }
+set addcmd(time)        {  userdb    1          pub msg dcc  }
 set addcmd(version)     {  arm       1          pub msg dcc  }
 set addcmd(view)        {  arm       1          pub msg dcc  }
 set addcmd(v)           {  arm       1          pub msg dcc  }; # -- shortcut: view
@@ -1033,6 +1086,7 @@ set addcmd(update)      {  arm       500        pub msg dcc  }
 # -- optional plugins to load
 # -- to load plugins, uncomment their line after editing any config parameters in each file
 #set addplugin(quote) "./armour/plugins/quote.tcl";           # -- quote management
+#set addplugin(openai) "./armour/plugins/openai.tcl";         # -- openai (ChatGPT)
 #set addplugin(tell) "./armour/plugins/tell.tcl";             # -- tell
 #set addplugin(trakka) "./armour/plugins/trakka/trakka.tcl";  # -- trakka
 #set addplugin(smsbot) "./armour/plugins/smsbot.tcl";         # -- SMS (via smsglobal.com)

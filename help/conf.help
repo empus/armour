@@ -1,2 +1,3 @@
-%B%command:%B% conf -- %B%level:%B% %LEVEL% -- %B%usage:%B% conf <setting|mask> [-out]
-searches configuration settings (wildcards supported). adding '-out' will also output the setting values when multiple settings are found.
+%B%command:%B% conf -- %B%level:%B% %LEVEL% -- %B%usage:%B% conf <setting|mask> [-out|-desc]
+searches configuration settings (wildcards supported). 
+adding '-out' will also output the setting values when multiple settings are found. adding '-desc' on a single setting will display the configuration description.

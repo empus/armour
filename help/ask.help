@@ -1,0 +1,2 @@
+%B%command:%B% ask %B%level:%B% %LEVEL% %B%usage:%B% ask <question>
+submits question to OpenAI and outputs answer.  use %B%and <follow-up>%B% to continue conversation.

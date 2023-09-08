@@ -1,0 +1,2 @@
+%B%command:%B% ask %B%level:%B% %LEVEL% %B%usage:%B% and <follow-up>
+continues existing conversation with OpenAI.  start new conversation with %B%ask <question>%B%
