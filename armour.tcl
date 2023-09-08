@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Fri Sep  8 08:33:22 PDT 2023
+# armour.tcl v4.0 autobuild completed on: Fri Sep  8 08:34:46 PDT 2023
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -786,7 +786,7 @@ namespace eval arm {
 # ------------------------------------------------------------------------------------------------
 
 # -- this revision is used to match the DB revision for use in upgrades and migrations
-set cfg(revision) "2023090902"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
+set cfg(revision) "2023090903"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
 set cfg(version) "v4.0";        # -- script version
 
 # -- load sqlite (or at least try)
