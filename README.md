@@ -1,11 +1,9 @@
 ----------------------------------------------------------------------------------------------------------------
 
  ![Armour](./armour.png)
- Anti abuse script for eggdrop bots on the Undernet IRC Network
+ Anti abuse and channel management script for eggdrop bots on the Undernet IRC Network
 
 https://armour.bot
-
-Empus <empus@undernet.org>
 
 ----------------------------------------------------------------------------------------------------------------
 
@@ -16,3 +14,11 @@ This is an out-of-date legacy branch.  For the current version of Armour, please
 # Installation
 
 Detailed install instructions and script documentation is found @ [https://armour.bot](https://armour.bot)
+
+# Contact
+
+| Method  | Contact
+|---------|--------
+| Email   | Empus via [empus@undernet.org](mailto:empus@undernet.org)
+| IRC     | [#armour on Undernet](https://chat.undernet.org/?nick=myNick%3F%3F#armour)
+| GitHub  | GitHub [Issues Page](https://github.com/empus/armour/issues)
