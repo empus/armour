@@ -1,2 +1,2 @@
 %B%command:%B% restart -- %B%level:%B% %LEVEL% -- %B%usage:%B% restart [reason]
-saves db & restarts bot (incolves server jump)
+saves db & restarts bot (involves server jump)

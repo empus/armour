@@ -1,0 +1,2 @@
+%B%command:%B% login -- %B%level:%B% 0 -- %B%usage:%B% login [user] [passphrase]
+authenticates to the bot. ommitting username (and password) will attempt automatic login by network account.

@@ -1,0 +1,2 @@
+%B%command:%B% idle -- %B%level:%B% %LEVEL% -- %B%usage:%B% idle ?chan? <nick>
+checks how long a client has been idle for in the given channel.

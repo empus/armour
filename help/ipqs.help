@@ -1,0 +1,2 @@
+%B%command:%B% ipqs -- %B%level:%B% %LEVEL% -- %B%usage:%B% ipqs <ip>
+executes IP lookup via ipqualityscore.com and returns results

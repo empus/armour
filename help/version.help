@@ -1,0 +1,2 @@
+%B%command:%B% version -- %B%level:%B% %LEVEL% -- %B%usage:%B% version
+returns the current version and revision of Armour.

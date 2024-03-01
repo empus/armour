@@ -1,2 +1,2 @@
-%B%command:%B% view -- %B%level:%B% %LEVEL% -- %B%usage:%B% view <white|black> <user|host|regex|rname|country|asn|chan> <value>
-views whitelist or blacklist entry of explicit type.  if type is unknown, use 'search' command.
+%B%command:%B% view -- %B%level:%B% %LEVEL% -- %B%usage:%B% view <id>
+views a whitelist or blacklist entry by ID.  If ID is unknown, use 'search' command.

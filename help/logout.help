@@ -1,0 +1,3 @@
+%B%command:%B% logout -- %B%level:%B% 0 -- %B%usage:%B% logout [user] [passphrase]
+deauthenticates from the bot. ommitting username (and password) will achieve self-logout.
+remote logouts can be achieved on another client with a known password, or without a password for global level 500 suers.

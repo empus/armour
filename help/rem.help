@@ -1,2 +1,2 @@
-%B%command:%B% rem -- %B%level:%B% %LEVEL% -- %B%usage:%B% rem <white|black> <user|host|rname|regex|country|asn|chan> <value>
-removes an explicit whitelist or blacklist entry.  if exact values are unknown, use 'search' command.
+%B%command:%B% rem -- %B%level:%B% %LEVEL% -- %B%usage:%B% rem <id>
+removes a whitelist or blacklist entry by ID.  if ID is unknown, use 'search' command.

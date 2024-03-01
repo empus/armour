@@ -1,0 +1,2 @@
+%B%command:%B% showlog -- %B%level:%B% %LEVEL% -- %B%usage:%B% showlog ?chan? [-cmd <cmd>] [-days n] [-user <user>] [-max n] [-last n]
+searches the command log (from most recent). optionally filtered by any combination of command, user, last N days, last N commands.  '-last' will optionally specify the number of results to return (default is 5).

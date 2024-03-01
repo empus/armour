@@ -1,0 +1,2 @@
+%B%command:%B% ask %B%level:%B% %LEVEL% %B%usage:%B% askmode [description]
+sets user-specific behaviour mode of OpenAI responses.  use %B%askmode%B% on its own to clear. %B%example:%B% askmode use humour and sarcasm

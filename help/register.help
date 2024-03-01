@@ -1,0 +1,2 @@
+%B%command:%B% register -- %B%level:%B% 0 -- %B%usage:%B% register <user>
+registers a new user with the bot.  automatically applies network account, if authenticated.

@@ -1,3 +1,3 @@
-%B%command:%B% scan -- %B%level:%B% %LEVEL% -- %B%usage:%B% scan <nick|host|ip|mask>
-warning: command is incomplete & buggy.
+%B%command:%B% scan -- %B%level:%B% %LEVEL% -- %B%usage:%B% scan ?chan? <nick|host|ip|mask|account|asn>
 scans for matches against: whitelists, blacklists, dnsbl, portscan. types of scans executed depends on the value specified.
+%B%warning:%B% command is incomplete & buggy.

@@ -1,0 +1,4 @@
+%B%command:%B% note -- %B%level:%B% %LEVEL% -- %B%usage:%B% <send|view|rem> <user|id|*> [note]
+send note to a user (or all users with *, if privileged): note send <user|*> <note>
+view notes (or individual note by ID): note view [id|*]
+remove note by ID: note rem <id>

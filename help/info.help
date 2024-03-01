@@ -1,0 +1,4 @@
+%B%command:%B% info -- %B%level:%B% %LEVEL% -- %B%usage:%B% info <user|chan>
+displays information about a:
+  - user: including account, email, languages, access, lastseen
+  - chan: including manager(s), current scan mode, and settings

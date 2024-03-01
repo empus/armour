@@ -1,0 +1,2 @@
+%B%command:%B% remchan -- %B%level:%B% %LEVEL% -- %B%usage:%B% remchan <chan> -force
+unregisters a channel and removes all associated channel access and other data (whitelists, blacklists, greets)

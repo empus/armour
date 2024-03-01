@@ -1,3 +1,3 @@
-%B%command:%B% adduser -- %B%level:%B% %LEVEL% -- %B%usage:%B% adduser <user> <level> <xuser> [automode]
-adds a user to the userlist. levels: 1-500.  automode is none|voice|op (default of none). cannot add a user equal to above your own level.
-xuser is required to achieve autologin.  the user should then use 'newpass' command after autologin, if they wish to allow manual logins in future.
+%B%command:%B% adduser -- %B%level:%B% %LEVEL% -- %B%usage:%B% adduser ?chan? <user> <level> [automode]
+adds a user to a channel's userlist. levels: 1-500.  automode is none|voice|op (default of none). cannot add a user equal to above your own level.
+global (chan: *) access will take precedent over channel specific access when it is higher, as will automode.

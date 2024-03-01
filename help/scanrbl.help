@@ -1,2 +1,2 @@
 %B%command:%B% scanrbl -- %B%level:%B% %LEVEL% -- %B%usage:%B% scanrbl <host|ip>
-executes DNSBL lookups on nominated hostname or IP.
+executes DNSBL lookups on nominated hostname or IP.  IPv6 currently unsupported.

@@ -1,2 +1,3 @@
-%B%command:%B% search -- %B%level:%B% %LEVEL% -- %B%usage:%B% search <white|black|*> <search>
-searches list(s) for a match against search value. wildcards supported (? is match any char once, * is match any char zero or more).
+%B%command:%B% search -- %B%level:%B% %LEVEL% -- %B%usage:%B% search ?chan? <value> [white|black|*] [-type <method>]
+searches lists for a match against search value. chan is optional with "*" denoting global entries and "?" denoting any channel.  wildcards supported (? is match any char once, * is match any char zero or more).
+ommitting the entry type (or using *) will search whitelists and blacklists. including 'type' will search specific entry methods: user|host|rname|regex|text|country|asn|chan

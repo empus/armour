@@ -1,15 +1,12 @@
 ----------------------------------------------------------------------------------------------------------------
 
  ![Armour](./armour.png)
- Anti abuse and channel management script for eggdrop bots on the Undernet IRC Network
+
+Abuse and channel management script for eggdrop bots on the Undernet IRC Network
 
 https://armour.bot
 
 ----------------------------------------------------------------------------------------------------------------
-
-# Warning
-
-This is an out-of-date legacy branch.  For the current version of Armour, please us [v4.0 beta](https://github.com/empus/armour/tree/4_0_beta)
 
 # Installation
 
