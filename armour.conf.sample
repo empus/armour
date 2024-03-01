@@ -995,7 +995,7 @@ set cfg(ask:blacklist:chans) ""
 
 # -- string masks blacklisted for use in queries
 # note: this list is only applied to channels listed in cfg(ask:blacklist:chans)
-set cfg(ask:blacklist) { "*badword1*" "*another*" "*example2*" }
+set cfg(ask:blacklist) "*badword1* *another* *example2*"
 
 # -- ChatGPT conversation memory after initial question (mins) - [60]
 set cfg(ask:mem) 60

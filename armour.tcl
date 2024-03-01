@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Fri Mar  1 00:48:18 PST 2024
+# armour.tcl v4.0 autobuild completed on: Fri Mar  1 00:58:14 PST 2024
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -786,7 +786,7 @@ namespace eval arm {
 # ------------------------------------------------------------------------------------------------
 
 # -- this revision is used to match the DB revision for use in upgrades and migrations
-set cfg(revision) "2024030100"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
+set cfg(revision) "2024030101"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
 set cfg(version) "v4.0";        # -- script version
 
 # -- load sqlite (or at least try)
@@ -1040,6 +1040,26 @@ db:query "CREATE TABLE IF NOT EXISTS trakka (\
     type TEXT NOT NULL,\
     value TEXT NOT NULL,\
     score INTEGER NOT NULL DEFAULT '1'\
+    )"
+
+# -- create captcha table
+db:query "CREATE TABLE IF NOT EXISTS captcha (\
+    id INTEGER PRIMARY KEY AUTOINCREMENT,\
+    chan TEXT,\
+    code TEXT,\
+    nick TEXT,\
+    uhost TEXT,\
+    ip TEXT,\
+    ip_asn TEXT,\
+    ip_subnet TEXT,\
+    ip_country TEXT,\
+    ts TEXT,\
+    expiry INT,\ 
+    verify_ip TEXT,\
+    verify_ts INT,\
+    lastkick_ts INT DEFAULT '0',\
+    result TEXT,\
+    result_ts INT DEFAULT '0'
     )"
 
 # -- providing a mechanism to manage DB upgrade and migration between script versions
@@ -15237,25 +15257,6 @@ proc utimerlist {} {
        debug 0 "utimerlist: utimer: $timer" 
     }
 }
-
-db:query "CREATE TABLE IF NOT EXISTS captcha (\
-    id INTEGER PRIMARY KEY AUTOINCREMENT,\
-    chan TEXT,\
-    code TEXT,\
-    nick TEXT,\
-    uhost TEXT,\
-    ip TEXT,\
-    ip_asn TEXT,\
-    ip_subnet TEXT,\
-    ip_country TEXT,\
-    ts TEXT,\
-    expiry INT,\ 
-    verify_ip TEXT,\
-    verify_ts INT,\
-    lastkick_ts INT DEFAULT '0',\
-    result TEXT,\
-    result_ts INT DEFAULT '0'
-    )"
 
 putlog "\[@\] Armour: loaded CAPTCHA support (web and text)"
 
