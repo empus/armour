@@ -134,7 +134,7 @@ proc ask:cron {minute hour day month weekday} {
         debug 1 "\002ask:cron:\002 deleting expired file: $pathfile"
         exec rm $pathfile
         db:connect
-        db:query "DELETE FROM images WHERE file = '$file'"
+        db:query "DELETE FROM openai WHERE file = '$file'"
         db:close
         incr deleted
     }
@@ -1336,18 +1336,7 @@ proc jsonstr {data} {
 	return "\"$new\""
 }
 
-# -- create quotes
-db:connect
-db:query "CREATE TABLE IF NOT EXISTS images (\
-	id INTEGER PRIMARY KEY AUTOINCREMENT,\
-	cid INTEGER NOT NULL DEFAULT '1',\
-    user TEXT,\
-	timestamp INT NOT NULL,\
-    file TEXT NOT NULL,\
-    votes INT NOT NULL DEFAULT '0',\
-	desc TEXT NOT NULL
-	)"
-
+# -- create openai table
 db:query "CREATE TABLE IF NOT EXISTS openai (\
 	id INTEGER PRIMARY KEY AUTOINCREMENT,\
     type TEXT,\

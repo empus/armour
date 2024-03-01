@@ -123,7 +123,7 @@ set cfg(update:notes) 1
 set cfg(update:auto) 0
 
 # -- github branch to check and apply updates from - [master]
-set cfg(update:branch) "4_0_beta"
+set cfg(update:branch) "master"
 
 # -- automatically remove old script backups after N days - [7]
 set cfg(update:flush) 7
