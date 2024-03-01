@@ -2,7 +2,7 @@
 
  ![Armour](./armour.png)
 
- Anti abuse and channel management script for eggdrop bots on the Undernet IRC Network
+Abuse and channel management script for eggdrop bots on the Undernet IRC Network
 
 https://armour.bot
 
