@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Fri Sep  8 08:34:46 PDT 2023
+# armour.tcl v4.0 autobuild completed on: Fri Mar  1 00:24:40 PST 2024
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -681,7 +681,7 @@ proc loadcmds {} {
         proc arm:cmd:r {0 1 2 3 {4 ""} {5 ""}} { coroexec arm:cmd:rem $0 $1 $2 $3 $4 $5 };         # -- cmd: rem
         proc arm:cmd:m {0 1 2 3 {4 ""} {5 ""}} { coroexec arm:cmd:mod $0 $1 $2 $3 $4 $5 };         # -- cmd: mod
         proc arm:cmd:v {0 1 2 3 {4 ""} {5 ""}} { coroexec arm:cmd:view $0 $1 $2 $3 $4 $5 };        # -- cmd: view
-        proc arm:cmd:i {0 1 2 3 {4 ""} {5 ""}} { coroexec arm:cmd:info $0 $1 $2 $3 $4 $5 };        # -- cmd: info
+        #proc arm:cmd:i {0 1 2 3 {4 ""} {5 ""}} { coroexec arm:cmd:info $0 $1 $2 $3 $4 $5 };        # -- cmd: info
         proc arm:cmd:e {0 1 2 3 {4 ""} {5 ""}} { coroexec arm:cmd:exempt $0 $1 $2 $3 $4 $5 };      # -- cmd: exempt
         proc arm:cmd:s {0 1 2 3 {4 ""} {5 ""}} { coroexec arm:cmd:search $0 $1 $2 $3 $4 $5 };      # -- cmd: search
         proc arm:cmd:o {0 1 2 3 {4 ""} {5 ""}} { coroexec arm:cmd:op $0 $1 $2 $3 $4 $5 };          # -- cmd: op
@@ -702,7 +702,7 @@ if {[cfg:get char:nick *] || [cfg:get char:glob *]} {
         if {$nick eq $botnick} { return; }
         
         # -- tidy nick
-        set nick [split $nick]
+        #set nick [split $nick]
 
         set first [lindex [split $text] 0]
         # -- check for global prefix char '*' OR bot nickname
@@ -779,14 +779,14 @@ debug 0 "\[@\] Armour: loaded command binds."
 # ------------------------------------------------------------------------------------------------
 # Armour: merged from arm-04_db.tcl
 #
-# user database functions
+# database functions
 #
 # ------------------------------------------------------------------------------------------------
 namespace eval arm {
 # ------------------------------------------------------------------------------------------------
 
 # -- this revision is used to match the DB revision for use in upgrades and migrations
-set cfg(revision) "2023090903"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
+set cfg(revision) "2024030100"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
 set cfg(version) "v4.0";        # -- script version
 
 # -- load sqlite (or at least try)
@@ -1448,9 +1448,9 @@ proc db:load {} {
     #debug 4 "db:load: started"
 
     # -- flush existing from memory 
-    if {[info exists entries]    }   { unset entries   }
-    if {[info exists flud:id]    }   { unset flud:id   }
-    if {[info exists flud:count] }   { unset flud:hits }
+    if {[info exists entries]    }   { unset entries    }
+    if {[info exists flud:id]    }   { unset flud:id    }
+    if {[info exists flud:count] }   { unset flud:count }
     
     set entries [list]; # -- safety net; when there are 0 entries in db
 
@@ -1484,7 +1484,7 @@ proc db:load {} {
         dict set entries $id depends $depends
         dict set entries $id reason $reason
         
-        foreach flag {noident onlykick nochans manual captcha disabled onlysecure silent ircbl notsecure} {
+        foreach flag {noident onlykick nochans manual captcha disabled onlysecure silent ircbl notsecure onlynew continue} {
             # -- get flag integer
             if {$flags eq 0} { 
                 set val 0;
@@ -1545,6 +1545,8 @@ proc db:add {list chan method value modifby action limit reason} {
     dict set entries $id silent 0;     # -- flag: 128
     dict set entries $id ircbl 0;      # -- flag: 256
     dict set entries $id notsecure 0;  # -- flag: 512
+    dict set entries $id onlynew 0;    # -- flag: 1024
+    dict set entries $id continue 0;   # -- flag: 2048
     dict set entries $id ts $ts
     dict set entries $id modifby $modifby
     dict set entries $id action $action
@@ -1649,6 +1651,14 @@ proc db:load:chan {} {
 proc get:val {var val} {
     variable $var
 
+    #if {$var ni "data:kicks data:bans scan:list chan:mode flood:line nick:newjoin"} {
+    #    putlog "\002get:val:\002 var: $var -- val: $val"
+    #}
+    set val [join $val]
+    #if {$var ni "data:kicks data:bans scan:list chan:mode flood:line nick:newjoin"} {
+    #    putlog "\002get:val:\002 val now: $val"
+    #}
+
     # -- handle special regexp chars
     set valexp $val
     regsub -all {\*} $valexp "\\*" valexp;
@@ -1664,7 +1674,7 @@ proc get:val {var val} {
 
     set exp "(?i)^\\{?$valexp\\}?$"
     set v [join [array names $var -regexp $exp]]
-    set v [lindex $v 0]
+    #set v [lindex $v 0]
     if {![info exists [subst $var]($v)] || $v eq ""} { return "" }
     set res [set [subst $var]($v)]
 
@@ -1688,6 +1698,8 @@ proc isFlag {dbflags flag} {
     #     128  : silent
     #     256  : ircbl
     #     512  : notsecure
+    #     1024 : onlynew
+    #     2048 : continue
     switch -- $flag {
       none       { set int 0   }
       noident    { set int 1   }
@@ -1700,6 +1712,8 @@ proc isFlag {dbflags flag} {
       silent     { set int 128 }
       silent     { set int 256 }
       notsecure  { set int 512 }
+      onlynew    { set int 1024 }
+      continue   { set int 2048 }
       default    { return 0    }
     }
     if {($int & $dbflags)} { return 1 } else { return 0 }
@@ -1718,6 +1732,8 @@ proc getFlag {flag} {
     #     128  : silent
     #     256  : ircbl
     #     512  : notsecure
+    #     1024 : onlynew
+    #     2048 : continue
     switch -- $flag {
       none       { set int 0   }
       noident    { set int 1   }
@@ -1730,6 +1746,8 @@ proc getFlag {flag} {
       silent     { set int 128 }
       ircbl      { set int 256 }
       notsecure  { set int 512 }
+      onlynew    { set int 1024 }
+      continue   { set int 2048 }
       default    { set 0       }
     }
     return $int
@@ -2013,37 +2031,13 @@ putlog "\[@\] Armour: loaded CIDR procedures."
 namespace eval arm {
 # ------------------------------------------------------------------------------------------------
 
-
-# -- convert ip address to asn
-proc geo:ip2asn {ip} {
-
-    # -- reverse the IP
-    if {![regexp {([0-9]{1,3}).([0-9]{1,3}).([0-9]{1,3}).([0-9]{1,3})} $ip -> a b c d]} {
-        # -- not valid IP
-        return;
-    }
-    set revip "$d.$c.$b.$a"  
-
-    # -- asynchronous lookup via coroutine  
-    set answer [dns:lookup $revip.origin.asn.cymru.com TXT]
-    
-    # -- example:
-    # 7545 | 123.243.188.0/22 | AU | apnic | 2007-02-14
-    
-    if {$answer == "NULL" || $answer == ""} { return; }
-    set string [split $answer "|"]
-    set asn [lindex $string 0]
-    regsub -all { } $asn {} asn
-    debug 3 "\002geo:ip2asn\002: ASN for IP $ip is: $asn"
-    return $asn
-}
-
-# -- convert ip to country
-proc geo:ip2country {ip} {
+# -- convert ip to: asn country subnet rir date
+proc geo:ip2data {ip} {
     # -- reverse the IP
     if {![regexp {([0-9]{1,3}).([0-9]{1,3}).([0-9]{1,3}).([0-9]{1,3})} $ip -> a b c d]} {
         # -- not valid IP
         # -- TODO: geo:ip2country IPv6 support
+        putlog "not valid ip"
         return;
     }
     set revip "$d.$c.$b.$a"  
@@ -2053,12 +2047,16 @@ proc geo:ip2country {ip} {
     # -- example:
     # 7545 | 123.243.188.0/22 | AU | apnic | 2007-02-14
     
-    if {$answer == "NULL" || $answer == ""} { return; }
-    set string [split $answer "|"]
-    set country [lindex $string 2]
-    regsub -all { } $country {} country
-    debug 3 "\002geo:ip2asn\002: country for IP $ip is: $country"
-    return $country
+    if {$answer eq "NULL" || $answer eq ""} { return; }
+    set string [split $answer " | "]
+    # 7545 {} {} 123.243.188.0/22 {} {} AU {} {} apnic {} {} 2007-02-14
+    set asn [lindex $string 0]
+    set subnet [lindex $string 3]
+    set country [lindex $string 6]
+    set rir [lindex $string 9]
+    set date [lindex $string 12]
+    debug 3 "\002geo:ip2data\002: IP: $ip -- ASN: $asn -- subnet: $subnet -- country: $country -- rir: $rir -- date: $date"
+    return "$asn $country $subnet $rir $date"
 }
 
 # -- convert IP to long format
@@ -2282,8 +2280,8 @@ proc auth:attempt {} {
     
     # -- append the TOTP token, if a secret key is configured
     set thepass [cfg:get auth:pass *]
-    #if {[cfg:get auth:totp *] ne ""} { append thepass " [onetimepass::get_totp [cfg:get auth:totp *]]" }
-    if {[cfg:get auth:totp *] ne ""} { append thepass " [exec /usr/local/bin/oathtool --totp [cfg:get auth:totp *]]" }
+    if {[cfg:get auth:totp *] ne ""} { append thepass " [onetimepass::get_totp [cfg:get auth:totp *]]" }
+    #if {[cfg:get auth:totp *] ne ""} { append thepass " [exec /usr/local/bin/oathtool --totp [cfg:get auth:totp *]]" }
     
     # -- determine the auth mechanism:
     # gnuworld: LOGIN <user> <pass>
@@ -3449,6 +3447,7 @@ proc kickban {nick ident host chan duration reason {id ""}} {
     debug 4 "kickban: adding chan kickban: \002nick:\002 $nick -- chan: $chan -- ident: $ident -- host: $host -- duration: $duration -- reason: $reason -- id: $id"
 
     set lnick [string tolower $nick]
+    set lchan [string tolower $chan]
     if {[dict exists $nickdata $lnick account] eq 1} { set xuser [dict get $nickdata $lnick account] } \
     else { set xuser 0 }
     
@@ -3460,11 +3459,11 @@ proc kickban {nick ident host chan duration reason {id ""}} {
         set mask [getmask $nick $xuser $ident $host]
 
         # -- track nick as recently kicked (to bump to kickban if threshold met)
-        if {![info exists data:kicknicks($chan,$nick)]} {
-            set data:kicknicks($chan,$nick) 1
-            utimer [lindex [split [cfg:get paranoid:klimit $chan] :] 1] "unset arm::data:kicknicks($chan,$nick)"
+        if {![info exists data:kicknicks($lchan,$nick)]} {
+            set data:kicknicks($lchan,$nick) 1
+            utimer [lindex [split [cfg:get paranoid:klimit $chan] :] 1] "arm::unset:kicknicks [split $lchan,$nick]"
         } else { 
-            incr data:kicknicks($chan,$nick)
+            incr data:kicknicks($lchan,$nick)
         }
     }
 
@@ -3556,7 +3555,7 @@ proc kickban {nick ident host chan duration reason {id ""}} {
     
     if {$id ne ""} {
         set data:banmask($id) $mask; 
-        utimer [cfg:get id:unban:time $chan] "unset arm::data:banmask($id)"; # -- allow automatic unban of recently banned mask, when removing blacklist by id
+        utimer [cfg:get id:unban:time $chan] "arm::arm:unset data:banmask $id"; # -- allow automatic unban of recently banned mask, when removing blacklist by id
     }
 }
 
@@ -3766,6 +3765,8 @@ proc arm:cmd:conf {0 1 2 3 {4 ""}  {5 ""}} {
                 auth:totp { continue; }
                 ipqs:key  { continue; }
                 ircbl:key { continue; }
+                ask:token { continue; }
+                ask:org   { continue; }
             }
             if {[string match $var $i] || [string match $var $long]} { lappend thelist $i }
         }
@@ -4337,10 +4338,14 @@ proc arm:cmd:kick {0 1 2 3 {4 ""}  {5 ""}} {
 # usage: ban ?chan? <nick1,mask1,nick2,mask2,mask3...> [duration] [reason]
 proc arm:cmd:ban {0 1 2 3 {4 ""}  {5 ""}} {
     global botnick
-    variable cfg;
+    variable cfg
+    variable unet
     lassign [proc:setvars $0 $1 $2 $3 $4 $5] type stype target starget nick uh hand source chan arg 
     
     set cmd "ban"
+
+    # -- undernet shortcut handling
+    if {[info exists unet(backchan)] && $unet(backchan) eq $chan} { set unet 1 } else { set unet 0 }
     
     #  usage: ban ?chan? <nick1,mask1,nick2,mask2,mask3...> [duration] [reason]
     lassign [db:get id,user users curnick $nick] uid user
@@ -4368,7 +4373,7 @@ proc arm:cmd:ban {0 1 2 3 {4 ""}  {5 ""}} {
             set reason [join [lrange $arg 1 end]]
         }
     }
-    if {![userdb:isAllowed $nick $cmd $chan $type]} { return; }
+    if {![userdb:isAllowed $nick $cmd $chan $type] && !$unet} { return; }
     set log "$chan [join $arg]"; set log [string trimright $log " "]
         
     set banlist [split $banlist ,]
@@ -4414,7 +4419,7 @@ proc arm:cmd:ban {0 1 2 3 {4 ""}  {5 ""}} {
     if {$noton != ""} {
         reply $type $target "missing: [join $noton ", "]"
     }
-    if {$type != "pub"} { reply $type $target "done." }
+    if {$type != "pub" || ([info exists unet(backchan) && $unet(backchan) ne $chan])} { reply $type $target "done." }
 
     # -- create log entry for command use
     set cid [db:get id channels chan $chan]
@@ -4645,9 +4650,6 @@ proc arm:cmd:asn {0 1 2 3 {4 ""}  {5 ""}} {
     
     set ip [lindex $arg 0]
     if {$ip == ""} { reply $stype $starget "\002usage:\002 asn <ip|host>"; return; }
-    
-    # -- this only returns the ASN itself
-    #set asn [geo:ip2asn $ip]
     
     # -- reverse the IP
     # -- TODO: IPv6 lookups
@@ -4942,9 +4944,7 @@ proc arm:cmd:country {0 1 2 3 {4 ""}  {5 ""}} {
     
     set ip [lindex $arg 0]
     if {$ip == ""} { reply $stype $starget "\002usage:\002 country <ip|host>"; return; }
-    
-    #set country [geo:ip2country $ip]
-        
+            
     # -- reverse the IP
     # -- TODO: IPv6 lookups
     if {![regexp {([0-9]{1,3}).([0-9]{1,3}).([0-9]{1,3}).([0-9]{1,3})} $ip -> a b c d]} {
@@ -5182,8 +5182,7 @@ proc arm:cmd:scan {0 1 2 3 {4 ""}  {5 ""}} {
         set tip $search
         set thost $tip
         set match 1
-        set country [geo:ip2country $tip]
-        set asn [geo:ip2asn $tip]
+        lassign [geo:ip2data $ip] asn country
         debug 2 "arm:cmd:scan: asn: $asn -- country: $country"
     }
     
@@ -5212,8 +5211,7 @@ proc arm:cmd:scan {0 1 2 3 {4 ""}  {5 ""}} {
         set tip $thost
         set thost tip
         set match 1
-        set country [geo:ip2country $tip]
-        set asn [geo:ip2asn $tip]
+        lassign [geo:ip2data $tip] asn country
         set ipscan 1
         debug 2 "arm:cmd:scan: asn: $asn country: $country"
     }
@@ -5618,7 +5616,7 @@ proc arm:cmd:say {0 1 2 3 {4 ""}  {5 ""}} {
         incr idx
     } elseif {[string index $dest 0] eq "#"} {
             # -- channel provided; do they have access for that chan?
-            if {![userdb:isAllowed $nick $cmd $dest $type] || ![botonchan $dest]} { reply $type $target "no, they won't like that."; return; }
+            if {![userdb:isAllowed $nick $cmd $dest $type] || ![botonchan $dest]} { return; }
             set mchan $dest; set msglist $mchan; incr idx
     } else {
         # -- chan not provided, we need to determine channel
@@ -5878,7 +5876,7 @@ proc arm:cmd:stats {0 1 2 3 {4 ""}  {5 ""}} {
     }
 
     # -- check if trakka is loaded
-    if {[lsearch [binds] *trakka*] ne -1} {
+    if {[info commands trakka:isEnabled] ne ""} {
         # -- check by chan
         if {[trakka:isEnabled $chan] || $chan eq "*"} {
             if {$chan eq "*"} {
@@ -6006,7 +6004,7 @@ proc arm:cmd:view {0 1 2 3 {4 ""}  {5 ""}} {
             # -- check if entry even exists
             set result [::dronebl::lookup $ip]  
             debug 2 "arm:cmd:view: dronebl result: $result"
-            if {[join [lindex $result 0]] == "No matches."} {
+            if {[join [lindex $result 0]] eq "No matches."} {
                 # -- exists
                 debug 1 "arm:cmd:view: dronebl entry does not exist (ip: $ip)"
                 reply $type $target "error: dronebl entry does not exist -- ip: $ip"
@@ -6725,7 +6723,7 @@ proc arm:cmd:mod {0 1 2 3 {4 ""}  {5 ""}} {
     if {![cfg:get ircbl $chan] && $param eq "ircbl"} { set usage 1 }; # -- IRCBL not enabled; show command usage
     
     if {$usage} {
-        reply $stype $starget "\002usage:\002 mod ?chan? <id> <value|action|limit|depends|reason|nochans|onlykick|noident|manual|captcha|disabled|onlysecure|notsecure|silent${xtra}> <value>"
+        reply $stype $starget "\002usage:\002 mod ?chan? <id> <value|action|limit|depends|reason|nochans|onlykick|noident|manual|captcha|disabled|onlysecure|notsecure|onlynew|silent|continue${xtra}> <value>"
         return;    
     }
         
@@ -6776,12 +6774,14 @@ proc arm:cmd:mod {0 1 2 3 {4 ""}  {5 ""}} {
             onlysecure { set param "onlysecure"; set isflag 1 }
             secureonly { set param "onlysecure"; set isflag 1 }
             notsecure  { set param "notsecure"; set isflag 1  }
+            onlynew    { set param "onlynew"; set isflag 1    }
+            continue   { set param "continue"; set isflag 1    }
             silent     { set param "silent"; set isflag 1 }
             ircbl      { set param "ircbl"; set isflag 1 }
             rbl        { set param "ircbl"; set isflag 1 }
             default {
                 reply $type $target "\002(\002error\002)\002 entry parameter must be one of: value|action|limit|depends|reason,\
-                 nochans|onlykick|noident|manual|captcha|disabled|onlysecure|notsecure|silent${xtra}|ctcp.  try: \002help mod\002"
+                 nochans|onlykick|noident|manual|captcha|disabled|onlysecure|notsecure|onlynew|silent|continue${xtra}|ctcp.  try: \002help mod\002"
                 return;
             }
         }
@@ -7276,6 +7276,225 @@ proc arm:cmd:queue {0 1 2 3 {4 ""}  {5 ""}} {
     }
 }
 
+# -- command: captcha
+# usage: captcha ?chan? <search> [-type <flags>] [-max <num>] [-nomatch]
+set addcmd(captcha)     {  arm       300        pub msg dcc  }
+proc arm:cmd:captcha {0 1 2 3 {4 ""}  {5 ""}} {
+    lassign [proc:setvars $0 $1 $2 $3 $4 $5] type stype target starget nick uh hand source chan arg 
+ 
+    set cmd "captcha"
+    
+    lassign [db:get id,user users curnick $nick] uid user
+    
+    # -- check for channel
+    set first [lindex $arg 0];
+    if {[string index $first 0] eq "#"} {
+        set chan $first
+        set search [lindex $arg 1]
+        set rest [lrange $arg 2 end]
+    } else { 
+        set chan [userdb:get:chan $user $chan]; # -- predict chan when not given
+        set search [lindex $arg 0]
+        set rest [lrange $arg 1 end]
+    }; 
+    
+    if {![userdb:isAllowed $nick $cmd $chan $type]} { return; }
+    set log "$chan [join $arg]"; set log [string trimright $log " "]
+
+    # -- end default proc template
+
+    if {$search eq "" || [string index $search 0] eq "-"} {
+        reply $stype $target "\002usage:\002 captcha ?chan? <search|stats> \[-days <num>\] \[-type <flags>\] \[-max <num>\] \[-nomatch\]"
+        return;
+    }
+
+    # -- check for -nomatch flag
+    if {[lindex $rest end] eq "-nomatch"} { 
+        set nomatch 1
+    } else { 
+        set nomatch 0
+    }
+
+    # -- check for -max for max results
+    set days ""; set pos [lsearch $rest "-days"]
+    if {$pos ne -1} {
+        set days [lindex $rest [expr $pos + 1]]
+        if {![regexp -- {^\d+$} $days]} {
+            reply $type $target "\002error:\002 invalid number."
+            return;
+        }
+    }
+
+    # -- stats recall?
+    if {$search eq "stats"} {
+        set dbchan [db:escape $chan]
+        set query "SELECT result,count(*) as count FROM captcha WHERE chan='$chan'"
+        #et uquery "SELECT concat(nick,'!',uhost) AS nuh, count(*) FROM captcha"; # -- package doesn't support concat() :<
+        set uquery "SELECT uhost FROM captcha WHERE chan='$chan'"
+        if {$days ne ""} { 
+            append query " AND ts >= [expr [unixtime]-(86400*$days)]"
+            append uquery " AND ts >= [expr [unixtime]-(86400*$days)]"
+        }
+        if {$nomatch} { 
+            append query " AND ip!=verify_ip"
+            append uquery " AND ip!=verify_ip" 
+        }
+        append query " GROUP BY result"
+        append uquery " GROUP BY uhost"
+        db:connect
+        set rows [db:query $query]
+        if {[llength $rows] eq 0} {
+            # -- no results
+            reply $type $target "\002info:\002 no resuls returned."
+            db:close
+            return;
+        }
+        # -- process results
+        set joined 0; set expired 0; set parted 0; set success 0; set voiced 0; 
+        set failed 0; set ratelimit 0; set kickabuse 0; set unknown 0; 
+        foreach row $rows {
+            lassign $row result count
+            switch -- $result {
+                "J" { set joined $count; }
+                "X" { set expired $count; }
+                "P" { set parted $count; }
+                "S" { set success $count; }
+                "V" { set voiced $count; }
+                "F" { set failed $count; }
+                "R" { set ratelimit $count; }
+                "K" { set kickabuse $count; }
+                default { set unknown $count; }
+            }
+        }
+        set total [expr $joined + $expired + $parted + $success + $voiced + $failed + $ratelimit + $kickabuse]
+        set jpc "[format "%.2f" [expr double(round($joined * 100)) / $total]]%"
+        set xpc "[format "%.2f" [expr double(round($expired * 100)) / $total]]%" 
+        set ppc "[format "%.2f" [expr double(round($parted * 100)) / $total]]%"
+        set spc "[format "%.2f" [expr double(round($success * 100)) / $total]]%" 
+        set vpc "[format "%.2f" [expr double(round($voiced * 100)) / $total]]%" 
+        set fpc "[format "%.2f" [expr double(round($failed * 100)) / $total]]%" 
+        set rpc "[format "%.2f" [expr double(round($ratelimit * 100)) / $total]]%" 
+        set kpc "[format "%.2f" [expr double(round($kickabuse * 100)) / $total]]%" 
+        set upc "[format "%.2f" [expr double(round($unknown * 100)) / $total]]%"
+
+        set text ""
+        if {$voiced ne 0} { lappend text "\002voiced:\002 $voiced ($vpc)" }
+        if {$joined ne 0} { lappend text "\002joined:\002 $joined ($jpc)" }
+        if {$expired ne 0} { lappend text "\002expired:\002 $expired ($xpc)" }
+        if {$parted ne 0} { lappend text "\002parted:\002 $parted ($ppc)" }
+        if {$success ne 0} { lappend text "\002success:\002 $success ($spc)" }
+        if {$failed ne 0} { lappend text "\002failed:\002 $failed ($fpc)" }
+        if {$ratelimit ne 0} { lappend text "\002ratelimit:\002 $ratelimit ($rpc)" }
+        if {$kickabuse ne 0} { lappend text "\002kickabuse:\002 $kickabuse ($kpc)" }
+
+        # -- add unique client count by user@host
+        set unique [llength [db:query $uquery]]
+        db:close
+        set text [join $text " -- "]
+        set text [string trimleft $text " -- "]
+        reply $type $target "\002CAPTCHA stats:\002 \002\[total:\002 $total\002\]\002 $text -- \002\[unique:\002 $unique\002\]\002"
+        # -- create log entry for command use
+        set cid [db:get id channels chan $chan]
+        log:cmdlog BOT $chan $cid $user $uid [string toupper $cmd] $log $source "" "" ""
+        return;
+    }
+
+    # -- check for -max for max results
+    set pos [lsearch $rest "-max"]
+    if {$pos ne -1} {
+        set max [lindex $rest [expr $pos + 1]]
+        if {![regexp -- {^\d+$} $max]} {
+            reply $type $target "\002error:\002 invalid number."
+            return;
+        } elseif {$max > 5} {
+            reply $type $target "\002error:\002 upper maximum of \0025\002 results."
+            return;
+        } elseif {$max < 1} {
+            reply $type $target "\002error:\002 number must be \0021-5\002 in range."
+            return;            
+        }
+    } else { set max 3 }
+
+    # -- check for result type flags
+    set flags ""
+    set pos [lsearch $rest "-type"]
+    if {$pos ne -1} {
+        set flags [lindex $rest [expr $pos + 1]]
+        set flags [string toupper $flags]
+        if {![regexp -- {^([A-Z],?)+$} $flags]} {
+            reply $type $target "\002error:\002 invalid result type flags. \002use:\002 J (joined), P (parted), F (failed), S (succeed, no voice), X (expired), V (voiced), K (kickabuse), R (ratelimit)"
+            return;
+        }
+        if {$flags eq "*"} { set flags "" }
+    }
+
+    db:connect    
+    set dbsearch [string tolower $search]
+    regsub -all {\*} $dbsearch "%" dbsearch
+    regsub -all {\?} $dbsearch "_" dbsearch
+    set dbsearch [db:escape $dbsearch]
+    set dbchan [db:escape $chan]
+    set query "SELECT nick,uhost,ip,ip_asn,ip_country,ip_subnet,ts,verify_ts,verify_ip,result FROM captcha WHERE chan='$dbchan'"
+    if {$days ne ""} { append query " AND ts >= [expr [unixtime]-(86400*$days)]" }
+    # -- allow comma delimited result types
+    if {$flags ne ""} {
+        set str [list]
+        foreach i [split $flags ,] {
+            if {$i eq "E"} { set i "X" }; # -- correct E to X for expired entries
+            lappend str "'$i'"
+        }
+        set tlist [join $str ", "]
+        append query " AND result IN ($tlist)"
+    };
+    append query " AND (lower(nick) LIKE '$dbsearch' OR lower(uhost) LIKE '$dbsearch' OR lower(ip) LIKE '$dbsearch' OR lower(ip_asn) LIKE '$dbsearch' \
+        OR lower(ip_country) LIKE '$dbsearch' OR lower(ip_subnet) LIKE '$dbsearch' OR lower(verify_ip) LIKE '$dbsearch')"
+    if {$nomatch} { append query " AND ip!=verify_ip" }
+    append query " ORDER BY ts DESC"
+    debug 3 "cmd:captcha: query: $query"
+    set rows [db:query $query]
+    db:close
+
+    if {$rows eq ""} {
+        reply $type $target "\002info:\002 no results."
+    } else {
+    
+        set count 0; set rcount [llength $rows]
+        foreach row $rows {
+            lassign $row rnick ruhost rip rasn rcountry rsubnet rts rverify_ts rverify_ip rresult
+            #putlog "row: rnick: $rnick -- ruhost: $ruhost -- rip: $rip -- rts: $rts -- rverify_ts: $rverify_ts -- rverify_ip: $rverify_ip -- rresult: $rresult"
+            switch -- $rresult {
+                "J" { set res "joined" }
+                "P" { set res "parted" }
+                "F" { set res "failed" }
+                "S" { set res "success" }
+                "V" { set res "voiced" }
+                "R" { set res "rate-limited" }
+                "K" { set res "abuse" }
+                "X" { set res "expired" }
+                default { set res "unknown" }
+            }
+            set text "\002\[\002[clock format $rts -format "%Y-%m-%d %H:%M:%S" -gmt 1] GMT\002\]\002 \002client:\002 $rnick!$ruhost (\002ip:\002 $rip"
+            if {$rasn ne ""} { append text " -- \002asn:\002 $rasn" }
+            if {$rsubnet ne ""} { append text " -- \002prefix:\002 $rsubnet" }
+            append text ") -- \002result:\002 $res"
+            if {$rverify_ip ne ""} {
+                append text " -- \002web:\002 $rverify_ip"
+                if {$rip eq $rverify_ip} { append text " (match)" } else { append text " (no match)" }
+            }
+            reply $type $target $text
+            incr count
+            if {$count >= $max && $count < $rcount} {
+                reply $type $target "\002info:\002 only displayed \002$count\002 of \002$rcount\002 results."
+                break;
+            }
+        }
+    }
+
+    # -- create log entry for command use
+    set cid [db:get id channels chan $chan]
+    log:cmdlog BOT $chan $cid $user $uid [string toupper $cmd] $log $source "" "" ""
+}
+
 
 debug 0 "\[@\] Armour: loaded user commands"
 
@@ -7323,7 +7542,14 @@ bind mode - "* +v" { arm::coroexec arm::mode:add:v }
 bind mode - "* +o" { arm::coroexec arm::mode:add:o }
 
 # -- remove blacklist entries on recent unbans
+# -- remove channel lock when banlist is no longer full
 bind mode - "* -b" { arm::coroexec arm::mode:rem:b }
+
+# -- track kicks for KICKLOCK channel setting
+bind kick - * { arm::coroexec arm::raw:kick:lock }
+
+# -- ctcp version replied
+bind ctcp - VERSION { arm::coroexec arm::ctcp:version }
 
 
 # -- begin onjoin scans
@@ -7412,7 +7638,13 @@ proc raw:join {nick uhost hand chan} {
             if {$length >= [cfg:get lasthosts $chan]} { set data:lasthosts($lchan) [lreplace [get:val lasthosts $lchan] $pos $pos] }
         }
     }
+
+    # -- set newjoin tracker for nick (identify 'newcomers')
+    set nick:newjoin($lchan,$snick) $uhost
  
+     # -- unset soon (default 60 seconds)
+    utimer [cfg:get time:newjoin $chan] "arm::newjoin:unset $snick $chan"
+    
     # -- halt scanner if no chan mode
     if {![info exists chan:mode($lchan)]} {
         debug 3 "raw:join: autologin (1) WHO $nick"
@@ -7433,17 +7665,12 @@ proc raw:join {nick uhost hand chan} {
     # -- safety net (chan recent kick list)
     if {![info exists data:kicks($lchan)]} { set data:kicks($lchan) "" }
     
-    # -- set newjoin tracker for nick (identify 'newcomers')
-    set nick:newjoin($lchan,$snick) $uhost
-    
+
     # -- store timestamp of newcomer for ordered sorting with floodnets
     set jtime [clock clicks]
     set jointime:nick($lchan,$jtime) $nick
     set nick:jointime($lchan,$snick) $jtime
-        
-    # -- unset soon (default 60 seconds)
-    utimer [cfg:get time:newjoin $chan] "arm::newjoin:unset $snick $chan"
-    
+            
     # ---- mode is "on" -- begin
     debug 1 "\002raw:join: ------------------------------------------------------------------------------------\002"
     debug 1 "\002raw:join: [join $nick]!$uhost joined $chan.....\002"
@@ -7720,9 +7947,8 @@ proc raw:nicknoton {server cmd text} {
     dict unset nickdata [string tolower $nick]; # -- remove dict data
 }
 
-
+# -- manage full banlists
 proc raw:fullbanlist {server cmd arg} {
-    variable cfg
     variable chan:mode;  # -- stores the operational mode of a channel (by chan)
 
     set chan [lindex $arg 1]
@@ -7735,18 +7961,21 @@ proc raw:fullbanlist {server cmd arg} {
     debug 0 "arm:raw:fullbanlist: channel $chan banlist full! (using generic X ban)";
     
     # -- lockdown chan (if not already)
-    if {![regexp -- {r} [getchanmode $chan]]} {
-        putquick "MODE $chan +r" -next
+    set fullmodes [string trimleft [cfg:get ban:full:modes] "+"]
+    if {![regexp -- {$fullmodes} [getchanmode $chan]]} {
+        putquick "MODE $chan +$fullmodes" -next
         # -- advise channel
-        if {[cfg:get chan:report $chan] != ""} { set xtra ",[cfg:get chan:report $chan]" } else { set xtra "" }
-        putquick "NOTICE @$chan$xtra :Armour: channel banlist is full!"
+        putquick "NOTICE @$chan :Armour: channel banlist is \002full!\002"
+        set reportchan [cfg:get chan:report $chan]
+        if {$reportchan ne ""} { putquick "NOTICE @$reportchan :Armour: channel banlist in $chan is \002full!\002" }   
     }
     
     # -- use generic ban
-    if {[cfg:get ban $chan] eq "x"} {
+    if {[cfg:get auth:mech] eq "gnuworld" && [cfg:get auth:user] ne ""} {
         putquick "PRIVMSG [cfg:get auth:serv:nick *] :BAN $chan $banmask [cfg:get ban:time *] [cfg:get ban:level *] Armour: generic ban (full banlist)" -next
     }
 }
+
 
 # -- signoff procedure to exempt clients from adaptive scans when setting umode +x
 proc raw:quit {nick uhost hand chan reason} {    
@@ -7769,7 +7998,7 @@ proc raw:quit {nick uhost hand chan reason} {
             # -- umode +x detected
             set nick:setx($snick) 1
             # -- unset array after 2 seconds (plenty of time to allow rejoin)
-            utimer 2 "unset arm::nick:setx($nick)"
+            utimer 2 "arm::arm:unset nick:setx $nick"
             return;
         }
     }
@@ -8017,7 +8246,7 @@ proc who {nick chan ident host ip flags xuser rname} {
     variable corowho;         # -- coroutine from raw:join to send data to scanner (by nick)
     
         
-    debug 3 "\002who:\002 nick: $nick -- chan: $chan -- ident: $ident -- host: $host -- ip: $ip -- flags: $flags -- xuser: $xuser -- rname: $rname"
+    debug 4 "\002who:\002 nick: $nick -- chan: $chan -- ident: $ident -- host: $host -- ip: $ip -- flags: $flags -- xuser: $xuser -- rname: $rname"
     
     set snick [split $nick];                        # -- make safe, for array keys
     set lnick [string tolower $nick];               # -- lower case for reliable dict search
@@ -8129,6 +8358,7 @@ proc who {nick chan ident host ip flags xuser rname} {
 }
 
 proc raw:endofwho {server cmd text} {
+    global botnet-nick
     variable cfg
     variable scan:full;       # -- tracks data for full channel scan by chan,key (for handling by arm::scan after /WHO):
                               #        chan,state :  tracks enablement
@@ -8156,82 +8386,89 @@ proc raw:endofwho {server cmd text} {
     # -- they could have changed nicks, quit, been kicked, or parted    
     set leavelist "";
     if {[string index $mask 0] eq "#"} {
-        set mode [get:val chan:mode $lchan]
-        if {$mode eq "secure"} {
-            set leavelist [get:val scan:list leave,$lchan]
-            set nicklist [get:val scan:list nicks,$lchan]
-            set wholist [get:val scan:list who,$lchan]
-            set datalist [get:val scan:list data,$lchan]
-            if {$wholist ne ""} { debug 4 "\002endofwho: scan:list(who,$lchan):\002 $wholist" }
-            if {$datalist ne ""} { debug 4 "\002endofwho: scan:list(data,$lchan):\002 $datalist" }
-            if {$nicklist ne ""} { debug 4 "\002endofwho: scan:list(nicks,$lchan):\002 $nicklist" }
-            if {$leavelist ne ""} { debug 4 "\002endofwho: scan:list(leave,$lchan):\002 $leavelist"    }
-            
-            if {$nicklist eq "" || $datalist eq ""} { set scan:list(who,$lchan) "" }
-            
-            foreach n $leavelist {
-                # -- check if nick in leavelist, but not in nicklist
-                if {$n ni $nicklist && $n ni $wholist} {
-                    set idx [lsearch -exact $leavelist $n]
-                    debug 4 "\002endofwho: 1 - \002removing $n from scan:list(leave,$lchan)"
-                    set scan:list(leave,$lchan) [lreplace [get:val scan:list leave,$lchan] $idx $idx]
-                    set leavelist [lreplace $leavelist $idx $idx]
-                    set remove 1
+        foreach lchan [split $lchan ,] {
+            set mode [get:val chan:mode $lchan]
+            if {$mode eq "secure"} {
+                set leavelist [get:val scan:list leave,$lchan]
+                set nicklist [get:val scan:list nicks,$lchan]
+                set wholist [get:val scan:list who,$lchan]
+                set datalist [get:val scan:list data,$lchan]
+                if {${botnet-nick} eq "chief"} {
+                    if {$wholist ne ""} { debug 3 "\002endofwho: scan:list(who,$lchan):\002 $wholist" }
+                    if {$datalist ne ""} { debug 3 "\002endofwho: scan:list(data,$lchan):\002 $datalist" }
+                    if {$nicklist ne ""} { debug 3 "\002endofwho: scan:list(nicks,$lchan):\002 $nicklist" }
+                    if {$leavelist ne ""} { debug 3 "\002endofwho: scan:list(leave,$lchan):\002 $leavelist"    }
                 }
-            }
-
-            # --- remove from nicklist if not in recent wholist
-            foreach n [get:val scan:list nicks,$lchan] {
-                set remove 0
-                if {[get:val scan:list who,$lchan] ne ""} {
-                    if {$n ni [get:val scan:list who,$lchan]} {
-                        # -- remove;
-                        # nick must have left, changed nicks, been kicked, or quit
-                        if {[info exists scan:list(nicks,$lchan)]} { debug 4 "\002endofwho: 2 - $n not in scan:list(who,$lchan)!\002 removing from scan:list(nicks,$lchan)"; unset scan:list(nicks,$lchan) }
-                        if {[info exists scan:list(leave,$lchan)]} { debug 4 "\002endofwho: 3 - $n not in scan:list(leave,$lchan)!\002 removing from scan:list(leave,$lchan)"; unset scan:list(leave,$lchan) }
+                if {$nicklist eq "" || $datalist eq ""} { set scan:list(who,$lchan) "" }
+                
+                foreach n $leavelist {
+                    # -- check if nick in leavelist, but not in nicklist
+                    if {$n ni $nicklist && $n ni $wholist} {
+                        set idx [lsearch -exact $leavelist $n]
+                        debug 4 "\002endofwho: 1 - \002removing $n from scan:list(leave,$lchan)"
+                        set scan:list(leave,$lchan) [lreplace [get:val scan:list leave,$lchan] $idx $idx]
+                        set leavelist [lreplace $leavelist $idx $idx]
+                        captcha:cleanup $lchan $n; # -- remove from expiry captcha wait queue
                         set remove 1
                     }
-                    unset scan:list(who,$lchan)
-                } else {
-                    # -- wholist is emtpy
-                    if {[info exists scan:list(nicks,$lchan)]} { debug 4 "\002endofwho:\002 4 - scan:list(who,$lchan) is empty!\002 clearing scan:list(nicks,$lchan)"; unset scan:list(nicks,$lchan) }
                 }
-                
-                if {$remove} {
-                    # -- stores the IP address of a nickname
-                    if {[info exists data:nickip($n)]} {
-                        set ip [get:val data:nickip $n]
-                        if {[info exists data:ipnicks($ip,$lchan)]} {
-                            # -- stores the nicknames on an IP
-                            set pos [lsearch -exact [get:val data:ipnicks $ip,$lchan] $n]
-                            if {$pos ne "-1"} {
-                                debug 4 "\002endofwho: secure mode leave nick missing from $lchan!\002 removing $n from data:ipnicks($ip,$lchan)"
-                                set data:ipnicks($ip,$lchan) [lreplace [get:val data:ipnicks $ip,$lchan] $pos $pos]
-                                if {[get:val data:ipnicks $ip,$lchan] eq ""} { unset data:ipnicks($ip,$lchan) }
-                            }
+
+                # --- remove from nicklist if not in recent wholist
+                foreach n [get:val scan:list nicks,$lchan] {
+                    set remove 0
+                    if {[get:val scan:list who,$lchan] ne ""} {
+                        if {$n ni [get:val scan:list who,$lchan]} {
+                            # -- remove;
+                            # nick must have left, changed nicks, been kicked, or quit
+                            if {[info exists scan:list(nicks,$lchan)]} { debug 4 "\002endofwho: 2 - $n not in scan:list(who,$lchan)!\002 removing from scan:list(nicks,$lchan)"; unset scan:list(nicks,$lchan) }
+                            if {[info exists scan:list(leave,$lchan)]} { debug 4 "\002endofwho: 3 - $n not in scan:list(leave,$lchan)!\002 removing from scan:list(leave,$lchan)"; unset scan:list(leave,$lchan) }
+                            set remove 1
                         }
-                        if {![onchan $n]} {
-                            debug 4 "\002endofwho: secure mode leave nick missing from $lchan!\002 removing $n from data:nickip($n)"
-                            unset data:nickip($n)
-                        }
+                        unset scan:list(who,$lchan)
+                    } else {
+                        # -- wholist is emtpy
+                        if {[info exists scan:list(nicks,$lchan)]} { debug 4 "\002endofwho:\002 4 - scan:list(who,$lchan) is empty!\002 clearing scan:list(nicks,$lchan)"; unset scan:list(nicks,$lchan) }
                     }
                     
-                    # -- stores the host address of a nickname
-                    # -- needed outside of eggdrop due to chanmode +D
-                    if {[info exists data:nickhost($n)]} {
-                        set host [get:val data:nickhost $n]
-                        if {[info exists data:hostnicks($host,$lchan)]} {
-                            # -- stores the nicknames on a host
-                            set pos [lsearch -exact [get:val data:hostnicks $host,$lchan] $n]
-                            if {$pos ne "-1"} {
-                                debug 4 "\002endofwho: secure mode leave nick missing from $lchan!\002 removing $n from data:hostnicks($host,$lchan)"
-                                set data:hostnicks($host,$lchan) [lreplace [get:val data:hostnicks $host,$lchan] $pos $pos]
-                                if {[get:val data:hostnicks $host,$lchan] eq ""} { unset data:hostnicks($host,$lchan) }
+                    if {$remove} {
+
+                        captcha:cleanup $lchan $n; # -- remove from expiry captcha wait queue
+
+                        # -- stores the IP address of a nickname
+                        if {[info exists data:nickip($n)]} {
+                            set ip [get:val data:nickip $n]
+                            if {[info exists data:ipnicks($ip,$lchan)]} {
+                                # -- stores the nicknames on an IP
+                                set pos [lsearch -exact [get:val data:ipnicks $ip,$lchan] $n]
+                                if {$pos ne "-1"} {
+                                    debug 4 "\002endofwho: secure mode leave nick missing from $lchan!\002 removing $n from data:ipnicks($ip,$lchan)"
+                                    set data:ipnicks($ip,$lchan) [lreplace [get:val data:ipnicks $ip,$lchan] $pos $pos]
+                                    if {[get:val data:ipnicks $ip,$lchan] eq ""} { unset data:ipnicks($ip,$lchan) }
+                                }
+                            }
+                            if {![onchan $n]} {
+                                debug 4 "\002endofwho: secure mode leave nick missing from $lchan!\002 removing $n from data:nickip($n)"
+                                unset data:nickip($n)
                             }
                         }
-                        if {![onchan $n]} {
-                            debug 4 "\002endofwho: secure mode leave nick missing from $lchan!\002 removing $n from data:nickhost($n)"
-                            unset data:nickhost($n)
+                        
+                        # -- stores the host address of a nickname
+                        # -- needed outside of eggdrop due to chanmode +D
+                        if {[info exists data:nickhost($n)]} {
+                            set host [get:val data:nickhost $n]
+                            if {[info exists data:hostnicks($host,$lchan)]} {
+                                # -- stores the nicknames on a host
+                                set pos [lsearch -exact [get:val data:hostnicks $host,$lchan] $n]
+                                if {$pos ne "-1"} {
+                                    debug 4 "\002endofwho: secure mode leave nick missing from $lchan!\002 removing $n from data:hostnicks($host,$lchan)"
+                                    set data:hostnicks($host,$lchan) [lreplace [get:val data:hostnicks $host,$lchan] $pos $pos]
+                                    if {[get:val data:hostnicks $host,$lchan] eq ""} { unset data:hostnicks($host,$lchan) }
+                                }
+                            }
+                            if {![onchan $n]} {
+                                debug 4 "\002endofwho: secure mode leave nick missing from $lchan!\002 removing $n from data:nickhost($n)"
+                                unset data:nickhost($n)
+                            }
                         }
                     }
                 }
@@ -8281,7 +8518,7 @@ proc raw:endofwho {server cmd text} {
         if {[dict exists $nickdata $mask account]} {
             set xuser [dict get $nickdata $mask account]
         } else { set xuser 0 }
-        debug 0 "\002raw:who:\002 presume conversion for =nick ($mask) to account -- user not online?"
+        debug 0 "\002raw:who:\002 presume conversion for =nick ($mask) to account -- user not online? (corowho: [subst $corowho($mask)])"
         $corowho($mask) $xuser
     }
 }
@@ -8520,11 +8757,47 @@ proc mode:add:o {nick uhost hand chan mode target} {
 # - recently means within period: cfg(idunban.time)
 proc mode:rem:b {nick uhost hand chan mode target} {
     global botnick
-    variable cfg
     variable data:banmask
     variable userdb
     variable chan:mode;   # -- stores the operational mode of a channel (by chan) set lchan [string tolower $chan]
     variable entries;     # -- dict storing all whitelist & blacklist entries
+
+    # --- remove channel lock when banlist no longer full
+    set fullmodes [string trimleft [cfg:get ban:full:modes] "+"]
+    if {[regexp -- {$fullmodes} [getchanmode $chan]]} {
+        # -- remove lockdown modes
+        debug 0 "arm:raw:fullbanlist: channel $chan banlist no logner full! (removing lockdown modes: +$fullmodes) -- \002TEMPORARILY DISABLED\002";
+        # -- TODO: what happens when people want to control this mode themselves? (i.e., keep it set)
+        #putquick "MODE $chan -$fullmodes" -next
+        # -- advise channel
+        #putquick "NOTICE @$chan :Armour: channel banlist is no longer full -- removing lock modes"
+        #set reportchan [cfg:get chan:report $chan]
+        #if {$reportchan ne ""} { putquick "NOTICE @$reportchan :Armour: channel banlist in $chan is no longer full -- removing lock modes" }   
+    }
+
+    # -- remove any existing unban timers
+    # {4310 {arm::unban #yolk *!~*@10.0.0.1} timer11853478 1}
+    foreach timer [timers] {
+        lassign $timer time proc tid num
+        #putlog "\002mode:reb:b\002: looping timer: time: $time -- proc: $proc -- tid: $tid -- num: $num"
+        lassign $proc cmd tchan banmask
+        #putlog "\002mode:reb:b\002: looping timer: cmd: $cmd -- tchan: $tchan -- banmask: $banmask"
+        if {$cmd eq "arm::unban" && $tchan eq $chan && $banmask eq $target} {
+            debug 1 "mode:rem:b: killing existing unban timer: $tid (mask: $target)"
+            killtimer $tid
+        }
+    }
+    # {2277 {arm::unset arm::data:banmask 95} timer11853155 1}
+    foreach timer [utimers] {
+        lassign $timer time proc tid num
+        #putlog "\002mode:reb:b\002: looping utimer: time: $time -- proc: $proc -- tid: $tid -- num: $num"
+        lassign $proc cmd var bid
+        #putlog "\002mode:reb:b\002: looping utimer: cmd: $cmd -- var: $var -- bid: $bid"
+        if {$cmd eq "arm::arm:unset" && $target eq [get:val data:banmask $bid]} {
+            debug 1 "mode:rem:b: killing existing unban utimer: $tid (mask: $target)"
+            killutimer $tid
+        }
+    }
 
     if {![cfg:get black:unban:rem $chan]} { return; }; # -- only continue if configured
     set lchan [string tolower $chan]
@@ -8538,12 +8811,11 @@ proc mode:rem:b {nick uhost hand chan mode target} {
         if {$target eq [get:val data:banmask $id]} {
             unset data:banmask($id)
             if {![dict exists $entries $id]} { continue; }; # -- entry no longer exists
-
             set tchan [get:val list:chan $id]
             if {$tchan eq "*"} {
                 # -- if the entry is global, we need to check the user has global access to remove
                 set globlevel [lindex [db:get level levels uid $uid cid 0] 0]; # -- select level from levels where uid=$uid and cid=0
-                if {$globlevel >= $userdb(cmd,rem,pub)} {
+                if {$globlevel < $userdb(cmd,rem,pub)} {
                     continue;
                 }
             }
@@ -8551,6 +8823,7 @@ proc mode:rem:b {nick uhost hand chan mode target} {
             set type [dict get $entries $id type]
             set method [dict get $entries $id method]
             set value [dict get $entries $id value]
+            if {$value ne $target && "*!*@$value" ne $target && "*!~*@$value" ne $target} { continue; }; # -- entry is not a match for the banmask
             set action [dict get $entries $id action]
             set limit [dict get $entries $id limit]
             set hits [dict get $entries $id hits]
@@ -8564,6 +8837,89 @@ proc mode:rem:b {nick uhost hand chan mode target} {
             if {$limit ne "1:1"} { reply pub $chan "removed $method $list entry (\002id:\002 $id \002value:\002 $value \002action:\002 $action \002limit:\002 $limit \002hits:\002 $hits \002reason:\002 $reason)" } \
             else { reply pub $chan "removed $method $list entry (\002id:\002 $id \002value:\002 $value \002action:\002 $action \002hits:\002 $hits \002reason:\002 $reason)" }
         }
+    }
+}
+
+
+# -- track kicks in channels for KICKLOCK setting trigger
+proc raw:kick:lock {nick uhost handle chan vict reason} {
+    global botnick
+    variable dbchans;  # -- dict holding all channels
+    variable kicklock; # -- array to count KICKLOCK tracking (by chan)
+
+    # -- ignore kicks the bot does for CAPTCHA
+    set kickmsgs [list [cfg:get captcha:expired:kick] [cfg:get captcha:wrong:kick] [cfg:get captcha:kick:kick] [cfg:get captcha:ratelimit:kick]]
+    foreach msg $kickmsgs {
+        if {$reason eq $msg && $nick eq $botnick} {
+            return; 
+        }
+    }
+
+    set cid [db:get id channels chan $chan]
+    if {$cid eq ""} { return; }; # -- safety net (chan not registered)
+
+    set klsetting [dict get $dbchans $cid kicklock]
+    if {$klsetting eq ""} { return; }; # -- safety net (kicklock off)
+
+    incr kicklock($chan); # -- increase counter
+
+    lassign [split $klsetting :] kicks mins modes actmins
+    set secs [expr $mins * 60]
+    set actsecs [expr $actmins * 60]
+
+    if {$kicklock($chan) >= $kicks} {
+        # -- threshold met!
+        debug 0 "raw:kick:lock: \002kicklock\002 threshold met in \002$chan\002 (\002$kicks\002 within \002$mins\002 mins) -- setting mode \002$modes\002 for \002$actmins\002 mins"
+        set tmodes [string trimleft $modes "+"]
+
+        if {![string match "*$tmodes*" [lindex [getchanmode $chan] 0]]} {
+            putquick "MODE $chan $modes"
+            putquick "NOTICE @$chan :Armour: KICKLOCK protection activated and set chanmode \002$modes\002 for \002$actmins\002 mins"
+            if {[info command "::unet::webchat:welcome"] ne ""} {
+                # -- undernet.tcl loaded
+                putquick "NOTICE @$::unet::cfg(backchan) :Armour: KICKLOCK protection activated and set chanmode \002$modes\002 for \002$actmins\002 mins" 
+            }
+            utimer $actsecs "::arm::kicklock:rem $chan $tmodes"
+        }
+    }
+    # -- start timer to decrease
+    utimer $secs "::arm::kicklock:decr $chan"
+}
+
+# -- decrease KICKLOCK tracker for channel
+proc kicklock:decr {chan} {
+    variable kicklock; # -- array to count KICKLOCK tracking (by chan)
+    if {[info exists kicklock($chan)]} {
+        incr kicklock($chan) -1
+        if {$kicklock($chan) < 1} { set kicklock($chan) 0 }; # -- safety net
+        debug 3 "kicklock:act: \002kicklock\002 decreased counter in $chan (now: $kicklock($chan))"
+    }
+}
+
+# -- remove KICKLOCK modes in channel
+proc kicklock:rem {chan tmodes} {
+    variable kicklock; # -- array to count KICKLOCK tracking (by chan)
+    if {[info exists kicklock($chan)]} {
+        set mlength [llength $tmodes]; set i 0; set act ""
+        while {$i <= $mlength} {
+            set m [string index $tmodes $i]
+            if {[string match "*$m*" [lindex [getchanmode $chan] 0]]} {
+                append act $m
+            }
+            incr i
+        }
+        if {$act ne ""} {
+            debug 1 "kicklock:act: \002kicklock\002 removing mode \002+$act\002 in \002$chan\002"
+            putquick "MODE $chan -$act"
+        }
+    }
+}
+
+# -- CTCP VERSION
+proc ctcp:version {nick uhost hand dest keyword text} {
+    putlog "ctcp:version: nick: $nick -- uhost: $uhost -- hand: $hand -- dest: $dest -- keyword: $keyword -- text: $text"
+    if {[string toupper $keyword] eq "VERSION"} { 
+        putquick "NOTICE @[arm::cfg:get chan:report] :Armour: received \002CTCP VERSION\002 from $nick!$uhost"
     }
 }
 
@@ -8619,7 +8975,7 @@ proc scan {nick chan full clicks ident ip host xuser rname} {
     variable dbchans;         # -- dict to store channel db data
     variable nickdata;        # -- dict: stores data against a nickname
                               #           nick
-                              #              ident
+                              #           ident
                               #           host
                               #           ip
                               #           uhost
@@ -8663,7 +9019,8 @@ proc scan {nick chan full clicks ident ip host xuser rname} {
 
     set nuhr "$nick!$ident@$host/$rname"
     set uhost "$ident@$host"
- 
+    dict set nickdata $lnick ip $ip
+
     # -- is full channel scan underway?
     if {$full} { incr scan:full(count,$lchan) }
        
@@ -8733,10 +9090,18 @@ proc scan {nick chan full clicks ident ip host xuser rname} {
         
     debug 2 "scan: pre-vars: dnsbl: $dnsbl ipscan: $ipscan portscan: $portscan auth: $auth exempt: $exempt"
 
+    set asn ""; set country ""; set subnet ""
     set chanmode [get:val chan:mode $lchan]
     if {$chanmode eq "secure"} {
         # -- channel jointime not known
         set jointime [get:val nick:whotime $lchan,$snick]
+
+        # -- always get ASN and country if channel is in 'secure' mode and web CAPTCHA is enabled
+        if {[cfg:get captcha $chan]} {
+            if {($asn eq "" || $country eq "" || $subnet eq "") && [cfg:get captcha:type $chan] eq "web"} {
+                lassign [geo:ip2data $ip] asn country subnet
+            }
+        }
     } else {
         # -- chan jointime should be known
         set jointime [get:val nick:jointime $lchan,$snick]
@@ -8767,7 +9132,7 @@ proc scan {nick chan full clicks ident ip host xuser rname} {
     # --- whitelist & blacklist scans
     set match 0; set todo 0; set hit 0; set id ""; set hits "";
     set tchan ""; set ltype ""; set method ""; set value ""; set what ""; 
-    set country ""; set asn ""; # -- check this so we only do the lookups once
+    set lastcontmatch ""; # -- track last matched entry with the 'continue' flag set
 
     foreach list "white black" {
         debug 1 "scan: beginning ${list}list matching in $chan";        
@@ -8791,10 +9156,31 @@ proc scan {nick chan full clicks ident ip host xuser rname} {
             # -- check match, recursively
             lassign [scan:match $tchan $ltype $id $method $value $ipscan $nick $ident $host $ip $xuser $rname $country $asn $cache $hits] \
                 match hit todo what cache hits country asn
+
+            # -- check for 'continue' flag to continue looking for matches
+    
+            set continue [dict get $entries $id continue]
+            if {$continue && $match} {
+                debug 1 "scan: continuing scans after $ltype entry match as continue=1 (chan: $tchan -- id: $id -- method: $method -- value: $value)"
+                set lastcontmatch [list $list $id $tchan $ltype $method $value $match $hit $todo $what $cache $hits $country $asn]
+                set match 0
+                continue; # -- continue matching
+            } else {
             
-            if {$match} { break; }; # -- there has been a match!
+                if {$match} { break; }; # -- there has been a match!
+
+            }
 
         }; # -- end of foreach id
+
+        if {$lastcontmatch ne "" && $match eq 0} {
+            # -- ensure blacklists are also checked
+            if {$list eq "white"} { continue; }
+
+            # -- no other matches, go back to the last entry martch with 'continue' flag
+            lassign $lastcontmatch list id tchan ltype method value match hit todo what cache hits country asn
+            debug 1 "scan: looped back to last $ltype entry match with continue=1 (chan: $tchan -- id: $id -- method: $method -- value: $value)"
+        }
 
         # -- do matching for any scans still to do
         if {$todo} {
@@ -8847,8 +9233,16 @@ proc scan {nick chan full clicks ident ip host xuser rname} {
                     debug 3 "\002scan:\002 adding $nick to scan:list(leave,$lchan)"
                     set leave "leave"; set chanops 0;
                 } else {
-                    set mode [list:mode $id]; set leave ""; set chanops 1;
-                    if {$mode ne ""} { putquick "MODE $chan $mode $nick" -next } elseif {$cmode eq "secure"} { voice:give $chan $nick };
+                    set mode [dict get $dbchans $cid mode]; set leave ""; set chanops 1;
+                    #putlog "\002scan: id: $id -- mode: $mode\002"
+                    if {$mode eq "secure"} { 
+                        voice:give $chan $nick $uhost
+                        if {[string match "webchat@*" $uhost] && [info command "::unet::webchat:welcome"] ne ""} { set leave "leave" }
+                    } else {
+                        set action [dict get $entries $id action]
+                        if {$action eq "V"} { putquick "MODE $chan +v $nick" -next } \
+                        elseif {$action eq "O"} { putquick "MODE $chan +o $nick" -next }
+                    }
                 }
             } elseif {$ltype eq "black"} {
                 if {$manual} {
@@ -8927,7 +9321,7 @@ proc scan {nick chan full clicks ident ip host xuser rname} {
             set response [join $response]
             set score [lindex $response 1]
             if {$ip ne $host} { set dst "$ip ($host)" } else { set dst $ip }
-            if {$score > 0} {
+            if {$score > 0} { 
                 # -- match found!
                 set match 1
                 set rbl [lindex $response 2]
@@ -8947,7 +9341,7 @@ proc scan {nick chan full clicks ident ip host xuser rname} {
                 
                 if {$white} {
                     set mode [list:mode $id]
-                    if {$mode ne ""} { putquick "MODE $chan $mode $nick" -next } elseif {$arm(mode) eq "secure"} { voice:give $chan $nick }
+                    if {$mode ne ""} { putquick "MODE $chan $mode $nick" -next } elseif {$arm(mode) eq "secure"} { voice:give $chan $nick $uhost }
                 } else {
                     if {$info eq ""} { set xtra "" } else { set xtra " info: $info" }
                     #set string "Armour: DNSBL blacklisted -- (ip: $ip rbl: $rbl desc: $desc${xtra})"
@@ -9019,13 +9413,16 @@ proc scan {nick chan full clicks ident ip host xuser rname} {
     debug 1 "\002scan: ------------------------------------------------------------------------------------\002"
     
     # -- continue for further scans before voicing
-    scan:continue $nick $ident $ip $host $xuser $rname $chan
+    scan:continue $nick $ident $ip $host $xuser $rname $chan $asn $country $subnet
 }
 
 proc scan:match {chan ltype id method value ipscan nick ident host ip xuser rname {country ""} {asn ""} {cache ""} {hits ""} {text ""}} {
     variable entries; # -- dict: whitelist and blacklist entries
+    variable nick:newjoin; # -- state: tracking recently joined client (by chan,nick)
     set match 0; set hit ""; set todo 0; 
     set res ""; set what "";
+
+    if {[get:val nick:newjoin $chan,$nick] ne ""} { set newcomer 1 } else { set newcomer 0 };
 
     # -- skip if already checked
     if {[dict exists $cache $id]} {
@@ -9060,6 +9457,11 @@ proc scan:match {chan ltype id method value ipscan nick ident host ip xuser rnam
                     # -- could be a regex
                     if {[regexp -nocase $value $text]} {
                         # -- regex match!
+                        # -- excempt if entry only matches newcomer and user has not newly joined
+                        if {[dict get $entries $id onlynew] && $newcomer ne 1} {
+                            debug 1 "scan:match: skipping blacklist entry as onlynew=1 and client is not newcomer (chan: $chan -- id: $id -- method: $method -- value: $value)"
+                            break;
+                        }
                         debug 0 "scan:match: matched blacklist text (regex): $chan: $chan -- id: $id -- type: $ltype -- value: $value";
                         set match 1
                     }
@@ -9067,6 +9469,11 @@ proc scan:match {chan ltype id method value ipscan nick ident host ip xuser rnam
                     # -- must be a wildcard
                     if {[string match -nocase $value $text]} {
                         # -- wildcard string match!
+                        # -- excempt if entry only matches newcomer and user has not newly joined
+                        if {[dict get $entries $id onlynew] && $newcomer ne 1} {
+                            debug 1 "scan:match: skipping blacklist entry as onlynew=1 and client is not newcomer (chan: $chan -- id: $id -- method: $method -- value: $value)"
+                            break;
+                        }
                         debug 0 "scan:match: matched blacklist text (wildcard): $chan: $chan -- id: $id -- type: $ltype -- value: $value";
                         set match 1
                     }
@@ -9077,9 +9484,23 @@ proc scan:match {chan ltype id method value ipscan nick ident host ip xuser rnam
             elseif {$method eq "chan" && $ltype eq "black"} { break; } \
             elseif {$method eq "regex" && [regexp $value "$nick!$ident@$host/$rname"]} { set match 1; break; } \
             elseif {$method eq "rname"} { set what $rname; set todo 1; } \
-            elseif {$method eq "country" && $ipscan} { if {$country eq ""} { set what [geo:ip2country $ip]; set country $what } else { set what $country }; set todo 1; } \
-            elseif {$method eq "asn" && $ipscan} { if {$asn eq ""} { set what [geo:ip2asn $ip]; set asn $what } else { set what $asn }; set todo 1; } \
-            elseif {$method eq "host"} {
+            elseif {$method eq "country" && $ipscan} { 
+                if {$country eq "" || $asn eq ""} { 
+                    lassign [geo:ip2data $ip] asn country
+                    set what $country
+                } else { 
+                    set what $country 
+                }; 
+                set todo 1; 
+            } elseif {$method eq "asn" && $ipscan} { 
+                if {$asn eq "" || $country eq ""} { 
+                    lassign [geo:ip2data $ip] asn country
+                    set what $asn; 
+                } else { 
+                    set what $asn 
+                }; 
+                set todo 1; 
+            } elseif {$method eq "host"} {
                 # -- hostname (or IP incl. CIDR)
                 if {[string match -nocase $value $host]} { set hit "host"; set match 1; set res "$host"; break; }
                 # -- check against user@host
@@ -9154,7 +9575,7 @@ proc scan:match {chan ltype id method value ipscan nick ident host ip xuser rnam
 }
 
 # -- continue further scans before voicing
-proc scan:continue {nick ident ip host xuser rname chan} {
+proc scan:continue {nick ident ip host xuser rname chan asn country subnet} {
     corotrace
     debug 4 "scan:continue: started"
     variable cfg;              # -- configuration settings
@@ -9173,11 +9594,12 @@ proc scan:continue {nick ident ip host xuser rname chan} {
     variable data:ipnicks;     # -- holds the nicks on a given IP (by IP,chan)
     variable data:kicknicks;   # -- tracking nicknames recently kicked from chan (by 'chan,nick')
 
-    variable captchasent;     # -- state: where a captcha has already been sent (by chan,nick)
-    variable captchaflag;     # -- state: where a captcha flag is enabled for a matched pattern (by chan,nick)
+    variable captchasent;      # -- state: where a captcha has already been sent (by chan,nick)
+    variable captchaflag;      # -- state: where a captcha flag is enabled for a matched pattern (by chan,nick)
 
     set integrate 1; set voice 0; set hasscore 0; set end 0;
     set lchan [string tolower $chan]
+    set uhost "$ident@$host"
 
     # -- helpful debugging to find source of superfluous scans
     if {![info exists scan:list(who,$lchan)]} { set scan:list(who,$lchan) "" } else { debug 4 "scan:continue scan:list(who,$lchan): [get:val scan:list who,$lchan]" }
@@ -9233,13 +9655,13 @@ proc scan:continue {nick ident ip host xuser rname chan} {
             # -- check whether to kick client
             if {$dokick} {
                 lassign [split [cfg:get paranoid:klimit $chan] :] lim secs
-                if {![info exists data:kicknicks($chan,$nick)]} {
-                    set data:kicknicks($chan,$nick) 1
-                    utimer $secs "unset arm::data:kicknicks($chan,$nick)"
+                if {![info exists data:kicknicks($lchan,$nick)]} {
+                    set data:kicknicks($lchan,$nick) 1
+                    utimer $secs "arm::unset:kicknicks [split $lchan,$nick]"
                 } else {
-                    incr data:kicknicks($chan,$nick)
+                    incr data:kicknicks($lchan,$nick)
                 }
-                if {[get:val data:kicknicks $chan,$nick] <= $lim} {
+                if {[get:val data:kicknicks $lchan,$nick] <= $lim} {
                     # -- ok to kick the user, threshold not met
                     putquick "KICK $chan $nick :Armour: $nick!$ident@$host $msg"
                 } else {
@@ -9292,7 +9714,7 @@ proc scan:continue {nick ident ip host xuser rname chan} {
         set score 0
         if {[info command trakka:score] ne ""} {
             # -- calculate score
-            set score [trakka:score $nick "$ident@$host" $xuser]
+            set score [trakka:score $chan $nick "$ident@$host" $xuser]
             debug 1 "scan:continue: total trakka score for $nick!$ident@$host is: $score"
         }
         
@@ -9321,20 +9743,34 @@ proc scan:continue {nick ident ip host xuser rname chan} {
         }
                 
         # -- send CTCP VERSION
+        #debug 0 "scan:continue: captchaflag($chan,$nick): $captchaflag($chan,$nick)"
         if {![info exists captchaflag($chan,$nick)]} { set captchaflag($chan,$nick) 0 }; # -- tracks whether captcha flag is set for matching pattern
-        if {[cfg:get paranoid:ctcp $chan] && $captchaflag($chan,$nick) eq 0} {
+        set doversion [cfg:get paranoid:ctcp $chan]
+        if {$chan eq "#unet-test" || $chan eq "#newchan1" || $chan eq "#undernet"} { set doversion 0 }
+        if {$doversion && $captchaflag($chan,$nick) eq 0} {
             set coroctcp($chan,$nick) [info coroutine];  # -- track that we're waiting for a reply
             putquick "PRIVMSG $nick :\001VERSION\001";   # -- send the version
             utimer [cfg:get paranoid:ctcp:wait $chan] [list arm::scan:ctcp:check $nick $ident $host $chan]
             set version [yield]; # -- wait for the outcome of the VERSION
             debug 1 "scan:continue: VERSION yielded"
         }
-        if {$version} { set voice 1; }; # -- voice user if VERSION reply received
+        #set version 0; # -- TODO: look at this version code again; we may need to deal with clients without VERSION responses
+        if {$version} { set voice 1; } else { set voice 0 }; # -- voice user if VERSION reply received
         
         # -- send CAPTCHA -- if not voicing yet and captcha not already sent (via list entry flag)
-        if {![info exists captchasent($chan,$nick)]} { set captchasent($chan,$nick) 0 }; # -- tracks whether captcha was alreadys ent
+        if {![info exists captchasent($chan,$nick)]} { set captchasent($chan,$nick) 0 } else { set captchasent($chan,$nick) 1 }; # -- tracks whether captcha was alreadys ent
+        debug 0 "scan:continue: captchasent($chan,$nick): $captchasent($chan,$nick)"
+        # -- TODO: change this to voice && captcha...
         if {!$voice && $captchasent($chan,$nick) eq 0} {
-            set manual [captcha:scan $nick "$ident@$host" $chan]; # -- returns whether manual handling required (due to error)
+            debug 0 "scan:continue: sending CAPTCHA to $nick!$ident@$host on $chan"
+            if {[cfg:get captcha:type $chan] eq "web"} {
+                # -- web CAPTCHA
+                captcha:web $nick "$ident@$host" $ip $chan $asn $country $subnet; # -- send web CAPTCHA URL to nick
+                set manual 0
+            }  else {
+                # -- text CAPTCHA
+                set manual [captcha:scan $nick "$ident@$host" $chan]; # -- returns whether manual handling required (due to error)
+            }
             set text "CAPTCHA request error"
         }
         
@@ -9388,7 +9824,7 @@ proc scan:continue {nick ident ip host xuser rname chan} {
         # -- voice the client, provided they're not voiced by now
         if {![isvoice $nick $chan]} { 
             debug 1 "scan:continue: \002giving voice to $nick on $chan!\002"; 
-            voice:give $chan $nick 
+            voice:give $chan $nick $uhost
         }
         set leave ""
     } else {
@@ -9416,7 +9852,7 @@ proc scan:action { nick uhost hand dest keyword text } {
 # -- public chatter matching using standard wildcard or regex entries
 proc pubm:scan:process {nick uhost hand chan text} {
     set start [clock clicks]
-    global botnick
+    global botnick botnet-nick
     variable cfg;           # -- config variables
    
     variable nick:override; # -- state: tracks that a nick has a manual exemption in place (by chan,nick)
@@ -9436,12 +9872,18 @@ proc pubm:scan:process {nick uhost hand chan text} {
     if {[dict exists $nickdata $lnick account]} { set xuser [dict get $nickdata $lnick account]} else { set xuser "" }
     if {[dict exists $nickdata $lnick rname]} { set rname [dict get $nickdata $lnick rname]} else { set rname "" }
     set lchan [string tolower $chan]
+    set chanmode [get:val chan:mode $lchan]
     lassign [split $uhost @] ident host    
     set exempt(type:text) 0; set exempt(type:lines) 0; set exempt($nick) 0;
     
     # -- check if nick joined recently (newcomer)
     if {[get:val nick:newjoin $chan,$nick] ne ""} { set newcomer 1 } else { set newcomer 0 };
-
+    
+    # -- TODO: remove when fixed
+    if {${botnet-nick} eq "chief"} {
+        debug 3 "pubm:scan:process: \002TEMP TO REMOVE LOG\002: nick:newjoin($chan,$nick): [get:val nick:newjoin $chan,$nick] -- newcomer: $newcomer"
+        debug 3 "pubm:scan:process: \002TEMP TO REMOVE LOG\002: array names nick:newjoin: [array names nick:newjoin]"
+    }
     # -- exempt if overridden from 'exempt' command
     if {[userdb:isLogin $nick]} {
         debug 6 "pubm:scan: chan: $chan -- authenticated user exempted from channel text and lineflood matching ([join $nick]!$uhost)"
@@ -9502,10 +9944,11 @@ proc pubm:scan:process {nick uhost hand chan text} {
                 } else {
                     set flood:line($nick,$lchan) 1
                 }
-                if {[get:val flood:line $nick,$lchan] >= $llines} {
+                set fludval [get:val flood:line [split $nick,$lchan]]
+                if {$fludval >= $llines} {
                     # -- hit!
                     set linehit(nick) 1; set action(lines) 1
-                    debug 1 "pubm:scan: lineflood hit! match on [get:val flood:line $nick,$chan] lines (nick: [join $nick]!$uhost)"
+                    debug 1 "pubm:scan: lineflood hit! match on $fludval lines (nick: [join $nick]!$uhost)"
                 }
                 utimer $lsecs "arm::flood:line:decr [split $nick,$lchan]";  # -- decrease the counter by 1 x line
             }
@@ -9526,10 +9969,11 @@ proc pubm:scan:process {nick uhost hand chan text} {
                 } else {
                     set flood:line($lchan) 1
                 }
-                if {[get:val flood:line $chan] >= $llines} {
+                set fludval [get:val flood:line [split $lchan]]
+                if {$fludval >= $llines} {
                     # -- hit!
                     set linehit(chan) 1; set action(lines) 1
-                    debug 1 "pubm:scan: lineflood hit! match on [get:val flood:line $chan] lines (chan: [join $chan])"
+                    debug 1 "pubm:scan: lineflood hit! match on $fludval lines (chan: [join $chan])"
                 }
                 utimer $lsecs "arm::flood:line:decr [split $lchan]";  # -- decrease the counter by 1 x line
             }
@@ -9540,7 +9984,7 @@ proc pubm:scan:process {nick uhost hand chan text} {
     # -- begin textflood matching
     set action(text) 0; set hit(text) 0
     if {!$exempt(type:text)} {
-                # -- find all the text type blacklist entry IDs
+        # -- find all the text type blacklist entry IDs
         set ids [dict keys [dict filter $entries script {id dictData} {
             expr {([dict get $dictData chan] eq $chan || [dict get $dictData chan] eq "*") && [dict get $dictData type] eq "black" \
                 && [dict get $dictData method] eq "text"}
@@ -9549,11 +9993,19 @@ proc pubm:scan:process {nick uhost hand chan text} {
         # -- match the actual text against all entries
         foreach id $ids {
             set value [dict get $entries $id value]
+
             # -- try wildcard first
             if {[string match -nocase $value $text]} {
                 # -- wildcard hit!
                 set hit(text) 1
                 debug 1 "pubm:scan: wildcard hit! list value (id: $id) of $value (nick: [join $nick] -- text: $text)"
+                # -- excempt if entry only matches newcomer and user has not newly joined
+                if {[dict get $entries $id onlynew] && $newcomer ne 1} {
+                    set method [dict get $entries $id method]
+                    debug 1 "pubm:scan: skipping blacklist entry as onlynew=1 and client is not newcomer (chan: $chan -- id: $id -- method: $method -- value: $value)"
+                    set hit(text) 0
+                    continue;
+                }
                 break;
             } else {
                 # -- try regex match
@@ -9562,12 +10014,20 @@ proc pubm:scan:process {nick uhost hand chan text} {
                     # -- regex hit!
                     set hit(text) 1
                     debug 1 "pubm:scan: list value (id: $id) hit! match of value: $value (nick: [join $nick] -- text: $text)"
+                    # -- exempt if entry only matches newcomer and user has not newly joined
+                    if {[dict get $entries $id onlynew] && $newcomer ne 1} {
+                        set method [dict get $entries $id method]
+                        debug 1 "pubm:scan: skipping blacklist entry as onlynew=1 and client is not newcomer (chan: $chan -- id: $id -- method: $method -- value: $value)"
+                        set hit(text) 0
+                        continue;
+                    }
                     break;
                 } elseif {$err eq 0} {
                     # -- error; probably just a wildcard
                     #debug 0 "pubm:scan: \002(error)\002 regexp parse err: $err"
                 }
             }
+            
         }
         
         if {$hit(text)} {
@@ -9601,7 +10061,7 @@ proc pubm:scan:process {nick uhost hand chan text} {
                                 # -- send to public chan
                                 reply msg $chan "[join $nick]: [cfg:get text:warn:msg $chan] \[id: $id\]"
                             } else {
-                                debug 0 "pubm:scan: \002(error)\002 invalid value for config setting cfg(text:warn:type)"
+                                debug 0 "pubm:scan: \002(error)\002 invalid value for config setting \002cfg(text:warn:type)\002"
                             }
                             set report [cfg:get text:warn:report $chan]
                             regsub -all {%N%} $report [join $nick] report
@@ -9840,7 +10300,7 @@ proc check:floodnet {nick uhost hand chan {xuser ""} {rname ""}} {
     variable entries;        # -- dict: blacklist and whitelist entries 
     
     variable flud:id;        # -- the id of a given cumulative pattern (by chan,method,value)
-    variable flud:count;     # -- the count of a given cumulative pattern (by id)
+    variable flud:count;     # -- the count of a given cumulative pattern (by chan,id)
     variable flud:nickcount; # -- the IDs that have already been matched for a given nick (by chan,nick)
                              # -- avoids double matching (first from channel join, second from /WHO result)
     
@@ -9849,13 +10309,13 @@ proc check:floodnet {nick uhost hand chan {xuser ""} {rname ""}} {
     variable kreason;        # -- expose kick reasons for cumulative patterns (by chan,nick)
     variable data:setx;      # -- state: tracks a recent umode +x user (by nick)
     
-    variable adapt:n;        # -- array to track the count of hits on a nick regex pattern (by regex)
-    variable adapt:ni;       # -- array to track the count of hits on a nick!ident regex pattern (by regex)
-    variable adapt:nir;      # -- array to track the count of hits on a nick!ident/rname regex pattern (by regex)
-    variable adapt:ni;       # -- array to track the count of hits on a nick!ident regex pattern (by regex)
-    variable adapt:i;        # -- array to track the count of hits on a ident regex pattern (by regex)
-    variable adapt:ir;       # -- array to track the count of hits on a ident/rname regex pattern (by regex)
-    variable adapt:nr;       # -- array to track the count of hits on a nick/rname regex pattern (by regex)
+    variable adapt:n;        # -- array to track the count of hits on a nick regex pattern (by chan,regex)
+    variable adapt:ni;       # -- array to track the count of hits on a nick!ident regex pattern (by chan,regex)
+    variable adapt:nir;      # -- array to track the count of hits on a nick!ident/rname regex pattern (by chan,regex)
+    variable adapt:ni;       # -- array to track the count of hits on a nick!ident regex pattern (by chan,regex)
+    variable adapt:i;        # -- array to track the count of hits on a ident regex pattern (by chan,regex)
+    variable adapt:ir;       # -- array to track the count of hits on a ident/rname regex pattern (by chan,regex)
+    variable adapt:nr;       # -- array to track the count of hits on a nick/rname regex pattern (by chan,regex)
     
     variable data:banmask;   # -- tracking banmasks banned recently by a blacklist (by id)
     variable data:kicks;     # -- stores queue of nicks to kick from a channel (by chan)
@@ -9913,9 +10373,7 @@ proc check:floodnet {nick uhost hand chan {xuser ""} {rname ""}} {
     
     # -- join flood rate
     set adaptrate [cfg:get adapt:rate $chan]
-    set joins [lindex [split $adaptrate :] 0]
-    set secs [lindex [split $adaptrate :] 1]
-    set retain [lindex [split $adaptrate :] 2]
+    lassign [split $adaptrate :] joins secs retain
     
     # -- build types for join if 'xuser' is not set (send after /who from scan)
     if {$xuser eq ""} {
@@ -9970,31 +10428,37 @@ proc check:floodnet {nick uhost hand chan {xuser ""} {rname ""}} {
         # -- get longtype string from ltypes array
         set ltype [get:val adapt:ltypes $type]
         
-        debug 4 "check:floodnet: (adaptive -- $prefix) looping: type: $type ltype: $ltype exp: [join $exp]"
+        debug 4 "check:floodnet: (adaptive -- $prefix) looping: type: $type ltype: $ltype exp: $chan,[join $exp]"
         
         # -- setup array?
         
         if {!$hit} {
     
-            debug 4 "check:floodnet: (adaptive -- $prefix) checking array: [subst $array]([join $exp])"
+            debug 4 "check:floodnet: (adaptive -- $prefix) checking array: [subst $array]([split $chan,$exp])"
             
-            if {![info exists [subst $array]($exp)]} {
+            if {![info exists [subst $array]($chan,$exp)]} {
                 # -- no counter being tracked for this nickname pattern
-                set [subst $array]($exp) 1
-                debug 3 "check:floodnet: (adaptive -- $prefix) no existing track counter: unsetting track array for $ltype pattern in $secs secs: [join $exp]"
-                utimer $secs "arm::adapt:unset $ltype [split $exp]"
+                set [subst $array]($chan,$exp) 1
+                debug 3 "check:floodnet: (adaptive -- $prefix) no existing track counter in $chan: unsetting track array for $ltype pattern in $secs secs: $chan,[join $exp]"
+                utimer $secs "arm::adapt:unset $ltype [split $chan,$exp]"
             } else {
-                # -- existing counter being tracked for this nickname pattern
-                debug 2 "check:floodnet: (adaptive -- $prefix) existing track counter: increasing for $ltype pattern: [join $exp]"
-                incr [subst $array]($exp)
-            
+
+                # -- avoid double counting JOIN if called from WHO
                 upvar 0 $array value
-                set count [subst $value($exp)]
-                debug 4 "check:floodnet: count: $count -- joins: $joins"
-    
+                set count [subst $value($chan,$exp)]
+                if {!$whoscan} { 
+                    # -- existing counter being tracked for this nickname pattern
+                    debug 2 "check:floodnet: (adaptive -- $prefix) existing join counter in $chan: increasing for $ltype pattern: $chan,[join $exp]"
+                    incr [subst $array]($chan,$exp)    
+                    set count [subst $value($chan,$exp)]
+                    debug 4 "check:floodnet: count: $count -- required joins: $joins"
+                } else {
+                    putlog "check:floodnet: \002skipping adaptive match count increase\002 chan: $chan -- nick: $snick -- exp: $exp -- current count: $count"
+                }
+
                 if {$count >= $joins} {
                     # -- flood join limit reached! -- take action
-                    debug 1 "\002check:floodnet: (adaptive -- $prefix) adaptive ($ltype) regex joinflood detected: $nick!$uhost\002"
+                    debug 1 "\002check:floodnet: (adaptive -- $prefix) adaptive ($ltype) regex joinflood detected in $chan: $nick!$uhost\002"
                     # -- store the active floodnet
                     set floodnet($chan) 1
                     
@@ -10025,16 +10489,16 @@ proc check:floodnet {nick uhost hand chan {xuser ""} {rname ""}} {
                             r   { set match "$rname"             }
                             nr  { set match "$newuser/$rname"    }
                         }
-                        debug 4 "check:floodnet: (adaptive -- $prefix) attempting to find pre-record matches: type: $type match: $match exp: [join $exp]"
+                        debug 4 "check:floodnet: (adaptive -- $prefix) attempting to find pre-record matches in $chan: type: $type match: $match exp: [join $exp]"
                         if {[regexp -- [join $exp] $match]} {
                             debug 3 "check:floodnet: (adaptive -- $prefix) pre-record regex match: [join $exp] against string: $match"
                             # -- only include the pre-record users
                             # -- add this nick at the end
-                            if {$newuser == $nick} { continue; }
+                            if {$newuser eq $nick} { continue; }
                             # -- weed out people who rejoined from umode +x
                             debug 4 "check:floodnet: (adaptive -- $prefix) checking if recent umode+x"
                             if {[info exists data:setx($newuser)]} { continue; }
-                            debug 2 "\002check:floodnet: (adaptive -- $prefix) pre-record! adaptive ($ltype) regex joinflood detected: [join $newuser]!$uh\002"
+                            debug 2 "\002check:floodnet: (adaptive -- $prefix) pre-record! adaptive ($ltype) regex joinflood detected in $chan: [join $newuser]!$uh\002"
                             set mask "*!*@$h"
                             # -- add mask to ban queue if doesn't exist and wasn't recently banned by me
                             if {$mask ni $blist && ![info exists data:chanban($chan,$mask)]} {
@@ -10048,18 +10512,17 @@ proc check:floodnet {nick uhost hand chan {xuser ""} {rname ""}} {
                             if {$mask ni [get:val data:bans $chan]} { lappend data:bans($chan) $mask }
                             # -- add nick to kick queue
                             if {$newuser ni $klist} { lappend klist $newuser }
-                            if {[$newuser ni [get:val data:kicks $chan]} { lappend data:kicks($chan) $newuser }
+                            if {$newuser ni [get:val data:kicks $chan]} { lappend data:kicks($chan) $newuser }
                             # -- add any other nicknames on this host to kickqueue
                             foreach hnick [get:val data:hostnicks $h,$lchan] {
                                 if {$hnick ni $klist} { lappend klist $hnick }
-                                if {$hnick ni [get:val data:kicks $chan] $hnick]} { lappend data:kicks($chan) $hnick }
+                                if {$hnick ni [get:val data:kicks $chan]} { lappend data:kicks($chan) $hnick }
                             }
                         }
                     }
     
                     # -- insert current user
-                    debug 4 "check:floodnet: (adaptive -- $prefix) adding nick: [join $nick] to kicklist"
-    
+                    debug 4 "check:floodnet: (adaptive -- $prefix) adding nick: [join $nick] to kicklist in $chan"
                     
                     if {$nick ni $klist} { lappend klist $nick }
                     if {$nick ni [get:val data:kicks $chan]} { lappend data:kicks($chan) $nick }
@@ -10071,7 +10534,7 @@ proc check:floodnet {nick uhost hand chan {xuser ""} {rname ""}} {
                     
                     # set host [lindex [split $uhost @] 1]
                     debug 4 "check:floodnet: (adaptive -- $prefix) adding *!*@$host to banlist"
-                    if {$blist == ""} { set blist "*!*@$host" } else {
+                    if {$blist eq ""} { set blist "*!*@$host" } else {
                         # -- add to end, not to front
                         if {"*!*@$host" ni $blist} { lappend blist "*!*@$host" }
                     }
@@ -10079,17 +10542,17 @@ proc check:floodnet {nick uhost hand chan {xuser ""} {rname ""}} {
     
                     # -- send kicks and bans at the end
                         
-                    debug 2 "\002check:floodnet: (adaptive -- $prefix) adaptive regex join flood detected (type: $ltype count: $count list: $klist)\002"
+                    debug 2 "\002check:floodnet: (adaptive -- $prefix) adaptive regex join flood detected in $chan (type: $ltype count: $count list: $klist)\002"
                     set hit 1
                 }
                 # -- end of flood detection
                     
                 # -- clear existing unset utimers for this pattern
-                adapt:preclear [split $exp]
+                adapt:preclear [split $chan,$exp]
                     
                 # -- setup timer to clear adaptive pattern count
-                debug 3 "check:floodnet: (adaptive -- $prefix) unsetting in $secs secs: $ltype [join $exp] $count"
-                utimer $secs "arm::adapt:unset $ltype [split $exp]"
+                debug 3 "check:floodnet: (adaptive -- $prefix) unsetting in $secs secs: $ltype $chan,[join $exp] $count"
+                utimer $secs "arm::adapt:unset $ltype [split $chan,$exp]"
     
             }
             # -- end if exists
@@ -10170,32 +10633,32 @@ proc check:floodnet {nick uhost hand chan {xuser ""} {rname ""}} {
                 debug 3 "check:floodnet: \002adding host id: $id for $chan to flud:nickcount($chan,$snick) to prevent double matching\002"
                 append flud:nickcount($chan,$snick) "$id "
 
-                if {![info exists flud:count($id)]} {
+                if {![info exists flud:count($chan,$id)]} {
                     # -- no such tracking array exists for this host/mask
-                    debug 3 "check:floodnet: (cumulative -- $prefix) host: \002no trackin\002 array exists: flud:count($id) -- \002created.\002"
-                    set flud:count($id) 1
+                    debug 3 "check:floodnet: (cumulative -- $prefix) host: \002no trackin\002 array exists: flud:count($chan,$id) -- \002created.\002"
+                    set flud:count($chan,$id) 1
                     # -- unset after timeout
                     utimer $secs "arm::flud:unset $chan $id $snick"
                     
                 } else {
                         # -- existing tracking array, increase counter
-                        incr flud:count($id)
-                        debug 3 "check:floodnet: (cumulative -- $prefix) host: \002existing\002 tracking array count flud:count($id): [get:val flud:count $id]"
-                        set count [get:val flud:count $id]
+                        incr flud:count($chan,$id)
+                        debug 3 "check:floodnet: (cumulative -- $prefix) host: \002existing\002 tracking array count flud:count($chan,$id): [get:val flud:count $chan,$id]"
+                        set count [get:val flud:count $chan,$id]
                         if {$count < $joins} {
                             # -- breach not met
-                            debug 3 "check:floodnet: (cumulative -- $prefix) host: breach \002not yet met\002 -- \002increased\002 flud:count($id) counter."
+                            debug 3 "check:floodnet: (cumulative -- $prefix) host: breach \002not yet met\002 -- \002increased\002 flud:count($chan,$id) counter."
                             # -- clear existing unset utimers for this value
                             flud:preclear $equal
                     
                             # -- setup timer to clear adaptive pattern count
-                            debug 3 "check:floodnet: (cumulative -- $prefix) host: unsetting in $secs secs: flud:count($id)"
+                            debug 3 "check:floodnet: (cumulative -- $prefix) host: unsetting in $secs secs: flud:count($chan,$id)"
                             # -- unset after timeout
                             utimer $secs "arm::flud:unset $chan $id $snick"
                             
                         } else {
                                 # -- joinflood breach!
-                                incr flud:count($id)
+                                incr flud:count($chan,$id)
                                 # -- store the active floodnet
                                 set floodnet($chan) 1
                                 
@@ -10205,11 +10668,11 @@ proc check:floodnet {nick uhost hand chan {xuser ""} {rname ""}} {
                                 # -- clear existing unset utimers for this value
                                 flud:preclear [split $equal]
                                 # -- setup timer to clear adaptive pattern count
-                                debug 3 "check:floodnet: (cumulative -- $prefix) host: unsetting in extended $hold secs: flud:count($id)"
+                                debug 3 "check:floodnet: (cumulative -- $prefix) host: unsetting in extended $hold secs for $chan: flud:count($chan,$id)"
                                 # -- unset after timeout
                                 utimer $hold "arm::flud:unset $chan $id $snick"    
                                 
-                                debug 3 "check:floodnet: (cumulative -- $prefix) \002host breach met!\002 client found: [join $nick]!$uhost -- finding \002pre-record\002 clients..."   
+                                debug 3 "check:floodnet: (cumulative -- $prefix) \002host breach met!\002 client found in $chan: [join $nick]!$uhost -- finding \002pre-record\002 clients..."   
     
                                 foreach client $joinlist {
                                     # -- add this nick at the end
@@ -10219,7 +10682,7 @@ proc check:floodnet {nick uhost hand chan {xuser ""} {rname ""}} {
                                     if {[string match -nocase $equal $newjoinuh]} {
                                         set thehost [lindex [split $newjoinuh @] 1]
                                         set mask "*!*@$thehost"
-                                        debug 3 "\002check:floodnet: (cumulative -- $prefix) host pre-record client found: $client!$newjoinuh\002"
+                                        debug 3 "\002check:floodnet: (cumulative -- $prefix) host pre-record client found in $chan: $client!$newjoinuh\002"
                                         # -- add client to kickban queue if doesn't exist
                                         if {$client ni $klist} { lappend klist $client }
                                         if {$client ni [get:val data:kicks $chan]} { lappend data:kicks($chan) $client }
@@ -10269,49 +10732,49 @@ proc check:floodnet {nick uhost hand chan {xuser ""} {rname ""}} {
             # -- check if match nick
             if {[regexp -- $equal "[join $nick]!$uhost/$rname"]} {
                 # -- matched!
-                debug 3 "check:floodnet: (cumulative -- $prefix) \002regex match\002: [join $equal] against string: [join $nick]!$uhost/$rname"
+                debug 3 "check:floodnet: (cumulative -- $prefix) \002regex match\002: [join $equal] against string in $chan: [join $nick]!$uhost/$rname"
 
                 debug 3 "check:floodnet: \002adding regex id: $id for $chan to flud:nickcount($chan,$snick) to prevent double matching\002"
                 append flud:nickcount($chan,$snick) "$id "
 
 
-                if {![info exists flud:count($id)]} {
+                if {![info exists flud:count($chan,$id)]} {
                     # -- no such tracking array exists for this host/mask
-                    debug 3 "check:floodnet: (cumulative -- $prefix) host: \002no tracking\002 array exists: flud:count($id) -- \002created.\002"
-                    set flud:count($id) 1
+                    debug 3 "check:floodnet: (cumulative -- $prefix) host: \002no tracking\002 array exists: flud:count($chan,$id) -- \002created.\002"
+                    set flud:count($chan,$id) 1
                     # -- unset after timeout
                     utimer $secs "arm::flud:unset $chan $id $snick"
                     
                 } else {
                         # -- existing tracking array, increase counter
-                        debug 3 "check:floodnet: (cumulative -- $prefix) regex: \002existing tracking\002 array count flud:count($id): [get:val flud:count $id]"
-                        incr flud:count($id)
-                        set count [get:val flud:count $id]
+                        debug 3 "check:floodnet: (cumulative -- $prefix) regex: \002existing tracking\002 array count flud:count($chan,$id): [get:val flud:count $chan,$id]"
+                        incr flud:count($chan,$id)
+                        set count [get:val flud:count $chan,$id]
                         if {$count < $joins} {
                             # -- breach not met
-                            debug 3 "check:floodnet: (cumulative -- $prefix) regex: breach \002not yet met\002 -- increased flud:count($id) counter to: \002$count\002"
+                            debug 3 "check:floodnet: (cumulative -- $prefix) regex: breach \002not yet met\002 -- increased flud:count($chan,$id) counterto: \002$count\002"
                             # -- clear existing unset utimers for this value
                             flud:preclear [split $equal]
                     
                             # -- setup timer to clear adaptive pattern count
-                            debug 3 "check:floodnet: (cumulative -- $prefix) regex: unsetting in $secs secs: flud:count($id)"
+                            debug 3 "check:floodnet: (cumulative -- $prefix) regex: unsetting in $secs secs: flud:count($chan,$id)"
                             # -- unset after timeout
                             utimer $secs "arm::flud:unset $chan $id $snick"
                             
                         } else {
                                 # -- joinflood breach!
                                 set hit 1; set noauto 1; # -- do not also add automatic entry
-                                incr flud:count($id)
+                                incr flud:count($chan,$id)
                                 # -- store the active floodnet
                                 set floodnet($chan) 1
                                 # -- clear existing unset utimers for this value
                                 flud:preclear [split $equal]
                                 # -- setup timer to clear adaptive pattern count
-                                debug 3 "check:floodnet: (cumulative -- $prefix) regex: unsetting in extended $hold secs: flud:count($id)"
+                                debug 3 "check:floodnet: (cumulative -- $prefix) regex: unsetting in extended $hold secs: flud:count($chan,$id)"
                                 # -- unset after timeout
                                 utimer $hold "arm::flud:unset $chan $id $snick"    
                                 
-                                debug 3 "check:floodnet: (cumulative -- $prefix) \002regex breach met!\002 client found: [join $nick]!$uhost -- finding \002pre-record\002 clients..."              
+                                debug 3 "check:floodnet: (cumulative -- $prefix) \002regex breach met!\002 client found in $chan: [join $nick]!$uhost -- finding \002pre-record\002 clients..."              
 
                                 # -- find the pre-record clients
                                 foreach client $joinlist {
@@ -10400,7 +10863,7 @@ proc check:floodnet {nick uhost hand chan {xuser ""} {rname ""}} {
                 debug 1 "kickban: added auto blacklist entry: $equal (id: $id)"
 
                 set data:banmask($id) "*!*@$host"; 
-                utimer [cfg:get id:unban:time $chan] "unset arm::data:banmask($id)"; # -- allow automatic unban of recently banned mask, when removing 
+                utimer [cfg:get id:unban:time $chan] "arm::arm:unset data:banmask $id"; # -- allow automatic unban of recently banned mask, when removing 
             }
             # -- end of exists
         }
@@ -10672,6 +11135,7 @@ proc userdb:msg:inituser {nick uhost hand arg} {
     db:close
     set defchan [cfg:get chan:def *]
     set defid [db:get id channels chan $defchan]
+    set chanlist [string tolower [join [channels]]]
     if {$defid eq ""} {
         # -- create default chan
         debug 0 "userdb:msg:inituser: auto creating missing channel: $defchan"
@@ -10686,8 +11150,20 @@ proc userdb:msg:inituser {nick uhost hand arg} {
             VALUES ($cid,$uid,500,'$reg_ts','$reg_by','$reg_ts','$reg_by')"
         db:close
         # -- add to eggdrop if it doesn't exist
-        set chanlist [string tolower [join [channels]]]
-        if {[string tolower $defchan] ni $chanlist} { channel add $defchan }
+        
+        if {[string tolower $defchan] ni $chanlist} { 
+            debug 0 "userdb:msg:inituser: adding missing \002default\002 channel to eggdrop: $defchan"
+            channel add $defchan
+        }
+    }
+
+    # -- add reportchan
+    set reportchan [cfg:get chan:report *]
+    if {$reportchan ne ""} {
+        if {[string tolower $reportchan] ni $chanlist} { 
+            debug 0 "userdb:msg:inituser: adding missing \002report\002 channel to eggdrop: $reportchan"
+            channel add $reportchan
+        }
     }
 
     # -- load channels
@@ -10783,6 +11259,8 @@ proc userdb:cmd:info {0 1 2 3 {4 ""} {5 ""}} {
         set longlist [list]; set shortlist [list]
         foreach row $rows {
             lassign $row setting value
+            if {$setting eq "askmode"} { continue; }; # -- user specific
+            if {$value eq ""} { continue; }; # -- avoid blank setting values
             if {[string length $value] > 8} {
                 # -- long line; output on its own
                 lappend longlist [list "\002$setting:\002 $value"]
@@ -10889,6 +11367,8 @@ proc userdb:cmd:info {0 1 2 3 {4 ""} {5 ""}} {
             lassign $row cid tlevel
             if {$cid eq 1 && $tlevel != 0 && $tlevel != ""} { lappend lvls "global (\002$tlevel\002)"; continue; }
             set tchan [db:get chan channels id $cid]
+            if {[regexp {s} [lindex [getchanmode $tchan] 0]] && $type eq "pub" && $target ne $tchan \
+                && $target ne [cfg:get chan:report]} { continue; }; # -- hide other +s (secret) channels from output
             lappend lvls "[join $tchan] ($tlevel)"
         }
         set lvls [join $lvls ", "]
@@ -11055,6 +11535,8 @@ proc userdb:cmd:userlist {0 1 2 3 {4 ""}  {5 ""}} {
     foreach row $rows {
         lassign $row tcid tchan
         if {![userdb:isAllowed $nick $cmd $tchan $type]} { continue; }; # -- no access to lookup this chan
+        if {$tchan ne "*" && [regexp {s} [lindex [getchanmode $tchan] 0]] && $type eq "pub" && $target ne $tchan \
+            && $target ne [cfg:get chan:report]} { continue; }; # -- hide other +s (secret) channels from output
         db:connect
         set rowsu [db:query "SELECT level,uid,automode FROM levels WHERE cid=$tcid"]
         set rowsu [lsort -decreasing $rowsu]
@@ -11414,6 +11896,9 @@ proc userdb:cmd:addchan {0 1 2 3 {4 ""}  {5 ""}} {
     # -- new dict structure
     dict set dbchans $tcid id $tcid
     dict set dbchans $tcid chan $achan
+
+    # -- empty kicklock
+    dict set dbchans $tcid kicklock ""
     
     if {$tuser ne ""} {
         lassign [db:get id,user users user $tuser] tuid tuser
@@ -11552,10 +12037,6 @@ proc userdb:cmd:modchan {0 1 2 3 {4 ""}  {5 ""}} {
     }
 
     # -- command: modchan
-    set usage 0
-    if {$ttype eq "" || $value eq ""} { set usage 1 }
-
-    #if {$ttype ni "mode url desc autotopic strictop strictvoice"} { set usage 1 }
 
     if {[string match "m*" $ttype]} { set ttype "mode" } \
     elseif {[string match "u*" $ttype]} { set ttype "url" } \
@@ -11565,33 +12046,50 @@ proc userdb:cmd:modchan {0 1 2 3 {4 ""}  {5 ""}} {
     elseif {[string match "strictv*" $ttype]} { set ttype "strictvoice" } \
     elseif {[string match "trak*" $ttype]} { set ttype "trakka" } \
     elseif {[string match "oper*" $ttype]} { set ttype "operop" } \
+    elseif {[string match "kicklock" $ttype]} { set ttype "kicklock" } \
     elseif {$ttype eq "quote"} { set ttype "quote"; set plug "quote" } \
     elseif {$ttype eq "quoterand"} { set ttype "quoterand"; set plug "quote" } \
     elseif {$ttype eq "correct"} { set ttype "correct" } \
     elseif {$ttype eq "tweet"} { set ttype "tweet"; set plug "twitter" } \
     elseif {$ttype eq "tweetquote"} { set ttype "tweetquote"; set plug "twitter" } \
     elseif {$ttype eq "openai"} { set ttype "openai"; set plug "openai" } \
+    elseif {$ttype eq "speak"} { set ttype "speak"; set plug "openai" } \
+    elseif {$ttype eq "image"} { set ttype "image"; set plug "openai" } \
+    elseif {$ttype eq "imagerand"} { set ttype "imagerand"; set plug "openai" } \
+    elseif {$ttype eq "trivia"} { set ttype "trivia"; set plug "trivia" } \
+    elseif {$ttype eq "vote"} { set ttype "vote"; set plug "vote" } \
     else { set usage 1 }
 
-    set setlist "mode|url|desc|autotopic|strictop|strictvoice||correct|operop"
+    set setlist "mode|url|desc|autotopic|strictop|strictvoice|correct|operop|kicklock"
 
     # -- optional settings based on plugins
     set plugin(quote) 0; set plugin(trakka) 0; set plugin(twitter) 0; set plugin(openai) 0;
     if {[info commands quote:cron] ne ""} { set plugin(quote) 1; append setlist "|quote|quoterand" }; # -- quote
     if {[info commands arm:cmd:tweet] ne ""} { set plugin(twitter) 1; append setlist "|tweet|tweetquote" }; # -- tweet
-    if {[info commands ask:query] ne ""} { set plugin(openai) 1; append setlist "|openai" }; # -- openai
+    if {[info commands ask:query] ne ""} { set plugin(openai) 1; append setlist "|openai|speak|image|imagerand" }; # -- openai
+    if {[info commands trivia:query] ne ""} { set plugin(trivia) 1; append setlist "|trivia" }; # -- trivia
+    if {[info commands vote:nick] ne ""} { set plugin(vote) 1; append setlist "|vote" }; # -- trivia
     set loadplugin 0
     if {$ttype eq "quote" && $plugin(quote) eq 0} { set loadplugin 1 }
     if {$ttype eq "quoterand" && $plugin(quote) eq 0} { set loadplugin 1 }
     if {$ttype eq "tweet" && $plugin(twitter) eq 0} { set loadplugin 1 }
     if {$ttype eq "tweetquote" && $plugin(twitter) eq 0} { set loadplugin 1 }
     if {$ttype eq "openai" && $plugin(openai) eq 0} { set loadplugin 1 }
+    if {$ttype eq "speak" && $plugin(openai) eq 0} { set loadplugin 1 }
+    if {$ttype eq "image" && $plugin(openai) eq 0} { set loadplugin 1 }
+    if {$ttype eq "imagerand" && $plugin(openai) eq 0} { set loadplugin 1 }
+    if {$ttype eq "trivia" && $plugin(trivia) eq 0} { set loadplugin 1 }
+    if {$ttype eq "vote" && $plugin(vote) eq 0} { set loadplugin 1 }
 
     # -- error if plugin isn't even loaded
     if {$loadplugin} {
         reply $type $target "\002error:\002 the \002$plug\002 plugin must be loaded."
         return;
     }
+
+    set usage 0
+    if {$value eq "" && $ttype ne "kicklock"} { set usage 1 }
+    if {$ttype eq ""} { set usage 1 }
     
     # -- unknown setting, show usage
     if {$usage} {
@@ -11620,27 +12118,41 @@ proc userdb:cmd:modchan {0 1 2 3 {4 ""}  {5 ""}} {
     set db_value [string tolower $value]
     set ltype $ttype
     
-    if {$ttype in "strictop strictvoice trakka operop quote quoterand correct tweet tweetquote openai"} {
+    if {$ttype in "strictop strictvoice trakka operop quote quoterand correct tweet tweetquote openai speak image imagerand trivia vote"} {
         set value $lvalue
         if {$lvalue ne "on" && $lvalue ne "off"} {
-            reply $type $target "\002(\002error\002)\002 value must be: on or off."
+            reply $type $target "\002error:\002 value must be: on or off."
             return;
         }
     } elseif {$ttype eq "mode"} {
         set value $lvalue
         if {$lvalue ne "on" && $lvalue ne "off" && $lvalue ne "secure"} {
-            reply $type $target "\002(\002error\002)\002 value must be: on, off, or secure. try: \002help mode\002"
+            reply $type $target "\002error:\002 value must be: on, off, or secure. try: \002help mode\002"
             return;
         }
     } elseif {$ttype in "desc"} {
         set ltype "description"
     } elseif {$ttype in "autotopic"} {
-        reply $type $target "\002(\002error\002)\002 not yet implemented."
+        reply $type $target "\002error:\002 description not yet implemented."
         return;
+    } elseif {$ttype in "kicklock"} {
+        # -- kicklock: set custom chanmode for specified time after X kicks in Y mins
+        if {$value ne "" && ![regexp {^\d+:\d+:\+[A-Za-z]+:\d+$} $value]} {
+            reply $type $target "\002error:\002 value must be in the form of \002X:Y:+M:N\002 -- to set modes \002+M\002 for \002N\002 mins\
+                after \002X\002 kicks in \002Y\002 minutes.  \002i.e.\002 3:5:+r:30"
+            return;            
+        }
     }
     
     set cvalue [db:get value settings cid $cid setting $ttype]
-    if {[string tolower $cvalue] eq $lvalue} { reply $type $target "$ltype is already $cvalue."; return; }
+    if {[string tolower $cvalue] eq $lvalue} { 
+        if {$cvalue eq ""} {
+            reply $type $target "$ltype is disabled.";
+        } else {
+            reply $type $target "$ltype is already $cvalue."; 
+        }
+        return;
+    }
     # -- update the setting!
     db:connect
     if {$cvalue eq ""} { db:query "INSERT INTO settings (cid,setting,value) VALUES($cid,'$ttype','[db:escape $value]')" } \
@@ -11802,7 +12314,7 @@ proc userdb:cmd:register {0 1 2 3 {4 ""}  {5 ""}} {
     # -- helps with internal bot stats recollection (cmd: report)
     set ltuser [string tolower $tuser]
     if {$ltuser eq "bot" || $ltuser eq "usernames" || $ltuser eq [string tolower ${botnet-nick}] \
-        || $ltuser eq [string tolower $botnick] || $ltuser eq $uservar} { 
+        || $ltuser eq [string tolower $botnick] || $ltuser eq $::uservar} { 
         reply $type $target "\002(\002error\002)\002 reserved username.";
         return;
     }
@@ -11922,6 +12434,7 @@ proc userdb:cmd:newuser {0 1 2 3 {4 ""}  {5 ""}} {
     if {![userdb:isAllowed $nick $cmd $chan $type]} { return; }
     # -- end default proc template
 
+    set params [llength $arg]
     set trguser [lindex $arg 0]    
     # -- do some ircd dependant syntax handling
     set ircd [cfg:get ircd *]
@@ -11929,8 +12442,8 @@ proc userdb:cmd:newuser {0 1 2 3 {4 ""}  {5 ""}} {
         # -- ircu (Undernet/Quakenet)
         set trgxuser [lindex $arg 1]
         set globlvl [lindex $arg 2]
-        if {$trguser eq "" || $trgxuser eq ""} {
-            reply $stype $starget "\002usage:\002 newuser <user> <xuser> \[globlevel\]";
+        if {$trguser eq "" || $trgxuser eq "" || $params > 3} {
+            reply $stype $starget "\002usage:\002 newuser <botuser> <netuser> \[globlevel\]";
             return;
         }
         set encpass ""; # -- do not set a temporary password
@@ -11938,7 +12451,7 @@ proc userdb:cmd:newuser {0 1 2 3 {4 ""}  {5 ""}} {
         # -- IRCnet/EFnet
         set globlvl [lindex $arg 1]
         set trgxuser ""
-        if {$trguser eq ""} {
+        if {$trguser eq "" || $params > 2} {
             reply $stype $starget "\002usage:\002 newuser <user> \[globlevel\]";
             return;
         }
@@ -11949,6 +12462,12 @@ proc userdb:cmd:newuser {0 1 2 3 {4 ""}  {5 ""}} {
     }
     
     if {$globlvl ne ""} {
+        # -- check if valid
+        if {![regexp -- {^\d+} $globlvl]} {
+            reply $type $target "\002(\002error\002)\002 global access level must be 1-500."
+            return;
+        }
+
         # -- check they have the access
         set sgloblvl [db:get level levels uid $uid cid 1]
         if {$sgloblvl eq ""} { set sgloblvl 0 }
@@ -11975,7 +12494,7 @@ proc userdb:cmd:newuser {0 1 2 3 {4 ""}  {5 ""}} {
     # -- reserved usernames 
     # -- helps with internal bot stats recollection (cmd: report)
     if {[string tolower $trguser] eq "bot" || [string tolower $trguser] eq "usernames" || [string tolower $trguser] eq [string tolower ${botnet-nick}] \
-        || [string tolower $trguser] eq [string tolower $botnick] || [string tolower $trguser] eq $uservar} { 
+        || [string tolower $trguser] eq [string tolower $botnick] || [string tolower $trguser] eq $::uservar} { 
         reply $type $target "\002(\002error\002)\002 reserved username.";
         return;
     }
@@ -12133,7 +12652,7 @@ proc userdb:cmd:verify {0 1 2 3 {4 ""}  {5 ""}} {
 proc userdb:pub:login {nick uhost hand chan arg} {
     if {[userdb:isLogin $nick]} {
         # -- already logged in
-        reply pub $chan "uhh, you are already authenticated."
+        reply pub $chan "$nick: mate, you are already authenticated."
         return;
     }
     debug 0 "\002userdb:pub:login\002: started.. sending /WHOIS $nick"
@@ -13142,7 +13661,7 @@ proc userdb:logout {nick {uhost ""}} {
 # -- nickname signoff
 proc userdb:signoff {nick uhost handle chan {text ""}} {
     # -- send to common proc userdb:unset:vars
-    userdb:unset:vars part $nick $uhost $chan
+    userdb:unset:vars quit $nick $uhost $chan
 }
 
 # -- nickname channel part
@@ -13919,11 +14438,33 @@ proc userdb:cmd:time {0 1 2 3 {4 ""}  {5 ""}} {
         return;
     }
 
+    set cid [db:get id channels chan $chan]
+
     # -- check if user exists
     lassign [db:get id,user users user $tuser] tuid ttuser
     if {$ttuser eq ""} {
-        reply $type $target "\002error:\002 user $tuser does not exist."
+        # -- assume user if ninjas plugin not loaded
+        if {[info commands ninjas:query] eq ""} { 
+            reply $type $target "\002error:\002 user $tuser does not exist."
+            return;
+        }
+        # -- try city name
+        set city [list city $tuser]
+        lassign [ninjas:query time $city] iserror data
+        if {[dict exists $data error]} { set iserror 1; set data [dict get $data error] }
+        if {$iserror} {
+            reply $type $target "\002error:\002 $data"
+            return;
+        }
+        set tz [dict get $data timezone]
+        set datetime [dict get $data datetime]
+        reply $type $target "$nick: time in $tz is $datetime"
+
+        # -- create log entry
+        putlog "log:cmdlog BOT * $cid $user $uid [string toupper $cmd] [join $arg] $source"
+        log:cmdlog BOT * $cid $user $uid [string toupper $cmd] [join $arg] $source "" "" ""
         return;
+
     } else { set tuser $ttuser }; # -- use the correct username case
 
     # -- get user's timezone
@@ -14124,16 +14665,23 @@ set cfg(captcha:url) "http://api.textcaptcha.com/${cfg(captcha:id)}.json"
 #package require tls
 #::http::register https 443 ::tls::socket
 
+bind join - * arm::captcha:raw:join;
+bind kick - * arm::captcha:raw:kick
+
 # -- run the test
 proc captcha:query {} {
     variable cfg
     variable captcha
     http::config -useragent "mozilla" 
 
+    debug 0 "captcha:query: started"
     set url [cfg:get captcha:url *]
     #catch {set tok [http::geturl $url]} error
-    coroexec http::geturl $url -keepalive 1 -timeout 3000 -command [info coroutine]
-    set tok [yield]
+    #http::geturl $url -keepalive 1 -timeout 3000 -command [info coroutine]
+    #coroexec http::geturl $url -keepalive 1 -timeout 3000 -command [info coroutine]
+    #set tok [yield]
+    set tok [http::geturl $url -keepalive 1 -timeout 3000]
+    debug 0 "captcha:query: post tok"
     
     set error ""; # -- TODO: fix generic error handling
     #if {[string match -nocase "*couldn't open socket*" $error]} {
@@ -14204,8 +14752,11 @@ proc captcha:scan {nick uhost chan {id ""}} {
     # -- send the client a question and wait for a reply
     # -- if no reply received in N time (configurable), kick(ban) client
     # -- if incorrect reply received, kick(ban) client
+    debug 3 "\002captcha:scan\002: scanning $nick on $chan"
     if {[cfg:get captcha $chan]} {
+        debug 3 "\002captcha:scan\002: CAPTCHA enabled for $chan"
         set response [captcha:query]
+        debug 3 "\002captcha:scan\002: response: $response"
         if {$response eq ""} {
             debug 3 "\002captcha:scan\002: response error, reverting to manual handling."
             return 1; # -- there was some kind of error, revert to manual handling
@@ -14223,7 +14774,7 @@ proc captcha:scan {nick uhost chan {id ""}} {
             
             # -- send the question to the client!
             debug 3 "\002captcha:scan\002: sending question to $nick for $chan: $question"
-            putquick "PRIVMSG $nick :\002Attention!\002 To talk in $chan please answer the following question correctly: $question"
+            putquick "NOTICE $nick :\002Attention!\002 To talk in $chan, please answer the following question correctly: $question"
             
             utimer [cfg:get captcha:time $chan] "arm::captcha:check $nick $uhost $chan $id"; # -- time limit for captcha
             
@@ -14238,7 +14789,7 @@ proc captcha:scan {nick uhost chan {id ""}} {
 
 # -- captcha:check
 # checks for expired CAPTCHAs
-proc captcha:check {nick uhost chan {id ""}} {
+proc captcha:check {nick uhost chan {code ""} {web "0"}} {
     variable cfg;
     variable data:captcha;   # -- holds captcha data for nick (by nick,chan)
     variable data:kicknicks; # -- tracking nicknames recently kicked from chan (by 'chan,nick')
@@ -14246,6 +14797,24 @@ proc captcha:check {nick uhost chan {id ""}} {
     set lchan [string tolower $chan]
     set dokick 0; set dokb 0;
     if {[info exists data:captcha($nick,$chan)]} {
+        # -- web CAPTCHA
+        if {$web} {
+            db:connect
+            set row [join [db:query "SELECT code,verify_ts,ts FROM captcha WHERE code='$code' AND result_ts=0 AND expiry <= [unixtime] ORDER BY ts DESC LIMIT 1"]]
+            lassign $row code verify_ts ts
+            if {$code eq ""} {
+                 # -- ID no longer exists; probably already processed successfully
+                unset data:captcha($nick,$lchan); # -- response tracker
+                db:close
+                return; 
+            }
+            # -- else, continue with expiry processing
+            # -- update result for Expired (X)
+            db:query "UPDATE captcha SET result_ts='[unixtime]', result='X' WHERE code='$code'"
+            debug 3 "captcha:check: found expired CAPTCHA entry -- chan: $chan -- code: $code -- nick: $nick -- uhost: $uhost"
+            db:close
+        }
+
         # -- expired entry! client did not respond
         set action [string tolower [cfg:get captcha:expired $chan]]
         if {[cfg:get captcha:expired:ops $chan] ne "" && $action ne "manual"} {
@@ -14267,8 +14836,8 @@ proc captcha:check {nick uhost chan {id ""}} {
             # -- invalid config option
             putlog "\002captcha:check:\002 invalid cfg(captcha:expired) option: $action (must be: manual|kick|kickban)" 
         }
-        unset data:captcha($nick,$lchan);          # -- response tracker
-        unset data:captcha($nick,$lchan,attempts); # -- attempt counter
+        unset data:captcha($nick,$lchan); # -- response tracker
+        if {[info exists data:captcha($nick,$lchan,attempts)]} { unset data:captcha($nick,$lchan,attempts) }; # -- attempt counter
     }
     
     # -- check whether to kick client
@@ -14276,7 +14845,7 @@ proc captcha:check {nick uhost chan {id ""}} {
         lassign [split [cfg:get paranoid:klimit $chan] :] lim secs
         if {![info exists data:kicknicks($lchan,$nick)]} {
             set data:kicknicks($lchan,$nick) 1
-            utimer $secs "unset arm::data:kicknicks($chan,$nick)"
+            utimer $secs "arm::unset:kicknicks [split $lchan,$nick]"
         } else {
             incr data:kicknicks($lchan,$nick)
         }
@@ -14328,12 +14897,16 @@ proc captcha:msg:response {nick uhost hand arg} {
             # -- correct answer!
             putlog "\002captcha:msg:response:\002 correct answer from $nick on $chan"
             if {[cfg:get captcha:ack $chan]} {
-                if {[cfg:get captcha:ack:msg $chan] ne ""} { putquick "PRIVMSG $nick :[cfg:get captcha:ack:msg $chan]" }; # -- send ack for correct response
+                set webchat "webchat@*"
+                if {[cfg:get captcha:ack:msg $chan] ne "" && [info command "::unet::webchat:welcome"] eq "" && [string match $webchat $uhost] eq 0} { 
+                    # -- send ack for correct response
+                    putquick "PRIVMSG $nick :[cfg:get captcha:ack:msg $chan]" 
+                }; 
                 if {[cfg:get captcha:ack:ops $chan] ne ""} {
                     reply notc @$chan "Armour: $nick!$uhost has submitted a \002correct\002 CAPTCHA response" 
                 }
             }
-            voice:give $chan $nick; # -- voice the user        
+            voice:give $chan $nick $uhost; # -- voice the user        
         } else {
             # -- incorrect answer!
             putlog "\002captcha:msg:response:\002 incorrect answer from $nick on $chan"
@@ -14382,7 +14955,7 @@ proc captcha:msg:response {nick uhost hand arg} {
             lassign [split [cfg:get paranoid:klimit $chan] :] lim secs
             if {![info exists data:kicknicks($lchan,$nick)]} {
                 set data:kicknicks($lchan,$nick) 1
-                utimer $secs "unset arm::data:kicknicks($lchan,$nick)"
+                utimer $secs "arm::unset:kicknicks [split $lchan,$nick]"
             } else {
                 incr data:kicknicks($lchan,$nick)
             }
@@ -14440,7 +15013,251 @@ proc captcha:msg:response {nick uhost hand arg} {
     }
 }
 
-putlog "\[@\] Armour: loaded text CAPTCHA support"
+
+# -- generate a CAPTCHA ID
+proc captcha:web {nick uhost ip chan {asn ""} {country ""} {subnet ""}} {
+    variable data:captcha;  # -- holds captcha data for nick (by <nick>,chan)
+
+    set lchan [string tolower $chan]
+
+    # -- generate CAPTCHA ID
+    set avail 0
+    while {!$avail} {
+        set length 5; # -- num of captcha ID chars
+        set chars "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+        set range [expr {[string length $chars]-1}]
+        set code ""
+        for {set i 0} {$i < $length} {incr i} {
+        set pos [expr {int(rand()*$range)}]
+        append code [string range $chars $pos $pos]
+        }
+        set existcode [db:get code captcha code $code]
+        if {$existcode eq ""} { set avail 1; break }
+    }
+    set ts [unixtime]
+    set secs [cfg:get captcha:time $chan] 
+    #set secs 10; # -- TODO: remove and leave above line
+    set expiry [expr $ts + $secs]
+    set dbnick [db:escape $nick]
+    set status "J"; # -- use J (join) status
+    db:connect
+
+    #db:query "INSERT INTO captcha (code, chan, nick, uhost, ip, ts, expiry, result) \
+    #    VALUES ('$code', '$chan', '$dbnick', '$uhost', '$ip', $ts, $expiry, 'J')"
+    db:query "INSERT INTO captcha (code, chan, nick, uhost, ip, ip_asn, ip_subnet, ip_country, ts, expiry, result) \
+        VALUES ('$code', '$chan', '$dbnick', '$uhost', '$ip', '$asn', '$subnet', '$country', $ts, $expiry, 'J')"
+    db:close
+
+    set url "https://verify.armour.bot/$code"
+
+    set data:captcha($nick,$lchan) ""; # -- track that we've asking for CAPTCHA challenge
+
+    # -- send the question to the client!
+    debug 3 "\002captcha:web\002: sending CAPTCHA link to $nick (country: $country -- ASN: $asn -- subnet: $subnet) for $chan: $url"
+    putquick "NOTICE $nick :\002Attention!\002 To talk in $chan, please complete the following CAPTCHA challenge: $url"
+    
+    utimer $secs "arm::captcha:check $nick $uhost $chan $code 1"; # -- time limit for captcha
+    
+    if {[cfg:get captcha:opnotc $chan] && ![cfg:get paranoid:ctcp $chan]} { 
+        putquick "NOTICE @$chan :Armour: $nick!$uhost looks suspicious; sent CAPTCHA question for verification -- \002/whois $nick\002"
+    }
+
+}
+
+# -- process web CAPTCHA entries
+proc captcha:web:check {} {
+    variable data:captcha;  # -- holds captcha data for nick (by <nick>,chan)
+    variable scan:list
+    set dokick 0; set dokb 0;
+
+    # -- query all entries that are not already actioned
+    db:connect
+    set rows [db:query "SELECT id,chan,code,nick,uhost,ip,ts,expiry,verify_ts,verify_ip,result FROM captcha WHERE result_ts=0"]
+    foreach row $rows {
+        lassign $row id chan code nick uhost ip ts expiry verify_ts verify_ip result
+        set lchan [string tolower $chan]
+
+        if {$result eq "S"} {
+            # -- Successful CAPTCHA verification
+            debug 3 "\002captcha:web:check\002: voicing $nick in $chan following a correct CAPTCHA challenge!" 
+            if {[cfg:get captcha:ack:ops $chan] ne ""} {
+                reply notc @$chan "Armour: $nick!$uhost has submitted a \002correct\002 CAPTCHA response ($verify_ip) -- voicing!" 
+            }
+            db:query "UPDATE captcha SET result_ts='[unixtime]', result='V' WHERE id='$id'"
+            captcha:cleanup $chan $nick
+            voice:give $chan $nick $uhost; # -- voice the user
+            if {[info exists data:captcha($nick,$lchan)]} { unset data:captcha($nick,$lchan) }
+
+        } elseif {$result eq "F"} {
+            # -- Failed CAPTCHA (some kinda of hCAPTCHA error)
+            # Let them try and allow the CAPTCHA expiry.  It might be a temporary hcaptcha.com outage
+
+        } elseif {$result eq "R"} {
+            # -- Rate-limited IP
+            set dokick 1; 
+            set kickmsg "Armour: you have been CAPTCHA rate-limited.  Please come back later."; # -- TODO: move kickmsg to config and add var to raw:kick:lock in arm-13_raw.tcl
+            reply notc @$chan "Armour: $nick!$uhost has been CAPTCHA \002rate-limited\002 ($verify_ip) -- taking action!" 
+            db:query "UPDATE captcha SET result_ts='[unixtime]' WHERE id='$id'"
+            captcha:cleanup $chan $nick
+            if {[info exists data:captcha($nick,$lchan)]} { unset data:captcha($nick,$lchan) }
+
+        } elseif {$result eq "K"} {
+            set dokick 1; 
+            set kickmsg "Armour: you have a history of abuse."; # -- TODO: move kickmsg to config and add var to raw:kick:lock in arm-13_raw.tcl
+            reply notc @$chan "Armour: $nick!$uhost has been CAPTCHA \002abuse-blocked\002 ($verify_ip) -- taking action!" 
+            db:query "UPDATE captcha SET result_ts='[unixtime]' WHERE id='$id'"
+            captcha:cleanup $chan $nick
+            if {[info exists data:captcha($nick,$lchan)]} { unset data:captcha($nick,$lchan) }
+        } elseif {$result eq "J"} {
+            # -- Check if client has parted channel
+            if {[info exists scan:list(leave,$chan)]} {
+                set pos [lsearch [get:val scan:list leave,$chan] $nick]
+                if {$pos eq -1} {
+                    # -- Client has parted channel
+                    debug 3 "\002captcha:web:check\002: client $nick!$uhost has since parted $chan -- updating 'captcha' table result to 'P'"
+                    db:query "UPDATE captcha SET result='P', result_ts='[unixtime]' WHERE id='$id'"
+                }
+            }
+        }
+    }
+
+    # -- check whether to kick client
+    if {$dokick} {
+        lassign [split [cfg:get paranoid:klimit $chan] :] lim secs
+        if {![info exists data:kicknicks($lchan,$nick)]} {
+            set data:kicknicks($lchan,$nick) 1
+            utimer $secs "arm::unset:kicknicks [split $lchan,$nick]"
+        } else {
+            incr data:kicknicks($lchan,$nick)
+        }
+        if {[get:val data:kicknicks $lchan,$nick] <= $lim} {
+            # -- ok to kick the user, threshold not met
+            putquick "KICK $chan $nick :$kickmsg"
+        } else {
+            # -- upgrade the kick to kickban!
+            set dokb 1;
+        }
+    }
+    
+    # -- send kickban for client
+    if {$dokb} {
+        lassign [split $uhost @] ident host
+        #set duration [cfg:get captcha:expired:bantime $chan]
+        set duration "3h"; # -- TODO: make this its own config setting, different to captcha:expired:bantime
+        kickban $nick $ident $host $chan $duration $kickmsg
+    }
+    
+    db:close
+    utimer 2 ::arm::captcha:web:check
+}
+
+# -- ensure old timers are cleared so if the client rejoins and gets in, 
+# they don't later get kicked for expired CAPTCHA
+proc captcha:cleanup {chan nick} {
+    variable scan:list
+    foreach i {nicks data} {
+        if {[info exists scan:list($i,$chan)]} {
+            set pos [lsearch [get:val scan:list $i,$chan] $nick]
+            if {$pos ne -1} {
+                debug 3 "\002captcha:cleanup\002: removing $nick from scan:list($i,$chan)"
+                set scan:list($i,$chan) [lreplace [get:val scan:list $i,$chan] $pos $pos]
+            }
+        }
+    }
+    foreach timer [utimers] {
+        lassign $timer secs cmd tid
+        if {[lindex $cmd 0] ne "arm::captcha:check"} { continue; }
+        lassign $cmd proc tnick tuhost tchan id web
+        if {$chan ne $tchan || $nick ne $tnick} { continue; }
+        debug 3 "\002captcha:cleanup\002: killing timer $tid for $nick in $chan"
+        killutimer $tid
+    }
+}
+
+# -- track kicks to update 'captcha' table for abuse prevention
+proc captcha:raw:kick {nick uhost handle chan vict reason} {
+    global botnick
+    variable nickdata; # -- dict storing information about client
+    set lvict [string tolower $vict]
+    if {[dict exists $nickdata $lvict ip]} {
+        set ip [dict get $nickdata $lvict ip]
+        debug 3 "\002captcha:raw:kick\002: $nick has kicked $vict in $chan"
+
+        # -- don't update the DB if the kick message was from the bot about CAPTCHA responses
+        set kickmsgs [list [cfg:get captcha:expired:kick] [cfg:get captcha:wrong:kick]]
+        foreach msg $kickmsgs {
+            if {$reason eq $msg && $nick eq $botnick} {
+                debug 3 "\002captcha:raw:kick\002: skipping kick message as it matches CAPTCHA behaviour"
+                return; 
+            }
+        }
+
+        # -- update any existing CAPTCHA history for previous clients on this IP
+        db:connect
+        db:query "UPDATE captcha SET lastkick_ts='[unixtime]' WHERE chan='$chan' AND ip='$ip'"
+        db:close
+
+    } else {
+        debug 3 "\002captcha:raw:kick\002: kick detected in $chan against $vict but there is no IP address stored for $nick"
+    }
+}
+
+# -- prevent expiry actions if the user got in the channel somehow anyway
+proc captcha:raw:join {nick uhost hand chan} {
+    variable scan:list
+    captcha:cleanup $chan $nick
+    if {[info exists scan:list(leave,$chan)]} {
+        set pos [lsearch [get:val scan:list leave,$chan] $nick]
+        if {$pos ne -1} {
+            debug 3 "\002captcha:cleanup\002: removing $nick from scan:list(leave,$chan)"
+            set scan:list(leave,$chan) [lreplace [get:val scan:list leave,$chan] $pos $pos]
+        }
+    }
+}
+
+# -- start captcha:web:check, only if not already running
+set dostart 1
+foreach utimer [utimers] {
+    set thetimer [lindex $utimer 1]
+    if {$thetimer eq "::arm::captcha:web:check"} { set dostart 0; break; }
+}
+if {$dostart} { captcha:web:check }
+
+
+# -- print timers, one per line
+proc timerlist {} {
+    foreach timer [timers] {
+       debug 0 "timerlist: timer: $timer" 
+    }
+}
+
+# -- print timers, one per line
+proc utimerlist {} {
+    foreach timer [utimers] {
+       debug 0 "utimerlist: utimer: $timer" 
+    }
+}
+
+db:query "CREATE TABLE IF NOT EXISTS captcha (\
+    id INTEGER PRIMARY KEY AUTOINCREMENT,\
+    chan TEXT,\
+    code TEXT,\
+    nick TEXT,\
+    uhost TEXT,\
+    ip TEXT,\
+    ip_asn TEXT,\
+    ip_subnet TEXT,\
+    ip_country TEXT,\
+    ts TEXT,\
+    expiry INT,\ 
+    verify_ip TEXT,\
+    verify_ts INT,\
+    lastkick_ts INT DEFAULT '0',\
+    result TEXT,\
+    result_ts INT DEFAULT '0'
+    )"
+
+putlog "\[@\] Armour: loaded CAPTCHA support (web and text)"
 
 }
 # -- end namespace
@@ -14466,6 +15283,7 @@ set cfg(ircbl:url:add) "https://ircbl.org/addrbl";
 
 # -- ircbl.org removal address
 set cfg(ircbl:url:del) "https://ircbl.org/delrbl";
+
 
 # -- run the test
 proc ircbl:query:coro {cmd ip type {comment ""}} {
@@ -14578,8 +15396,12 @@ putlog "\[@\] Armour: loaded IRCBL support functions."
 namespace eval arm {
 # ------------------------------------------------------------------------------------------------
 
-# -- IPQS addition API endpoint
+# -- load the command
+#                       plugin   level req.   binds enabled  
+set addcmd(ipqs)     {  ipqs     1            pub msg dcc    }
+
 set cfg(ipqs:url) "https://www.ipqualityscore.com/api/json/ip"
+
 
 # -- prerequisites (Tcllibc)
 package require Tcl 8.6
@@ -14601,6 +15423,7 @@ proc ipqs:query {ip} {
     set url "$cfgurl/[cfg:get ipqs:key *]/$ip"
 
     #catch {set tok [http::geturl $url -keepalive 1]} error
+    debug 3 "\002ipqs:query:\002 querying url: $url"
     coroexec http::geturl $url -keepalive 1 -timeout 3000 -command [info coroutine]
     set tok [yield]
 
@@ -14744,7 +15567,7 @@ proc list:return {chan {list ""} {method ""} {value ""}} {
     putlog "list:return: id: $id (depends: $depends) -- chan: $chan -- list: $list -- method: $method -- value: $value"
     
     set flags [list]
-    foreach i "noident onlykick nochans manual captcha disabled onlysecure silent ircbl notsecure" {
+    foreach i "noident onlykick nochans manual captcha disabled onlysecure silent ircbl notsecure onlynew continue" {
         if {[dict get $entries $id $i] eq 1} {
             if {$i eq "disabled"} { lappend flags "\002$i\002" } else { lappend flags $i }
         }
@@ -14759,7 +15582,7 @@ proc list:return {chan {list ""} {method ""} {value ""}} {
         O   { set action "op"      }
         V   { set action "voice"   }
         B   { set action "kickban" }
-        K    { set action "kickban" }
+        K   { set action "kickban" }
         A   { set action "accept"  }
     }
     
@@ -14871,7 +15694,7 @@ proc mode:secure {} {
         }
         set nlist [join $clist ,]
         if {$nlist ne ""} {
-            debug 5 "mode:secure: starting /WHO for channels: [join $clist]"
+            debug 3 "mode:secure: starting /WHO for channels: [join $clist]"
             putquick "WHO $nlist cd%cnuhiartf,102"
         }
         utimer [cfg:get queue:secure *] arm::mode:secure; # -- restart
@@ -15052,23 +15875,27 @@ proc adapt:unset {type exp} {
         rname            { set array "adapt:r"   }
     }
 
-    if {[info exists [set array]($exp)]} {
-        debug 3 "adapt:unset: removing adaptive regex tracker (type: $type array: $array exp: [join $exp])"
-        unset [set array]($exp)
-    }
+	if {[info exists ${array}($exp)]} {
+		set count [set ${array}($exp)]
+		debug 3 "adapt:unset: removing adaptive regex tracker (type: $type -- array: $array -- exp: $exp) -- \002count:\002 $count"
+		debug 3 "adapt:unset: unsetting ${array}($exp)"
+		unset ${array}($exp)
+	}
 }
 
 # -- arm:flud:unset
 # clear floodnet track
 proc flud:unset {chan id snick} {
-    variable flud:count;     # -- the count of a given cumulative pattern (by id)
+    variable flud:count;     # -- the count of a given cumulative pattern (by chan,id)
     variable flud:nickcount; # -- the IDs that have already been matched for a given nick (by chan,nick)
                              # -- avoids double matching (first from channel join, second from /WHO result)
 
+    debug 4 "\002flud:unset:\002 starting flud:unset: chan: $chan -- id: $id -- snick: $snick"
+
     # -- remove ID from count list
-    if {[info exists flud:count($id)]} {
-        debug 3 "flud:unset: removing floodnet tracker flud:count([join $id])"
-        unset flud:count($id)
+    if {[info exists flud:count($chan,$id)]} {
+        debug 3 "flud:unset: removing floodnet tracker flud:count($chan,[join $id])"
+        unset flud:count($chan,$id)
     }
 
     # -- remove ID from nickcount list
@@ -15101,10 +15928,10 @@ proc flood:line:decr {value} {
     variable flood:line
     # -- value is a nick or a channel, depending on counter type
     if {[info exists flood:line($value)]} {
-        set val [get:val flood:line $value]
+        set val [get:val flood:line [split $value]]
         debug 5 "flood:line:decr: decreasing flood:line tracker flood:line($value) -- current: $val"
         incr flood:line($value) -1
-        if {[get:val flood:line $value] == 0} {
+        if {[get:val flood:line [split $value]] eq 0} {
             debug 5 "flood:line:decr: removing nil flood:line tracker flood:line($value)"
             unset flood:line($value)
         }
@@ -15138,20 +15965,24 @@ proc newjoin:unset {nick chan} {
     variable nick:jointime; # -- stores the timestamp a nick joined a channel (by chan,nick)
     variable jointime:nick; # -- stores the nick that joined a channel (by chan,timestamp)
     
+    #debug 6 "\002newjoin:unset:\002 started: nick: $nick -- chan: $chan"
+
+    set snick [split $nick]
+
     # -- remove associated newjoin state for nick on chan
-    if {[info exists nick:newjoin($chan,$nick)]} {
-        debug 4 "newjoin:unset: removed newjoin tracker newjoin:nick($chan,[join $nick]) for nick: $nick"
-        unset nick:newjoin($chan,$nick)
+    if {[get:val nick:newjoin [split $chan,$snick]] ne ""} {
+        debug 4 "newjoin:unset: removed newjoin tracker newjoin:nick($chan,$snick) for nick: $nick"
+        unset nick:newjoin($chan,$snick)
     }
-    
-    # -- remove associated newjoin state for nick on chan
-    if {[info exists nick:jointime($chan,$nick)]} {
-        debug 4 "newjoin:unset: removed newjoin timestamp tracker nick:jointime($chan,[join $nick]) for nick: $nick"
-        unset nick:jointime($chan,$nick)
-    }   
+  
+    if {[get:val nick:jointime [split $chan,$snick]] ne ""} {
+        debug 4 "newjoin:unset: removed newjoin timestamp tracker nick:jointime($chan,$snick) for nick: $nick"
+        unset nick:jointime($chan,$snick)
+    }  
     
     # -- remove associated jointime for nick on chan
-    foreach ts [array names jointime:nick] {
+    foreach key [array names jointime:nick] {
+        lassign [split $key ,] chan ts
         set tnick [get:val jointime:nick $chan,$ts]
         if {$nick eq $tnick} { 
             debug 4 "newjoin:unset: removed newcomer jointime (timestamp) tracker join:time($chan,$ts) for nick: $nick"
@@ -15232,6 +16063,30 @@ proc preclear:timer {tfunc {value ""}} {
         }
     } 
     debug 3 "preclear:timer killed $count timers"
+}
+
+# -- generic proc to unset vars from timers
+proc arm:unset {var {key ""}} {
+    if {[info exists [subst $var]]} {
+        #debug 3 "arm:unset: $var exists"
+        if {$key eq ""} {
+            debug 3 "arm:unset: unsetting $var"
+            unset $var
+        } else {
+            if {[info exists $var($key)]} {
+                debug 3 "arm:unset: unsetting $var($key)"
+                unset $var($key)
+            }
+        }
+    }
+}
+
+proc unset:kicknicks {key} {
+    variable data:kicknicks
+    if {[info exists data:kicknicks($key)]} {
+        debug 3 "unset:kicknicks: unsetting data:kicknicks($key)"
+        unset data:kicknicks($key)
+    }
 }
 
 # -- work out how to know if this is a full channel scan, or channel join
@@ -15378,15 +16233,40 @@ proc kill:timers {} {
 }
 
 # -- voice the nick
-proc voice:give {chan nick} {
+proc voice:give {chan nick {uhost ""} {timed ""}} {
     variable cfg
     variable voicelist; # -- store list of nicks to stack voice on chan
-    putlog "\002voice:give:\002 voicing $nick on $chan"
+    variable dbchans;   # -- dict of db channels
+    variable scan:list
+
+    # -- check if it's a webchat user (and not already called from the ::unet::webchat:welcome proc)
+    if {[info command "::unet::webchat:welcome"] ne ""} {
+        if {$uhost ne "" && $timed ne "1"} {
+            set match "webchat@*"
+            if {[string match $match $uhost]} {
+                # -- webchat user
+                set cid [db:get id channels chan $chan]
+                if {![onchan $nick $chan] && [dict get $dbchans $cid mode] eq "secure"} {
+                    # -- nick is hidden and chan mode is secure (mode +D)
+
+                    set lchan [string tolower $chan]
+                    # -- leave the client to prevent future scans
+                    debug 3 "\002voice:give:\002 adding $nick to scan:list(leave,$lchan)"
+                    if {$nick ni [get:val scan:list leave,$lchan]} { lappend scan:list(leave,$lchan) $nick; }; # -- add to leave list
+                    ::unet::webchat:welcome $chan $nick $uhost
+                    return;
+                }
+            }
+        }
+    }
+
+    # -- not triggered from timer
+    debug 0 "\002voice:give:\002 voicing $nick on $chan"
     # -- stack voice?
     if {[cfg:get stackvoice $chan]} { lappend voicelist($chan) $nick } else {
         # -- single voice
-        putserv "MODE $chan +v $nick" -next
-    }    
+        putquick "MODE $chan +v $nick"
+    }
 }
 
 # -- stack the voice modes
@@ -15456,7 +16336,7 @@ proc integrate {nick uhost hand chan extra} {
 
 # -- obtain a hostmask to use (for bans)
 proc getmask {nick {xuser "0"} {ident ""} {host ""}} {
-    if {$xuser ne 0} {
+    if {$xuser ne 0 && $xuser ne ""} {
         # -- user is authed
         set mask "*!*@$xuser.[cfg:get xhost:ext *]";
     } else {
@@ -15535,18 +16415,18 @@ proc scan:cleanup {nick chan {leave ""}} {
 proc log:cmdlog {source chan chan_id user user_id cmd params bywho target target_xuser wait} {
     variable cfg
     db:connect
+    putlog "$source $chan $chan_id $user $user_id $cmd $params $bywho $target $target_xuser $wait"
     set db_chan [db:escape $chan]
     set db_user [db:escape $user]
     set db_params [db:escape $params]
     set db_bywho [db:escape $bywho]
     set db_target [db:escape $target]
     set db_target_xuser [db:escape $target_xuser]
-    db:query "INSERT INTO cmdlog (timestamp, source, chan, chan_id, user, user_id,\
-        command, params, bywho, target, target_xuser, wait) \
-        VALUES ('[clock seconds]', '$source', '$db_chan', $chan_id, '$db_user', '$user_id', '$cmd',\
-        '$db_params', '$db_bywho', '$db_target', '$db_target_xuser', '$wait')"
-    db:close
     
+    db:query "INSERT INTO cmdlog (timestamp, source, chan, chan_id, user, user_id, command, params, bywho, target, target_xuser, wait) VALUES ('[clock seconds]', '$source', '$db_chan', $chan_id, '$db_user', '$user_id', '$cmd', '$db_params', '$db_bywho', '$db_target', '$db_target_xuser', '$wait')"
+    
+    db:close
+
     set xtra ""
     if {$params ne ""} { append xtra " $params" }
     if {$user ne ""} { append xtra " (\002user:\002 $user)" }
@@ -15608,8 +16488,8 @@ proc proc:setvars {0 1 2 3 {4 ""} {5 ""}} {
         set stype "dcc"; set starget $idx; set uh $idx; set chan [cfg:get chan:def *];
     }    
     
-    #debug 0 "\002proc:setvars\002: $1 $2 $3 $4 $5"
-    #debug 0 "\002proc:setvars\002: arg: $arg"
+    #debug 3 "\002proc:setvars\002: $0 $1 $2 $3 $4 $5"
+    #debug 3 "\002proc:setvars\002: arg: $arg"
     return "$type $stype $target $starget $nick $uh $hand $source $chan [list $arg]"
 }
 
@@ -15793,16 +16673,16 @@ debug 0 "\[@\] Armour: loaded support functions."
 # -- end namespace
 
 
-# ------------------------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------------
 # Armour: merged from arm-22_update.tcl
 #
 # script autoupdate
 #
 # Provides the ability for the bot to periodically check for new script updates
-# 'update' command to check, get commit info, install, restore the last script backup, or list github branches
+# 'update' command to check, install, restore the last script backup, or list github branches
 #
 # usage:
-#     update <check|info|install|restore|branches> [branch]
+#     update <check|install|restore|branches> [branch]
 #
 # Handling where multiple Armour bots run from a common eggdrop install directory:
 #
@@ -15820,9 +16700,9 @@ debug 0 "\[@\] Armour: loaded support functions."
 #   - age (in days) of old script backups to periodically delete (hourly)
 #   - debug mode to download and stage updates but not automatically apply them
 #
-# ------------------------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------------
 namespace eval arm {
-# ------------------------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------------
 
 package require tls
 package require http
@@ -15923,9 +16803,9 @@ proc arm:cmd:update {0 1 2 3 {4 ""} {5 ""}} {
     lassign $arg action branch
     if {$branch eq "" || $branch eq "-f" || $branch eq "-t"} { set branch [cfg:get update:branch] }; # -- revert to config branch (default of master)
 
-    if {$action ne "check" && $action ne "install" && $action ne "info" && $action ne "restore" && $action ne "branches" \
+    if {$action ne "check" && $action ne "install" && $action ne "restore" && $action ne "branches" \
         && $action ne "c" && $action ne "i" && $action ne "r" && $action ne "b"} {
-        reply $stype $starget "usage: update <check|info|install|restore|branches> \[branch\]"
+        reply $stype $starget "usage: update <check|install|restore|branches> \[branch\]"
         return;
     }
 
@@ -16064,7 +16944,7 @@ proc arm:cmd:update {0 1 2 3 {4 ""} {5 ""}} {
     } elseif {$action eq "branches" || $action eq "b"} {
         # -- list available branches
         lassign [update:github "https://api.github.com/repos/empus/armour/branches" "get branches" $type $target] success extra json
-        if {!$success} { reply $type $target "error."; return; }; # -- error
+        if {!$success} { return; }; # -- error
         set count 0
         foreach branch $json {
             incr count
@@ -16083,22 +16963,6 @@ proc arm:cmd:update {0 1 2 3 {4 ""} {5 ""}} {
         if {$count > 1} {
             reply $type $target "found \002$count\002 branches."
         } 
-    } elseif {$action eq "info"} {
-        # -- list available branches
-        lassign [update:github "https://api.github.com/repos/empus/armour/branches/$branch" "get branch info" $type $target] success extra json
-        if {!$success} { reply $type $target "error."; return; }; # -- error
-
-        set bname [dict get $json name]
-        set commit [dict get $json commit]
-        set sha [dict get $commit sha]
-        set url [dict get $commit url]
-        set scommit [dict get $commit commit]
-        set commitmsg [dict get $scommit message]
-        set author [dict get $scommit author]
-        set aname [dict get $author name]
-        set commitdate [dict get $author date]
-        reply $type $target "\002branch:\002 $bname -- \002message:\002 $commitmsg -- \002commit:\002 [userdb:timeago [clock scan $commitdate]] ago\
-             -- \002url:\002 https://github.com/empus/armour/commit/$sha -- \002usage:\002 update install"
     } 
 
     # -- create log entry for command use
@@ -16111,9 +16975,9 @@ proc update:github {url desc type target} {
     http::config -useragent "mozilla" 
     variable github
     set headers [list Accept application/json Authorization [list Bearer $github(token)]]
-    #debug 0 "\002update:github:\002 headers: $headers"
+    debug 0 "\002update:github:\002 headers: $headers"
     set errcode [catch {set tok [::http::geturl $url -headers $headers -timeout 10000]} error]
-    if {$errcode ne 0} { debug 0 "\002update:github:\002 errcode: $errcode -- error: $error" }
+    debug 0 "\002update:github:\002 errcode: $errcode -- error: $error"
     set success 1;
     # -- check for errors
     if {$errcode} { set success 0; set errout "error: $error" }
@@ -16177,6 +17041,8 @@ proc update:check {branch {debug "0"} {mode ""}} {
         set value [lrange $line 1 end]
         if {$tag eq "version"} {
             set gversion $value
+        } elseif {$tag eq "comment"} {
+            set gcomment $value
         } elseif {$tag eq "revision"} {
             set grevision $value
         } elseif {$tag eq "filecount"} {
@@ -16196,6 +17062,7 @@ proc update:check {branch {debug "0"} {mode ""}} {
     dict set ghdata revision $revision
     dict set ghdata gversion $gversion
     dict set ghdata grevision $grevision
+    dict set ghdata gcomment $gcomment
     dict set ghdata update 0
     dict set ghdata status current
     dict set ghdata newversion 0
@@ -16214,7 +17081,7 @@ proc update:check {branch {debug "0"} {mode ""}} {
             dict set ghdata status "outdated"
             dict set ghdata newrevision 1
             set sendnote 1
-            set output "revision update (\002$grevision\002) of version \002v$version\002 available! (\002current revision:\002 $revision -- \002usage\002: update info)"
+            set output "revision update (\002$grevision\002) of version \002v$version\002 available! \002current revision:\002 $revision"
         } else {
             # -- local version is up to date
             dict set ghdata status "current"
@@ -16231,7 +17098,7 @@ proc update:check {branch {debug "0"} {mode ""}} {
         dict set ghdata update 1
         dict set ghdata newversion 1
         set sendnote 1
-        set output "version update (\002v$gversion\002) available! (\002current version:\002 v$version -- \002usage\002: update info)"
+        set output "version update (\002v$gversion\002) available! \002current version:\002 v$version"
     }
 
     if {$output ne ""} {
@@ -16286,11 +17153,11 @@ proc update:note {note ghdata} {
         if {$ghdata ne ""} {
             set ver [dict get $ghdata gversion]
             set rev [dict get $ghdata grevision]
+            set gcomment [dict get $ghdata gcomment]
             set imatch "script \002v$ver\002 (\002revision:\002 $rev)"
-            set imatch2 "script revision update (\002$rev\002) of version \002v$ver\002 available!"
             set dmatch "script \002v$ver\002 update downloaded"
             set exist [db:query "SELECT id FROM notes WHERE from_u='Armour' AND to_u='$to_user' \
-                AND (note LIKE '%$imatch%' OR note LIKE '%$imatch2%') AND note NOT LIKE '%$dmatch%'"]
+                AND note LIKE '%$imatch%' AND note NOT LIKE '%$dmatch%'"]
             if {$exist ne ""} {
                 # -- note already exists, don't send it twice
                 debug 0 "\002update:note:\002 note already exists for user $to_user"
@@ -16305,6 +17172,19 @@ proc update:note {note ghdata} {
             reply notc $to_nick "(\002note\002 from Armour -- \002id:\002 $rowid): $note"
             debug 0 "update:note: notified $to_user ($to_nick![getchanhost $to_nick]) about new script update available."
         }
+
+        # -- send additional update comment, if it exists
+        if {$gcomment ne ""} {
+            set db_note [db:escape $gcomment]
+            db:query "INSERT INTO notes (timestamp, from_u, from_id, to_u, to_id, read, note) \
+                    VALUES ('[clock seconds]', 'Armour', '0', '$to_user', '$tuid', '$read', '$db_note')"
+            set rowid [db:last:rowid]
+            if {$online} {
+                reply notc $to_nick "(\002note\002 from Armour -- \002id:\002 $rowid): $gcomment"
+                debug 0 "update:note: notified $to_user ($to_nick![getchanhost $to_nick]) of update comment: $gcomment"
+            }            
+        }
+
         db:close
     }
 }
@@ -16414,7 +17294,7 @@ proc update:install {update} {
     # -- compare existing config with new sample config and retain existing settings
     set sampleconf "./armour/backup/armour-$start/armour.conf.sample"
     set newconf "./armour/backup/armour-$start/${confname}.conf"
-    set merge [update:config $sampleconf $newconf $ghdata]; # -- diff current and new sample config to merge settings 
+    set merge [update:config $sampleconf $newconf $ghdata] 
     set new [dict get $merge new]
     set exist [dict get $merge exist]
     set settext [dict get $merge settext]
@@ -16438,7 +17318,7 @@ proc update:install {update} {
     set existplugincount [dict get $merge existplugincount]
     set existplugintext [dict get $merge existplugintext]
 
-    #exec echo [dict get $merge] > ./armour/tmp.txt
+    exec echo [dict get $merge] > ./armour/tmp.txt
 
     # -- create backups
     debug 0 "\002update:install:\002 creating backup of previous script files and db"
@@ -16594,7 +17474,7 @@ proc update:config {sampleconf newconf ghdata} {
             set curval [cfg:get $var]
             variable cfg
             if {![info exists cfg($var)]} { incr new; lappend newsettings $var; }; # -- new config setting
-            if {$curval eq $val || [info exists cfg($var)] eq 0} {
+            if {$curval eq $val} {
                 # -- value is unchanged
                 incr unchanged
                 debug 5 "\002update:config:\002 unchanged config value: $var = $val"
@@ -16660,7 +17540,7 @@ proc update:config {sampleconf newconf ghdata} {
                         puts $fd "set addport($p) \"$addport($p)\""
                     }
                 } elseif {[array names scan:ports] ne ""} {
-                    # -- old ports config (v4.x-alpha)
+                     # -- old ports config (v4.x-alpha)
                     # -- TODO: delete this block when support is dropped for this old config method
 
                     # -- existing scan:ports config; add all ports but only do this once

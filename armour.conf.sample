@@ -54,12 +54,12 @@
 # LIMITATIONS:
 # ------------------------------------------------------------------------------------------------
 #
-#    IPv6 support for client scans, is still limited.
+#    IPv6 support for client scans does not yet support CIDR
 # 
 # ------------------------------------------------------------------------------------------------
 #
 # Code by       :  Empus @ Undernet - empus@undernet.org
-# Last modified :  2022-12-11
+# Last modified :  2024-03-01
 #
 # Please contact me should you need any assistence, but I hope most config options are explanatory.
 #
@@ -309,8 +309,8 @@ set cfg(note:level) 1
 # ------------------------------------------------------------------------------------------------
 
 # --- channels to NOT operate on. comma separated
-# -- command chans (comma delimited)
-set cfg(chan:nocmd) "#foo"
+# -- command chans (comma delimited). leaeve empy to allow on all channels
+set cfg(chan:nocmd) "#foo1 #foo2"
 
 # -- autologin /who cycle (secs) - [60]
 # -- how frequently to check the channel list for people who authenticated to X after joining
@@ -321,6 +321,7 @@ set cfg(autologin:cycle) 60
 set cfg(chan:def) "EDITCHAN"
 
 # -- reporting channel (backchan)
+# -- useful for command logging and other diagnostics
 set cfg(chan:report) ""
 
 # -- how long to disable floodnet detection after chanmode '+d' (secs) - [60]
@@ -521,14 +522,20 @@ set cfg(bot:remote:whois) "remote-bot"
 
 
 # ------------------------------------------------------------------------------------------------
-# TEXT CAPTCHA SETTINGS
+# CAPTCHA SETTINGS
+# -- requires channel mode to be 'secure'
+# -- web CAPTCHA requires 'armour-verify' web application @ https://github.com/empus/armour-verify
 # ------------------------------------------------------------------------------------------------
-# Text CAPTCHA used to help validate suspicious joining clients
+# CAPTCHA used to help validate suspicious joining clients
 
-# -- enable text CAPTCHA for suspicious clients? (0|1) - [1]
+# -- enable CAPTCHA for suspicious clients? (0|1) - [1]
 set cfg(captcha) 0
 
+# -- CAPTCHA type (web|text) - [text]
+set cfg(captcha:type) "text"
+
 # -- www.textcaptcha.com ID
+# -- only required if cfg(captcha:type) is "text"
 set cfg(captcha:id) "your@emailaddress.com"
 
 # -- send an opnotice when a question is sent to a user? (0|1) - [1]
@@ -544,7 +551,13 @@ set cfg(captcha:expired) "kickban"
 set cfg(captcha:expired:bantime) "1h"
 
 # -- kick message for expired responses
-set cfg(captcha:expired:kick) "Armour: your lack of response is disturbing."
+set cfg(captcha:expired:kick) "Armour: your lack of CAPTCHA response is disturbing."
+
+# -- kick message from web CAPTCHA when kick history is identified
+set cfg(captcha:kick:kick) "Armour: you have a history of abuse."
+
+# -- kick message from web CAPTCHA when IP is rate-limited
+set cfg(captcha:ratelimit:kick) "Armour: you have been CAPTCHA rate-limited.  Please come back later."
 
 # -- send notice to channel operators when a captcha expectation expires? (0|1) - 1
 set cfg(captcha:expired:ops) 1
@@ -933,10 +946,8 @@ set cfg(dronebl:type) 17
 # ------------------------------------------------------------------------------------------------
 # OPENAI
 # -- requires 'openai' plugin to be loaded
+# -- requires 'openai' per channel setting to be enabled
 # ------------------------------------------------------------------------------------------------
-
-# -- ChatGPT API URL
-set cfg(ask:url) "https://api.openai.com/v1/chat/completions"
 
 # -- ChatGPT API token
 # https://platform.openai.com/account/api-keys
@@ -947,7 +958,13 @@ set cfg(ask:token) "YOUR-TOKEN-HERE"
 set cfg(ask:org) "YOUR-ORG-HERE"
 
 # -- ChatGPT API model
-set cfg(ask:model) "gpt-3.5-turbo"
+set cfg(ask:model) "gpt-4-turbo-preview"
+
+# -- ChatGPT query timeout (secs) - [60]
+set cfg(ask:timeout) 60
+
+# -- ChatGPT Max Answer Lines
+set cfg(ask:lines) "3"
 
 # -- ChatGPT API temperature
 # The sampling temperature, between 0 and 1. Higher values like 0.8 will make the output more 
@@ -955,6 +972,10 @@ set cfg(ask:model) "gpt-3.5-turbo"
 # the model will use log probability to automatically increase the temperature until certain 
 # thresholds are hit.
 set cfg(ask:temp) "0.7"
+
+# -- ChatGPT chatbot description
+# Optional instruction to the chatbot to influence its responses
+set cfg(ask:system) "You are $cfg(botname). Be fun and helpful, pretending to be a sentient robot created by Empus."
 
 # -- ChatGPT system behaviour for all user requests
 # notes:
@@ -966,7 +987,15 @@ set cfg(ask:temp) "0.7"
 #   "Answer sarcastically."
 #   "Pretend to be a sarcastic politician."
 #   "Act like an idio."
-set cfg(ask:system) "Answer in 3 lines or less."
+set cfg(ask:prefix) "Answer in 3 lines or less."
+
+# -- channels to apply blacklisted request strings in (space delimited)
+# note: set to "" to disable blacklist on all channels
+set cfg(ask:blacklist:chans) ""
+
+# -- string masks blacklisted for use in queries
+# note: this list is only applied to channels listed in cfg(ask:blacklist:chans)
+set cfg(ask:blacklist) { "*badword1*" "*another*" "*example2*" }
 
 # -- ChatGPT conversation memory after initial question (mins) - [60]
 set cfg(ask:mem) 60
@@ -978,6 +1007,52 @@ set cfg(ask:cmdnick) 1
 # -- allow channel ops to send queries even if not logged in? (0|1) - [1]
 set cfg(ask:ops) 1
 
+# -- allow channel voiced users to send queries even if not logged in? (0|1) - [1]
+set cfg(ask:voice) 1
+
+# -- DALL-E image creation enable? (0|1) - [1]
+set cfg(ask:image) 1
+
+# -- DALL-E image size (pixels) - "1024x1024"
+# -- smaller images are faster to generate (512x512, 1024x1024)
+# -- note that dall-e-3 does not support 512x512
+set cfg(ask:image:size) "1024x1024"
+
+# -- DALL-E image model - [dall-e-3]
+set cfg(ask:image:model) "dall-e-3"
+
+# -- DALL-E image overlay with requesting nick and prompt? (0|1) - [1]
+# note: ImageMagick7 must be installed on machine (using binary 'convert')
+set cfg(ask:image:overlay) 1
+
+# -- DALL-E image creation rate limiting (req:mins:hold) - [5:5:30]
+# -- triggered at 5 requests per 5 mins, then retaining rate limit for 30 mins
+# -- set to "" to disable rate limiting
+set cfg(ask:image:rate) "5:5:10"
+
+# -- DALL-E image creation rate limiting action
+# -- set to "" to temporarily prevent all image requests
+# -- set value to alternate DALL-E model to reduce API costs during rate limited restriction period
+set cfg(ask:rate:act) "dall-e-2"
+
+# -- absolute path to save DALL-E image PNG files to webserver
+set cfg(ask:path) "/home/armour/www/armour";
+
+# -- how long to retain PNG and mp3 files for? - [30d]
+# acceptable units:
+#   s: seconds
+#   m: minutes
+#   h: hours
+#   d: days
+#   w: weeks
+#
+# notes:
+#   - to keep forever, use empty value
+#   - if 'quote' plugin is loaded, files quotes in weblinks will always be preserved
+set cfg(ask:expire) "90d"
+
+# -- URL root serving PNG files from above path
+set cfg(ask:site) "https://files.armour.bot";
 
 
 # ------------------------------------------------------------------------------------------------
@@ -1002,6 +1077,9 @@ set addcmd(register)    {  userdb    0          pub msg dcc  }; # -- only if con
 set addcmd(ask)         {  arm       1          pub msg dcc  }; # -- requires openai plugin
 set addcmd(askmode)     {  arm       1          pub msg dcc  }; # -- requires openai plugin
 set addcmd(and)         {  arm       1          pub msg dcc  }; # -- requires openai plugin
+set addcmd(image)       {  arm       1          pub msg dcc  }; # -- requires openai plugin
+set addcmd(i)           {  arm       1          pub msg dcc  }; # -- shortcut: image
+set addcmd(speak)       {  arm       1          pub msg dcc  }; # -- requires speak plugin
 set addcmd(access)      {  userdb    1          pub msg dcc  }
 set addcmd(cmds)        {  arm       1          pub msg dcc  }
 set addcmd(help)        {  arm       1          pub msg dcc  }
@@ -1050,11 +1128,11 @@ set addcmd(invite)      {  arm       100        pub msg dcc  }
 set addcmd(a)           {  arm       200        pub msg dcc  }; # -- shortcut: add
 set addcmd(mod)         {  arm       200        pub msg dcc  }
 set addcmd(m)           {  arm       200        pub msg dcc  }; # -- shortcut: mod
-set addcmd(rem)         {  arm       200        pub msg dcc  }
-set addcmd(r)           {  arm       200        pub msg dcc  }; # -- shortcut: rem
 set addcmd(black)       {  arm       200        pub msg dcc  }
 set addcmd(b)           {  arm       200        pub msg dcc  }; # -- shortcut: black
-set addcmd(chanscan)    {  arm       200        pub msg dcc  }
+set addcmd(chanscan)    {  arm       300        pub msg dcc  }
+set addcmd(rem)         {  arm       300        pub msg dcc  }
+set addcmd(r)           {  arm       300        pub msg dcc  }; # -- shortcut: rem
 set addcmd(newuser)     {  userdb    400        pub msg dcc  }
 set addcmd(adduser)     {  userdb    400        pub msg dcc  }
 set addcmd(remuser)     {  userdb    400        pub msg dcc  }
@@ -1062,7 +1140,7 @@ set addcmd(userlist)    {  userdb    400        pub msg dcc  }
 set addcmd(usearch)     {  userdb    400        pub msg dcc  }
 set addcmd(chanlist)    {  userdb    400        pub msg dcc  }
 set addcmd(moduser)     {  userdb    400        pub msg dcc  }
-set addcmd(say)         {  arm       400        pub msg dcc  }
+set addcmd(say)         {  arm       500        pub msg dcc  }
 set addcmd(jump)        {  arm       450        pub msg dcc  }
 set addcmd(load)        {  arm       450        pub msg dcc  }
 set addcmd(reload)      {  arm       450        pub msg dcc  }
