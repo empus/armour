@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Fri Mar  1 03:24:01 PST 2024
+# armour.tcl v4.0 autobuild completed on: Fri Mar  1 19:22:07 PST 2024
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -786,7 +786,7 @@ namespace eval arm {
 # ------------------------------------------------------------------------------------------------
 
 # -- this revision is used to match the DB revision for use in upgrades and migrations
-set cfg(revision) "2024030101"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
+set cfg(revision) "2024030200"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
 set cfg(version) "v4.0";        # -- script version
 
 # -- load sqlite (or at least try)
@@ -5824,7 +5824,8 @@ proc arm:cmd:stats {0 1 2 3 {4 ""}  {5 ""}} {
     set methods "user host regex country asn chan rname text"; # -- entry methods 
     set types "white black"; # -- list types
     db:connect
-    set chans [string tolower [join [join [db:query $query]]]]; # -- list of registered chans
+    set chans [join [join [db:query $query]]]; # -- list of registered chans
+    
     putlog "\002arm:stats:\002 chans: $chans"
     db:close
         
@@ -14275,6 +14276,8 @@ proc userdb:deluser {user uid} {
     db:query "DELETE FROM notes WHERE to_id=$uid"; # -- leave remaining notes from this user to others
     debug 3 "userdb:deluser: deleting user greets: $user (uid: $uid)"
     db:query "DELETE FROM greets WHERE uid=$uid"; 
+    debug 3 "userdb:deluser: deleted user settings: $user (uid: $uid)"
+    db:query "DELETE FROM settings WHERE uid=$uid";
     catch { db:query "SELECT count(*) FROM idb" } err
     if {$err ne "no such table: idb"} {
         # -- IDB loaded
@@ -14284,9 +14287,9 @@ proc userdb:deluser {user uid} {
 
     # -- deal with openai plugin
     if {[info commands ask:query] ne ""} {
-        # -- training plugin loaded
-        db:query "DELETE FROM openai WHERE uid=$uid"
-        debug 3 "userdb:deluser: deleted user settings from openai plugin table (uid: $uid)"
+        # -- openai plugin loaded
+        #db:query "DELETE FROM openai WHERE user='$user'"
+        #debug 3 "userdb:deluser: deleted openai entries from openai table (uid: $uid)"
     }
 
     db:close
