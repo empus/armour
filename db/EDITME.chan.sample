@@ -1,3 +1,0 @@
-#Dynamic Channel File for chief (eggdrop v1.8.4) -- written Mon Dec 23 04:00:00 2019
-
-channel add #armour { chanmode {+kstn protect_it!} idle-kick 0 stopnethack-mode 0 revenge-mode 0 need-op {} need-invite {} need-key {putquick "JOIN #armour protect_it!"} need-unban {} need-limit {} flood-chan 0:0 flood-ctcp 0:0 flood-join 0:0 flood-kick 0:0 flood-deop 0:0 flood-nick 0:0 aop-delay 0:0 ban-type 3 ban-time 120 exempt-time 60 invite-time 60 -enforcebans +dynamicbans +userbans -autoop -autohalfop -bitch -greet +protectops -protecthalfops -protectfriends -dontkickops -statuslog -revenge -revengebot -autovoice -secret +shared +cycle -seen -inactive +dynamicexempts +userexempts +dynamicinvites +userinvites -nodesynch -static }

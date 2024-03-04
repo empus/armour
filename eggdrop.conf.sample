@@ -207,7 +207,7 @@ set wait-split 1800
 set wait-info 180
 set mode-buf-length 200
 unbind msg - hello *msg:hello
-bind msg - createuser *msg:hello
+bind msg - hello *msg:hello
 unbind msg - ident *msg:ident
 unbind msg - addhost *msg:addhost
 set opchars "@"
@@ -257,6 +257,8 @@ source scripts/dccwhois.tcl
 source scripts/userinfo.tcl
 loadhelp userinfo.help
 #source scripts/compat.tcl
+
+if {![file isdirectory "./db"]} { exec mkdir "./db" }
 
 if {[info exists net-type]} {
   switch -- ${net-type} {

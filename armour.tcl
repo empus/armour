@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Sun Mar  3 22:50:27 PST 2024
+# armour.tcl v4.0 autobuild completed on: Mon Mar  4 09:54:15 PST 2024
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -204,11 +204,22 @@ if {$armname eq ""} {
     } else { set confname $armname }
 
     if {![file isfile ./armour/db/$armname.db]} {
-        debug 0 "\002warning\002: ./armour/db/$armname.db does not exist. defaulting to \002./armour/db/armour.db\002"
-        if {[info commands report] ne ""} { report debug "" "Armour \002warning\002: ./armour/db/$armname.db does not exist. defaulting to \002./armour/db/armour.db\002" }
-        set dbname "armour"
-    } else { set dbname $armname }
+        debug 0 "\002warning\002: ./armour/db/$armname.db does not exist. using \002./armour/db/$armname.db\002"
+        if {[info commands report] ne ""} { report debug "" "Armour \002warning\002: ./armour/db/$armname.db does not exist. using \002./armour/db/$armname.db\002" }
+        set dbname $armname
+    } else { 
+        #debug 0 "\002warning\002: ./armour/db/$armname.db exists. using \002./armour/db/$armname.db\002"
+        #if {[info commands report] ne ""} { report debug "" "Armour \002warning\002: ./armour/db/$armname.db exists. using \002./armour/db/$armname.db\002" }
+        set dbname $armname
+    }
+    # -- move any old armour.db file to bot specific named db files
+    if {![file isfile ./armour/db/$armname.db] && [file isfile ./armour/db/armour.db]} {
+        debug 0 "\002info\002: migrating \002./armour/db/armour.db\002 to \002./armour/db/$armname.db\002"
+        exec mv ./armour/db/armour.db ./armour/db/$armname.db
+    }
 }
+
+
 
 
 
@@ -1623,7 +1634,7 @@ proc db:add {list chan method value modifby action limit reason} {
     # -- track the ids of cumulative patterns
     if {$limit ne "1:1:1" && $limit ne ""} { set flud:id($chan,$method,$value) $id };
     
-    debug 0 "db:add: added $value $method $llist entry ([dict size $entries] total list entries)"
+    debug 0 "db:add: added $value $method $llist entry ID: $id ([dict size $entries] total list entries)"
     
     # -- return the ID
     return $id
@@ -6778,33 +6789,33 @@ proc arm:cmd:mod {0 1 2 3 {4 ""}  {5 ""}} {
     set first [lindex $arg 0]; set ischan 0; set idgiven 0
     if {[string index $first 0] eq "#" || [string index $first 0] eq "*"} {
         # -- chan (or global) provided
-        set ischan 1; lassign $arg chan ids param; set setval [lrange $arg 3 end]
+        set ischan 1; lassign $arg tchan ids param; set setval [lrange $arg 3 end]
     } else {
         # -- chan not provided
         lassign $arg ids param; set setval [lrange $arg 2 end]
-        set chan [userdb:get:chan $user $chan]; # -- find a logical chan
+        set chan [userdb:get:chan $user $tchan]; # -- find a logical chan
     }
-    set cid [db:get id channels chan $chan]
-    if {![userdb:isAllowed $nick $cmd $chan $type]} { return; }
-    set log "$chan [join $arg]"; set log [string trimright $log " "]
+    set cid [db:get id channels chan $tchan]
+    if {![userdb:isAllowed $nick $cmd $tchan $type]} { return; }
+    set log "$tchan [join $arg]"; set log [string trimright $log " "]
     
     set globlevel [db:get level levels cid 1 uid $uid]
     if {$globlevel eq ""} { set globlevel 0 }
     
-    if {[cfg:get ircbl $chan] && $globlevel >= [cfg:get ircbl:lvl $chan]} { set xtra "|ircbl" } else { set xtra "" }; # -- IRCBL syntax
+    if {[cfg:get ircbl $tchan] && $globlevel >= [cfg:get ircbl:lvl $tchan]} { set xtra "|ircbl" } else { set xtra "" }; # -- IRCBL syntax
 
     set usage 0;
     if {$ids eq "" || $param eq "" || $setval eq ""} { set usage 1 }; # -- show command usage
     if {$param eq "depends" && $setval eq ""} { set usage 0; };       # -- allow null value to clear dependencies
 
-    if {![cfg:get ircbl $chan] && $param eq "ircbl"} { set usage 1 }; # -- IRCBL not enabled; show command usage
+    if {![cfg:get ircbl $tchan] && $param eq "ircbl"} { set usage 1 }; # -- IRCBL not enabled; show command usage
     
     if {$usage} {
         reply $stype $starget "\002usage:\002 mod ?chan? <id> <value|action|limit|depends|reason|nochans|onlykick|noident|manual|captcha|disabled|onlysecure|notsecure|onlynew|silent|continue${xtra}> <value>"
         return;    
     }
         
-    putlog "\002cmd:mod:\002 chan: $chan -- ids: $ids -- param: $param -- setval: $setval"
+    putlog "\002cmd:mod:\002 chan: $tchan -- ids: $ids -- param: $param -- setval: $setval"
     
     # -- loop over any entries
     foreach id [split $ids ,] {
@@ -6828,7 +6839,7 @@ proc arm:cmd:mod {0 1 2 3 {4 ""}  {5 ""}} {
                     
         if {$ltype eq "white"} { set list "whitelist" } else { set list "blacklist" }
         
-        putlog "\002cmd:mod:\002 chan: $chan -- id: $id -- list: $ltype -- method: $method -- value: $value -- param: $param -- setval: $setval"
+        putlog "\002cmd:mod:\002 chan: $cthan -- id: $id -- list: $ltype -- method: $method -- value: $value -- param: $param -- setval: $setval"
 
         set isflag 0
 
@@ -6904,7 +6915,7 @@ proc arm:cmd:mod {0 1 2 3 {4 ""}  {5 ""}} {
 
         if {$param eq "ircbl"} {
             # -- IRCBL additions require special global level
-            if {$globlevel < [cfg:get ircbl:lvl $chan]} {
+            if {$globlevel < [cfg:get ircbl:lvl $tchan]} {
                 reply $type $target "\002(\002error\002)\002 \002ircbl\002 flag access denied.";
                 return;
             }
@@ -6957,13 +6968,13 @@ proc arm:cmd:mod {0 1 2 3 {4 ""}  {5 ""}} {
             set setval [join $setval ,]
             if {$setval eq ""} { set setval "null" }
         }
-        debug 1 "arm:cmd:mod: modified $list $method entry: $value (chan: $chan -- id: $id -- param: $setval)"
-        reply $type $target "modified $method $list entry (\002chan:\002 $chan -- \002id:\002 $id -- \002value:\002 $value -- \002$param:\002 $setval)"
+        debug 1 "arm:cmd:mod: modified $list $method entry: $value (chan: $tchan -- id: $id -- param: $setval)"
+        reply $type $target "modified $method $list entry (\002chan:\002 $tchan -- \002id:\002 $id -- \002value:\002 $value -- \002$param:\002 $setval)"
     }
     # -- end of foreach
     
     # -- create log entry for command use
-    log:cmdlog BOT $chan $cid $user $uid [string toupper $cmd] $log "$nick!$uh" "" "" ""
+    log:cmdlog BOT $tchan $cid $user $uid [string toupper $cmd] $log "$nick!$uh" "" "" ""
     return;
 }
 
@@ -8858,8 +8869,9 @@ proc mode:rem:b {nick uhost hand chan mode target} {
         lassign $timer time proc tid num
         #putlog "\002mode:reb:b\002: looping timer: time: $time -- proc: $proc -- tid: $tid -- num: $num"
         lassign $proc cmd tchan banmask
+        if {$cmd ne "arm::unban"} { continue; }
         #putlog "\002mode:reb:b\002: looping timer: cmd: $cmd -- tchan: $tchan -- banmask: $banmask"
-        if {$cmd eq "arm::unban" && $tchan eq $chan && $banmask eq $target} {
+        if {$tchan eq $chan && $banmask eq $target} {
             debug 1 "mode:rem:b: killing existing unban timer: $tid (mask: $target)"
             killtimer $tid
         }
@@ -8869,8 +8881,9 @@ proc mode:rem:b {nick uhost hand chan mode target} {
         lassign $timer time proc tid num
         #putlog "\002mode:reb:b\002: looping utimer: time: $time -- proc: $proc -- tid: $tid -- num: $num"
         lassign $proc cmd var bid
+        if {$cmd ne "arm::arm:unset"} { continue; } 
         #putlog "\002mode:reb:b\002: looping utimer: cmd: $cmd -- var: $var -- bid: $bid"
-        if {$cmd eq "arm::arm:unset" && $target eq [get:val data:banmask $bid]} {
+        if {$target eq [get:val data:banmask $bid]} {
             debug 1 "mode:rem:b: killing existing unban utimer: $tid (mask: $target)"
             killutimer $tid
         }
@@ -8935,8 +8948,8 @@ proc raw:kick:lock {nick uhost handle chan vict reason} {
     set cid [db:get id channels chan $chan]
     if {$cid eq ""} { return; }; # -- safety net (chan not registered)
 
+    if {![dict exists $dbchans $cid kicklock]} { return; }; # -- safety net (kicklock off)
     set klsetting [dict get $dbchans $cid kicklock]
-    if {$klsetting eq ""} { return; }; # -- safety net (kicklock off)
 
     incr kicklock($chan); # -- increase counter
 
@@ -10937,7 +10950,7 @@ proc check:floodnet {nick uhost hand chan {xuser ""} {rname ""}} {
                 set reason "(auto) join flood detected"
                 set id [db:add B $chan $method $equal Armour B 1:1:1 $reason]
                 
-                debug 1 "kickban: added auto blacklist entry: $equal (id: $id)"
+                debug 1 "check:floodnet: added auto blacklist entry: $equal (id: $id)"
 
                 set data:banmask($id) "*!*@$host"; 
                 utimer [cfg:get id:unban:time $chan] "arm::arm:unset data:banmask $id"; # -- allow automatic unban of recently banned mask, when removing 
@@ -10967,9 +10980,8 @@ proc flud:queue {} {
     variable dbchans;    # -- dict: list of channel entries
     variable kreason;    # -- kick reason (by chan,nick)
     variable dbchans;
-    variable voicecache: # -- cache of existing voiced users when lock uses +D and secure mode
+    variable voicecache; # -- cache of existing voiced users when lock uses +D and secure mode
     
-
     #debug 3 "flud:queue: starting..."
 
     if {![info exists dbchans]} { after [cfg:get queue:flud *] arm::flud:queue; return; }
@@ -11004,7 +11016,7 @@ proc flud:queue {} {
                 }
                 # -- only use mode +D if ircu based ircd (e.g., Undernet, Quakenet)
                 if {[cfg:get ircd] eq 1} {
-                    if {[string match "*D* $lockmode]} {
+                    if {[string match "*D*" $lockmode]} {
                         # -- set secure mode
                         dict set dbchans $id mode $mode;  # -- dict: channel mode
                         set voicecache($chan) [list]
@@ -11079,7 +11091,14 @@ proc flud:queue {} {
         if {$size eq 0} {
             #debug 1 "flud:queue: server queue size is empty, unset floodnet track in [cfg:get chanlock:time $chan] secs"
             #utimer [cfg:get chanlock:time $chan] "arm::flud:unlock $chan"
-            if {[lsearch [utimers] *flud:unlock*] eq -1} { flud:unlock $chan }; # -- only if there's no existing timer
+            set start 1
+            foreach timer [utimers] {
+                lassign $timer secs cmd tid
+                lassign $cmd proc tchan
+                if {$proc ne "arm::flud:unlock"} { continue; }
+                if {$tchan eq $chan} { set start 0; }
+            }
+            if {$start} { flud:unlock "$chan" }; # -- only if there's no existing timer
         }
 
     }; # -- end foreach chan
@@ -11095,11 +11114,12 @@ proc flud:unlock {chan} {
     variable chanlock;  # -- tracking active channel lock (by chan)
     
     # -- let's check the server queue again and ensure it's empty
-    if {![info exists floodnet($chan)]} { set fludactive 0 } else { set fludactive 1 }
     set size [queuesize server]
     
+    #if {![info exists floodnet($chan)]} { set fludactive 0 } else { set fludactive 1 }
+    
     # -- only unlock if queue is empty and flood is not active
-    if {$size eq 0 && !$fludactive} { 
+    if {$size eq 0} { 
         if {[info exists chanlock($chan)]} {
             # -- unlock channel
             regsub {\+} [cfg:get chanlock:mode $chan] {-} unlock
@@ -11109,8 +11129,15 @@ proc flud:unlock {chan} {
             catch { unset floodnet($chan) }
         }
     } else {
-        # -- add another N seconds to the delay and check again
-        if {[lsearch [utimers] *flud:unlock*] eq -1} { utimer [cfg:get chanlock:time $chan] "arm::flud:unlock $chan" }; # -- only if there's no existing timer
+        # -- astart again if a timer is not already runninng
+        set start 1
+        foreach timer [utimers] {
+            lassign $timer secs cmd tid
+            lassign $cmd proc tchan
+            if {$proc ne "arm::flud:unlock"} { continue; }
+            if {$tchan eq $chan} { set start 0; }
+        }
+        if {$start} { utimer [cfg:get chanlock:time $chan] "arm::flud:unlock $chan" }; # -- only if there's no existing timer
     }
 }
 
@@ -14180,7 +14207,7 @@ proc userdb:isAllowed {nick cmd chan type} {
     variable userdb;
 
     # -- check channels we don't allow commands
-    set list [split [cfg:get chan:nocmd *] ,]
+    set list [split [cfg:get chan:nocmd *] " "]
     foreach channel $list {
         if {[string tolower $channel] eq [string tolower $chan]} {
             debug 0 "userdb:isAllowed: $chan does not allow use of bot commands (chan:nocmd) -- chan: $chan -- $nick: $nick -- cmd: $cmd"

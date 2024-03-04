@@ -1,28 +1,29 @@
 #!/bin/bash
 
-# -------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------------------
 # Armour install script
-# -------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------------------
 # 
 # Usage:
 #         ./install.sh [option]
 #
 #           -i              Install Armour (and optionally, eggdrop)
 #           -a              Add a new bot to existing Armour install
+#           -l              Load Armour on an existing eggdrop with Armour already configured
 #           -h, --help      Display script options
 #
-# -------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------------------
 #
 # Tested on:
 #           - Debian 12
 #           - CentOS 9
 #           - Ubuntu 23.10
-#           - FreeBSD 
+#           - FreeBSD 13.1
 #           - macOS 14.3
 #
-# -------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------------------
 # https://armour.bot/setup 
-# -------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------------------
 
 
 ARMOUR_VER="v4.0"
@@ -116,7 +117,7 @@ else
 fi
 
 # -- set OS specific package manager and packages
-MD5="md5"
+MD5="md5sum"
 PKG_OATHTOOL="oathtool"
 PKG_IMAGEMAGICK="imagemagick"
 if [[ -n "${ARMOUR_ON_LINUX-}" ]]; then
@@ -147,9 +148,9 @@ elif [[ -n "${ARMOUR_ON_BSD-}" ]]
 then
     PKGMGR="pkg"
     PKGMGR_ARGS="install -y"
-    PACKAGES="curl git tcl tcllib tcl-tls sqlite3 libsqlite3-tcl"
+    PACKAGES="curl git tcl tcllib tcltls sqlite3 tcl-sqlite3"
     PKG_IMAGEMAGICK="ImageMagick7"
-    MD5="md5sum"
+    MD5="md5"
 elif [[ -n "${ARMOUR_ON_MACOS-}" ]]
 then
     SYSTEM="macOS"
@@ -158,6 +159,7 @@ then
     #PACKAGES="curl git tcl tcllib tcltls sqlite3 tcl-sqlite3 oath-toolkit imagemagick"
     PACKAGES="curl git tcl sqlite3 oath-toolkit imagemagick"
     PKG_OATHTOOL="oath-toolkit"
+    MD5="md5"
 fi
 
 execute() {
@@ -215,6 +217,7 @@ ask_for_prereq() {
         if [[ "${ASKED}" -eq 1 ]]
         then
             echo
+            ring_bell
             echo "${tty_red}Error:${tty_reset} You must install the prerequisites before installing Armour. See:"
             echo "       ${tty_underline}https://armour.bot/setup/install/#requirements${tty_reset}"
             abort
@@ -254,6 +257,7 @@ install_prereq() {
     fi
     if [ ! $return_code -eq 0 ]; then
         echo
+        ring_bell
         echo "${tty_red}Error:${tty_reset} failed package install.  Please correct and try again."
         echo
         abort
@@ -341,6 +345,7 @@ ask_for_eggdrop() {
 }
 
 # -- check which eggdrop install directory to use
+ARMOUR_LOADING=false
 ask_for_eggdrop_dir() {
     local input
     ohai "What eggdrop installation directory should be used? [${tty_green}${HOME}/bots${tty_reset}]"
@@ -394,7 +399,11 @@ ask_for_eggdrop_dir() {
 existing_eggdrop() {
     ask_for_eggdrop_dir
     ask_for_botname
+    configure_eggdrop
     install_armour
+    configure_armour
+    start_eggdrop
+    show_success
 }
 
 # -- new eggdrop installation
@@ -439,6 +448,7 @@ build_eggdrop() {
     return_code=$?
     if [ ! $return_code -eq 0 ]; then
         echo
+        ring_bell
         echo "${tty_red}Error:${tty_reset} eggdrop configure script failed.  Please check logs and try again.  Delete the ${EGGDROP_DIR} directory to allow retry."
         echo
         abort
@@ -450,6 +460,7 @@ build_eggdrop() {
     return_code=$?
     if [ ! $return_code -eq 0 ]; then
         echo
+        ring_bell
         echo "${tty_red}Error:${tty_reset} eggdrop compilation failed.  Please check logs and try again.  Delete the ${tty_bold}${EGGDROP_DIR}${tty_reset} directory to allow retry."
         echo
         abort
@@ -461,14 +472,12 @@ build_eggdrop() {
     return_code=$?
     if [ ! $return_code -eq 0 ]; then
         echo
+        ring_bell
         echo "${tty_red}Error:${tty_reset} eggdrop installation failed.  Please check logs and try again.  Delete the ${tty_bold}${EGGDROP_DIR}${tty_reset} directory to allow retry."
         echo
         abort
     fi
     echo
-    ask_for_botname
-    install_armour
-    configure_eggdrop
 }
 
 # -- get the name of the bot
@@ -482,8 +491,9 @@ ask_for_botname() {
         ask_for_botname
     fi
     ARMOUR_INSTALL_DIR="${EGGDROP_INSTALL_DIR}/armour"
-    if [ -f "${ARMOUR_INSTALL_DIR}/${BOTNAME}.conf" ]; then
+    if [[ -f "${ARMOUR_INSTALL_DIR}/${BOTNAME}.conf" && ${ARMOUR_LOADING} == false ]]; then
         echo
+        ring_bell
         echo "${tty_red}Error:${tty_reset} Armour configuration file ${tty_green}${ARMOUR_INSTALL_DIR}/${BOTNAME}.conf${tty_reset} already exists.  Please choose another bot name."
         echo
         ask_for_botname
@@ -524,6 +534,12 @@ configure_eggdrop() {
     ohai "Copying ${tty_green}armour/eggdrop.conf.sample${tty_reset} to ${tty_green}./${BOTNAME}.conf${tty_reset} ..."
     cp armour/eggdrop.conf.sample ./${BOTNAME}.conf
     echo
+    if [ ! -d "${EGGDROP_INSTALL_DIR}/db" ]; then
+        mkdir "${EGGDROP_INSTALL_DIR}/db"
+        ohai "Created ${tty_green}${EGGDROP_INSTALL_DIR}/db${tty_reset} directory"
+        echo
+    fi
+    check_eggdrop_settings
 }
 
 # -- clone Armour from GitHub
@@ -562,13 +578,13 @@ install_armour() {
     ohai "Copying ${tty_green}armour/armour.conf.sample${tty_reset} to ${tty_green}armour/${BOTNAME}.conf${tty_reset} ..."
     echo
     cp armour.conf.sample ${BOTNAME}.conf
-    configure_armour
 }
 
 # -- configure Armour *.conf settings
 configure_armour() {
     ohai "Configuring settings in ${tty_green}armour/${BOTNAME}.conf${tty_reset} ..."
     echo
+    check_armour_settings
 }
 
 
@@ -737,8 +753,191 @@ ask_for_setting_value() {
     fi
 }
 
+eggdrop_setting() {
+    # -- value validation
+    BINARY=0
+    NOEMPTY=0
+    NUMERIC=0
+
+    echo
+    if [[ "$1" == "uservar" || "$1" == "nick" || "$1" == "botnet-nick" ]]; then
+        NOEMPTY=1
+        new_value="${BOTNAME}"
+        return
+    else
+        ohai "[${tty_blue}Setting${tty_reset}] ${tty_green}$setting_name${tty_reset}:"
+    fi
+
+    if [ $1 == "altnick" ]; then
+        echo "    The alternate nickname on IRC when ${tty_green}${BOTNAME}${tty_reset} is taken."
+        NOEMPTY=1
+        
+    elif [ $1 == "username" ]; then
+        echo "    The ${tty_green}ident${tty_reset} used for the bot on IRC"
+        NOEMPTY=1
+
+    elif [ $1 == "owner" ]; then
+        echo "    Your ${tty_green}owner${tty_reset} handle (user) in eggdrop"
+        NOEMPTY=1
+
+    elif [ $1 == "admin" ]; then
+        echo "    The ${tty_green}admin${tty_reset} description used by the bot"
+        NOEMPTY=1
+
+    elif [ $1 == "network" ]; then
+        echo "    The name of the IRC ${tty_green}network${tty_reset} the bot connects to.:"
+        NOEMPTY=1
+
+    elif [ $1 == "realname" ]; then
+        echo "    The ${tty_green}realname${tty_reset} (gecos) field for the bot, shown in ${tty_green}/WHOIS${tty_reset})"
+        NOEMPTY=1
+
+    elif [ $1 == "offset" ]; then
+        echo "    The ${tty_green}UTC${tty_reset} timezone offset for the bot. e.g., ${tty_green}+5${tty_reset}"
+        NOEMPTY=1
+
+    elif [ $1 == "listen-addr" ]; then
+        echo "    The ${tty_green}listen address${tty_reset} used to accept bot and telnet connections on."
+        NOEMPTY=1
+
+    elif [ $1 == "vhost4" ]; then
+        echo "    The ${tty_green}IPv4${tty_reset} bind address for outgoing IRC server connections."
+        NOEMPTY=1
+
+    elif [ $1 == "vhost6" ]; then
+        echo "    The ${tty_green}IPv6${tty_reset} bind address for outgoing IRC server connections. Leave empty if not using IPv6."
+
+    elif [ $1 == "net-type" ]; then
+        echo "    The ${tty_green}network type${tty_reset} of the IRC network. Options are:"
+        echo "        ${tty_green}Undernet${tty_reset}"
+        echo "        ${tty_green}DALnet${tty_reset}"
+        echo "        ${tty_green}IRCnet${tty_reset}"
+        echo "        ${tty_green}EFnet${tty_reset}"
+        echo "        ${tty_green}Libera${tty_reset}"
+        echo "        ${tty_green}Quakenet${tty_reset}"
+        echo "        ${tty_green}Rizon${tty_reset}"
+        echo "        ${tty_blue}Other${tty_reset}"
+        NOEMPTY=1
+
+    elif [ $1 == "servers" ]; then
+        echo "    The space delimited ${tty_green}server(s)${tty_reset} to connect to on IRC"
+        NOEMPTY=1
+    
+    elif [ $1 == "_port" ]; then
+        echo "    The ${tty_green}port number${tty_reset} >1024 to use for incoming botnet and telnet connections."
+        NOEMPTY=1
+        NUMERIC=1
+
+    elif [ $1 == "_oidentd" ]; then
+        echo "    Does this box use ${tty_green}oidentd${tty_reset} for IRC identd requests?"
+        echo "        ${tty_green}0${tty_reset}: No"
+        echo "        ${tty_green}1${tty_reset}: Yes"
+        NOEMPTY=1
+        BINARY=1
+
+    fi
+    echo
+}
+
+REALNAME=""
+check_eggdrop_settings() {
+
+    ohai "Eggdrop settings ..."
+    echo
+
+    SETTING_LIST="uservar nick altnick botnet-nick username owner admin network realname offset listen-addr vhost4 net-type servers"
+    cd ${EGGDROP_INSTALL_DIR}
+    EGGDROP_FILE="${BOTNAME}.conf"
+
+    # -- read the config file
+    while IFS= read -r line; do
+        # -- check for line match on pattern: set cfg(name) "value"
+        setting_name=""
+        current_value=""
+        extracted_info=$(echo "$line" | sed -E -n 's/^set[[:space:]]+([[:alnum:]_-]+)[[:space:]]+"?([^"]*)"?$/\1 \2/p')
+        if [ -n "$extracted_info" ]; then
+            setting_name=$(echo "$extracted_info" | cut -d' ' -f1)
+            current_value=$(echo "$extracted_info" | cut -d' ' -f2-)
+
+            # -- ignore settings which are not required for basic deployments
+            if [[ " $SETTING_LIST " != *" $setting_name "* ]]; then
+                continue;
+            fi
+            
+            if [[ "$setting_name" == "uservar" || "$setting_name" == "nick" || "$setting_name" == "botnet-nick" ]]; then
+                new_value="${BOTNAME}"
+                ohai "Applying automatic value for ${tty_green}$setting_name${tty_reset}: ${tty_blue}$new_value${tty_reset}"
+                echo
+            else
+
+                # -- describe setting
+                eggdrop_setting "$setting_name"
+
+                # -- request new config value
+                ask_for_setting_value "$setting_name" "$current_value"
+            
+            fi
+
+            # -- avoid asking for this later when configuring Armour
+            if [[ "$setting_name" == "realname" ]]; then
+                REALNAME="${new_value}"
+            fi
+
+            # -- new setting line
+            updated_line="set $setting_name \"$new_value\""
+            ohai "[${tty_blue}Updated${tty_reset}] config line: ${tty_green}$updated_line${tty_reset}"
+            echo
+            
+            # -- replace the line
+            if [[ "$(uname)" == "FreeBSD" || "$(uname)" == "OpenBSD" || "$(uname)" == "NetBSD" || "$(uname)" == "Darwin" ]]; then
+                sed -i '' "s|^set $setting_name .*$|$updated_line|" "$EGGDROP_FILE"
+            else
+                sed -i "s|^set $setting_name .*$|$updated_line|" "$EGGDROP_FILE"
+            fi
+            
+        fi
+
+    done < "$EGGDROP_FILE"
+
+    # -- do the 'listen' line
+    eggdrop_setting "_port"
+    ask_for_setting_value "port number" "1231"
+    if [[ "$(uname)" == "FreeBSD" || "$(uname)" == "OpenBSD" || "$(uname)" == "NetBSD" || "$(uname)" == "Darwin" ]]; then
+        sed -i '' "s|^listen .*$|listen $new_value all|" "$EGGDROP_FILE"
+    else
+        sed -i "s|^listen .*$|listen $new_value all|" "$EGGDROP_FILE"
+    fi
+    ohai "[${tty_blue}Updated${tty_reset}] config line: ${tty_green}listen $new_value all${tty_reset}"
+    echo
+
+    # -- ask about oidentd usage
+    eggdrop_setting "_oidentd"
+    ask_for_setting_value "oidentd" "0"
+    if [ "$new_value" == "1" ]; then
+        # -- load ident module and uncomment ident-method
+        if [[ "$(uname)" == "FreeBSD" || "$(uname)" == "OpenBSD" || "$(uname)" == "NetBSD" || "$(uname)" == "Darwin" ]]; then
+            sed -i '' "s|^\#loadmodule ident$|loadmodule ident|" "$EGGDROP_FILE"
+        else
+            sed -i "s|^\#loadmodule ident$|loadmodule ident|" "$EGGDROP_FILE"
+        fi
+        ohai "[${tty_blue}Updated${tty_reset}] config line: ${tty_green}loadmodule ident${tty_reset}"
+        echo
+        if [[ "$(uname)" == "FreeBSD" || "$(uname)" == "OpenBSD" || "$(uname)" == "NetBSD" || "$(uname)" == "Darwin" ]]; then
+            sed -i '' "s|^\#set ident-method 0|set ident-method 0|" "$EGGDROP_FILE"
+        else
+            sed -i "s|^\#set ident-method 0|set ident-method 0|" "$EGGDROP_FILE"
+        fi
+        ohai "[${tty_blue}Updated${tty_reset}] config line: ${tty_green}set ident-method 0${tty_reset}"
+        echo
+    fi
+
+}
+
 
 check_armour_settings() {
+
+    ohai "Armour settings ..."
+    echo
 
     SETTING_LIST="botname md5 register register:inchan ircd znc realname servicehost prefix chan:nocmd chan:def chan:report auth:user auth:pass auth:totp auth:mech auth:serv:nick auth:serv:host xhost:ext auth:hide auth:rand auth:wait ban portscan"
     NOAUTH=0
@@ -824,6 +1023,11 @@ check_armour_settings() {
                 new_value="${BOTNAME}"
                 echo
 
+            elif [[ "${setting_name}" == "realname" && ${REALNAME} != "" ]]; then
+                ohai "Setting ${tty_green}realname${tty_reset} to: ${tty_green}${REALNAME}${tty_reset}"
+                new_value="${REALNAME}"
+                echo
+
             else
 
                 # -- describe the setting
@@ -854,7 +1058,11 @@ check_armour_settings() {
             echo
             
             # -- replace the line
-            sed -i "s|^set cfg($setting_name) \".*\"$|$updated_line|" "$ARMOUR_FILE"
+            if [[ "$(uname)" == "FreeBSD" || "$(uname)" == "OpenBSD" || "$(uname)" == "NetBSD" || "$(uname)" == "Darwin" ]]; then
+                sed -i '' "s|^set cfg($setting_name) .*$|$updated_line|" "$ARMOUR_FILE"
+            else
+                sed -i "s|^set cfg($setting_name) .*$|$updated_line|" "$ARMOUR_FILE"
+            fi
 
         fi
     done < "$ARMOUR_FILE"
@@ -862,6 +1070,7 @@ check_armour_settings() {
 
 
 # -- show the final remarks
+ARMOUR_LOADED=false
 show_success() {
     if [ ${NEW_EGGDROP} == true ]; then
         echo "    Armour is now ready to be loaded! Start your eggdrop:"
@@ -869,20 +1078,28 @@ show_success() {
         echo "        ${tty_blue}./eggdrop ${BOTNAME}.conf${tty_reset}"
         echo
         echo "    From IRC, ensure you are added to eggdrop as owner, via: ${tty_green}/msg ${BOTNAME} hello${tty_reset}"
-    else
+
+    elif [ ${ARMOUR_LOADED} == false ]; then
         echo "    Armour is now ready to be loaded!"
     fi
-    echo
-    echo "    Be sure to check your Armour config file, reviewing settings, and loading plugins if desired:"
-    echo
-    echo "        Armour configuration file: ${tty_blue}./armour/${BOTNAME}.conf${tty_reset}"
-    echo
-    echo "    When ready, you can load Armour by adding the below line to the end of your eggdrop ${tty_green}${BOTNAME}.conf${tty_reset} file:"
-    echo
-    echo "        ${tty_blue}source ./armour/${BOTNAME}.conf${tty_reset}"
-    echo
-    echo "    Rehash the eggdrop to load Armour, and then initialise the script by creating yourself as the 500 level admin:"
-    echo
+
+    if [ ${ARMOUR_LOADED} == false ]; then
+        echo
+        echo "    Be sure to check your Armour config file, reviewing settings, and loading plugins if desired:"
+        echo
+        echo "        Armour configuration file: ${tty_blue}./armour/${BOTNAME}.conf${tty_reset}"
+        echo
+        echo "    When ready, you can load Armour by adding the below line to the end of your eggdrop ${tty_green}${BOTNAME}.conf${tty_reset} file:"
+        echo
+        echo "        ${tty_blue}source ./armour/${BOTNAME}.conf${tty_reset}"
+        echo
+        echo "    Rehash the eggdrop to load Armour, and then initialise the script by creating yourself as the global level 500 admin:"
+        echo
+    else
+        # -- Armour has already been loaded on the bot
+        echo "    You may now initialise the script by creating yourself as the global level 500 admin:"
+        echo
+    fi
     if [ "${IRCU}" == "1" ]; then
         echo "        ${tty_blue}/msg ${BOTNAME} inituser <botuser> <netuser>${tty_reset}"
         echo
@@ -906,6 +1123,7 @@ show_success() {
     echo
     printf "    Enjoy! \xF0\x9F\x8D\xBA\n"
     echo
+    exit
 }
 
 # -- check and install optional dependencies
@@ -939,6 +1157,7 @@ optional_support() {
 
     if [ ! $return_code -eq 0 ]; then
         echo
+        ring_bell
         echo "${tty_red}Error:${tty_reset} failed package install.  Please correct and try again."
         echo
         optional_support
@@ -975,6 +1194,7 @@ optional_support() {
 
         if [ ! $return_code -eq 0 ]; then
             echo
+            ring_bell
             echo "${tty_red}Error:${tty_reset} failed package install.  Please correct and try again."
             echo
             optional_support
@@ -985,10 +1205,42 @@ optional_support() {
     fi
 }
 
+# -- start the eggdrop
+start_eggdrop() {
+    local input
+    echo
+    ohai "Do you wish to start the eggdrop now? (${tty_green}Y${tty_reset})es or (${tty_green}N${tty_reset})o"
+    echo 
+    getc input
+    if [[ "${input}" == 'y' ]]; then
+        ohai "Starting ${tty_green}eggdrop${tty_reset} from ${tty_green}${EGGDROP_INSTALL_DIR}${tty_reset}..."
+        echo
+        cd ${EGGDROP_INSTALL_DIR}
+        if [[ "$NEW_EGGDROP" == true || "$ADD_BOT" == true ]]; then
+            echo "    ${tty_green}./eggdrop -m ${BOTNAME}.conf${tty_reset}"
+            echo
+            ./eggdrop -m ${BOTNAME}.conf
+        else
+            echo "    ${tty_green}./eggdrop ${BOTNAME}.conf${tty_reset}"
+            echo
+            ./eggdrop ${BOTNAME}.conf
+        fi
+    
+    elif [[ "${input}" == 'n' ]]; then
+        ohai "OK!  Not starting eggdrop.  You can do this manually at your leisure."
+        echo
+    else
+        start_eggdrop
+    fi
+    echo
+}
+
 
 # -- add a new bot to existing Armour install
+ADD_BOT=false
 add_bot() {
     NEW_EGGDROP=false
+    ADD_BOT=true
     IRCU=0
     ohai "Adding a new ${tty_green}Armour ${ARMOUR_VER}${tty_reset} bot to ${tty_green}existing${tty_reset} installation"
     echo
@@ -997,6 +1249,7 @@ add_bot() {
     
     if [ ! -d $ARMOUR_INSTALL_DIR ]; then
         # -- Armour does not exist in this eggdrop install
+        ring_bell
         echo "${tty_red}Error:${tty_reset} Armour is not installed in this eggdrop directory.  Please install via:"
         echo
         echo "        ${tty_blue}./install.sh -i${tty_reset}"
@@ -1010,16 +1263,20 @@ add_bot() {
     ohai "Copying ${tty_green}${ARMOUR_INSTALL_DIR}/armour.conf.sample${tty_reset} to ${tty_green}${ARMOUR_INSTALL_DIR}/${BOTNAME}.conf${tty_reset} ..."
     cp ${ARMOUR_INSTALL_DIR}/armour.conf.sample ${ARMOUR_INSTALL_DIR}/${BOTNAME}.conf 
     echo
-    configure_eggdrop
-    echo
     # -- ask for IRC network
     ask_for_network
 
+    # -- ask for eggdrop setting values
+    configure_eggdrop
+
     # -- ask for Armour setting values
-    check_armour_settings
+    configure_armour
 
     # -- check for ImageMagick and oathtool
     optional_support
+
+    # -- ask whether to start eggdrop (and start if chosen)
+    start_eggdrop
 
     # -- complete!
     echo
@@ -1034,7 +1291,6 @@ add_bot() {
 install_bot() {
     IRCU=0
     # -- begin!
-    echo
     ohai "${tty_green}Armour ${ARMOUR_VER} Installation${tty_reset}"
     wait_for_user
 
@@ -1054,11 +1310,23 @@ install_bot() {
     # -- ask for IRC network
     ask_for_network
 
+    # -- ask for bot name
+    ask_for_botname
+
+    # -- install Armour
+    install_armour
+
+    # -- configure eggdrop
+    configure_eggdrop
+
     # -- ask for Armour setting values
-    check_armour_settings
+    configure_armour
 
     # -- check for ImageMagick and oathtool
     optional_support
+
+    # -- start eggdrop?
+    start_eggdrop
 
     # -- complete!
     echo
@@ -1070,13 +1338,124 @@ install_bot() {
 
 }
 
+# -- crude, but gets the job done
+get_eggdrop_pid() {
+    PID=""
+    PID1=`pgrep -af "eggdrop $BOTNAME.conf" | awk '{print $1}'`
+    PID2=`pgrep -af "eggdrop -m $BOTNAME.conf" | awk '{print $1}'`
+    if [ "$PID1" != "" ]; then
+        PID=$PID1
+    elif [ "$PID2" != "" ]; then
+        PID=$PID2
+    fi
+    ohai "Eggdrop PID: ${tty_green}${PID}${tty_reset}"
+}
+
+# -- load already installed and configured Armour on an existing eggdrop
+load_armour() {
+    ARMOUR_LOADING=true
+    NEW_EGGDROP=false
+    ohai "Loading ${tty_green}Armour ${ARMOUR_VER}${tty_reset} on ${tty_green}existing${tty_reset} eggdrop"
+    echo
+    echo "        This process is intended to load Armour on an eggdrop that is ${tty_green}already${tty_reset} running and which ${tty_green}already${tty_reset} has Armour configured."
+    echo "        If you continue, this script will add the ${tty_green}Armour${tty_reset} script to the eggdrop config file and ${tty_green}rehash${tty_reset} the eggdrop to load it"
+    echo
+    echo "        ${tty_yellow}Warning:${tty_reset}: If the eggdrop is not running or Armour is not configured, please exit."
+    echo
+    wait_for_user
+    echo
+    ask_for_eggdrop_dir
+    ARMOUR_INSTALL_DIR="${EGGDROP_INSTALL_DIR}/armour"
+    
+    if [ ! -d $ARMOUR_INSTALL_DIR ]; then
+        # -- Armour does not exist in this eggdrop install
+        ring_bell
+        echo "${tty_red}Error:${tty_reset} Armour is not installed in this eggdrop directory.  Please install via:"
+        echo
+        echo "        ${tty_blue}./install.sh -i${tty_reset}"
+        abort
+    fi
+    
+    ohai "Using Armour install directory: ${tty_green}$ARMOUR_INSTALL_DIR${tty_reset}"
+    echo
+    ask_for_botname
+    echo
+
+    if [ ! -f "${EGGDROP_INSTALL_DIR}/${BOTNAME}.conf" ]; then
+        # -- Armour does not exist in this eggdrop install
+        ring_bell
+        echo "${tty_red}Error:${tty_reset} existing eggdrop config file not found: ${tty_green}${EGGDROP_INSTALL_DIR}/${BOTNAME}.conf${tty_reset}"
+        echo
+        load_armour
+    fi
+
+    cd ${EGGDROP_INSTALL_DIR}
+
+    # -- replace the line
+    ohai "Uncommenting the ${tty_yellow}source armour/\$uservar.conf${tty_reset} line in ${tty_green}${EGGDROP_INSTALL_DIR}/${BOTNAME}.conf${tty_reset}"
+    if [[ "$(uname)" == "FreeBSD" || "$(uname)" == "OpenBSD" || "$(uname)" == "NetBSD" || "$(uname)" == "Darwin" ]]; then
+        sed -i '' "s|^\#source armour/\$uservar.conf$|source armour/\$uservar.conf|" "${BOTNAME}.conf"
+    else
+        sed -i "s|^\#source armour/\$uservar.conf$|source armour/\$uservar.conf|" "${BOTNAME}.conf"
+    fi
+    ohai "Done!"
+    echo
+
+    get_eggdrop_pid
+    if [ "$PID" != "" ]; then
+        # -- rehash the bot!
+        ohai "Rehashing eggdrop to load Armour! (PID: ${tty_green}$PID${tty_reset})"
+        kill -HUP $PID
+        return_code=$?
+        if [ ! $return_code -eq 0 ]; then
+            echo
+            ring_bell
+            echo "${tty_red}Error:${tty_reset} eggdrop rehash failed."
+            echo
+            get_eggdrop_pid
+            echo
+            if [ "$PID" == "" ]; then
+                # -- eggdrop no longer running... must have crashed?
+                ring_bell
+                echo "${tty_red}Error${tty_reset}: Eggdrop no longer running.  Possibly crashed.  Please check logs and DCC partyline."
+                echo
+                abort
+            fi
+        else
+            ohai "${tty_green}Success!${tty_reset} Armour is now loaded on the bot: ${tty_green}$BOTNAME${tty_reset}"
+        fi
+        
+    else
+        # -- eggdrop not running
+        ohai "${tty_yellow}Warning:${tty_reset} eggdrop not found running... unable to automatically load Armour."
+        echo
+        echo "    You can rehash or start the bot manually and ${tty_green}Armour ${ARMOUR_VER}${tty_reset} should then be running."
+        echo
+        printf "    Enjoy! \xF0\x9F\x8D\xBA\n"
+        echo
+        #abort
+    fi
+
+    IRCU=`grep 'cfg(ircd)' armour/${BOTNAME}.conf | awk '{print $3}'`
+    IRCU="${IRCU//\"}"
+    ARMOUR_LOADED=true
+
+    echo
+    ohai "${tty_green}Support${tty_reset}"
+    echo
+    show_success
+}
+
 # -- display usage
 usage() {
+    echo
     echo "Armour Installer"
     echo "Usage: ./install.sh [options]"
     echo "    -i              Install Armour (and optionally, eggdrop)"
     echo "    -a              Add a new bot to existing Armour install"
+    echo "    -l              Load Armour on an existing eggdrop with Armour already configured"
     echo "    -h, --help      Display this message"
+    echo
     exit "${1:-0}"
 }
 
@@ -1085,6 +1464,7 @@ if [[ $# -gt 0 ]]; then
     case "$1" in
         -h | --help) usage ;;
         -i) install_bot ;;
+        -l) load_armour ;;
         -a) add_bot ;;
         *)
             warn "Unrecognized option: '$1'"
@@ -1094,4 +1474,5 @@ if [[ $# -gt 0 ]]; then
 fi
 
 # -- default action to run installer
+echo
 install_bot

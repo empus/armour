@@ -775,7 +775,7 @@ set cfg(notc:white) 0
 set cfg(notc:black) 0
 
 # -- send op notices for whitelist entries? (0|1) - [1]
-set cfg(opnotc:white) 0
+set cfg(opnotc:white) 1
 
 # -- send op notices for blacklist entries? (0|1) - [1]
 set cfg(opnotc:black) 1
@@ -1031,7 +1031,7 @@ set cfg(ask:image:overlay) 1
 # -- DALL-E image creation rate limiting (req:mins:hold) - [5:5:30]
 # -- triggered at 5 requests per 5 mins, then retaining rate limit for 30 mins
 # -- set to "" to disable rate limiting
-set cfg(ask:image:rate) "5:5:10"
+set cfg(ask:image:rate) "5:5:30"
 
 # -- DALL-E image creation rate limiting action
 # -- set to "" to temporarily prevent all image requests
@@ -1039,12 +1039,10 @@ set cfg(ask:image:rate) "5:5:10"
 set cfg(ask:rate:act) "dall-e-2"
 
 # -- absolute path to save DALL-E image PNG files to webserver
-set cfg(ask:path) "/home/armour/www/armour";
+set cfg(ask:path) "/home/armour/www/armour"
 
 # -- how long to retain PNG and mp3 files for? - [30d]
 # acceptable units:
-#   s: seconds
-#   m: minutes
 #   h: hours
 #   d: days
 #   w: weeks
@@ -1055,7 +1053,7 @@ set cfg(ask:path) "/home/armour/www/armour";
 set cfg(ask:expire) "90d"
 
 # -- URL root serving PNG files from above path
-set cfg(ask:site) "https://files.armour.bot";
+set cfg(ask:site) "https://files.armour.bot"
 
 
 # ------------------------------------------------------------------------------------------------
