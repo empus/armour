@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Fri Mar  1 19:22:07 PST 2024
+# armour.tcl v4.0 autobuild completed on: Sun Mar  3 22:50:27 PST 2024
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -168,7 +168,13 @@ proc debug {level string} {
 
 set scan(cfg:ban:time) [cfg:get ban:time *]; # -- config variable fixes
 
-if {![info exists uservar]} { set uservar ${botnet-nick} }; # -- set var if not used in eggdrop config
+# -- set var if not used in eggdrop config
+if {![info exists ::uservar]} { 
+    set ::uservar ${botnet-nick} 
+} 
+if {![info exists uservar]} { 
+    set uservar ${botnet-nick} 
+}
 
 # -- handle script config file in case user keeps as armour.conf
 # -- the below will help make script 3.x to 4.x migrations easier for users, and for those that don't rename armour.conf
@@ -565,6 +571,35 @@ proc loadcmds {} {
     variable addcmd 
     variable userdb 
     global botnet-nick
+
+    # -- automatically add the shortcut commands
+    if {[cfg:get cmd:short *]} {
+        set shortlist {
+            "whois info"
+            "v view"
+            "s search"
+            "e exempt"
+            "k kick"
+            "kb ban"
+            "ub unban"
+            "a add"
+            "m mod"
+            "b black"
+            "r rem"
+            "o op"
+            "d deop"
+            "t topic"
+            "u userlist"
+            "i image"
+            "act say"
+        }
+        foreach entry $shortlist {
+            lassign $entry short cmd
+            lassign $addcmd($cmd) plug lvl
+            debug 4 "Adding \002command shortcut:\002 set addcmd($short) \"$plug $lvl pub msg dcc\""
+            set addcmd($short) "$plug $lvl pub msg dcc"
+        }
+    }
     
     # -- TODO: unbind existing binds; so commands can be disabled once bot is running
     
@@ -786,7 +821,7 @@ namespace eval arm {
 # ------------------------------------------------------------------------------------------------
 
 # -- this revision is used to match the DB revision for use in upgrades and migrations
-set cfg(revision) "2024030200"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
+set cfg(revision) "2024030400"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
 set cfg(version) "v4.0";        # -- script version
 
 # -- load sqlite (or at least try)
@@ -1436,6 +1471,16 @@ proc db:upgrade {} {
         debug 0 "db:upgrade: renaming channels_new table to channels"
         db:query "ALTER TABLE channels_new RENAME TO channels;"
         db:close
+    }
+
+    # -- delete old bot.conf.sample file
+    if {$revision < "2024030400" && $dbfresh eq 0} {
+        if {!$upgrade} { debug 0 "\[@\] Armour: beginning db migration from $revision to $confrev" }
+        set upgrade 1;
+        if {[file exists ./armour/bot.conf.sample]} { 
+            exec rm ./armour/bot.conf.sample
+            debug 0 "\[@\] Armour: deleted file: \002./armour/bot.conf.sample\002"
+        }
     }
 
     # -- update the DB revision entry
@@ -5622,8 +5667,9 @@ proc arm:cmd:say {0 1 2 3 {4 ""}  {5 ""}} {
     if {$dest eq "-a"} {
         # -- action (/me)
         set action 1; set dest [lindex $arg 1]; set idx 1
-    } 
-    
+        if {$dest eq ""} { reply $stype $starget "\002usage:\002 say -a <chan|*> <string>"; return;  }
+    }
+
     set msglist [list];
     if {$dest eq "*"} {
         # -- global say (all chans)
@@ -5660,6 +5706,16 @@ proc arm:cmd:say {0 1 2 3 {4 ""}  {5 ""}} {
     log:cmdlog BOT $chan $cid $user $uid [string toupper $cmd] $log $source "" "" ""
     
     return;
+}
+
+# -- add shortcut 'act' to 'say' command for actions
+if {[cfg:get cmd:short *]} {
+    proc arm:cmd:act {0 1 2 3 {4 ""}  {5 ""}} {
+        set type $0
+        if {$type eq "pub"} { arm:cmd:say $0 $1 $2 $3 $4 "-a $5" } \
+        elseif {$type eq "msg"} { arm:cmd:say $0 $1 $2 $3 "-a $4" } \
+        elseif {$type eq "dcc"} { arm:cmd:say $0 $1 $2 "-a $3" }   
+    }
 }
 
 
@@ -17344,6 +17400,17 @@ proc update:install {update} {
     # note that removed or renamed files should be handled during migrations (db:upgrade proc)
     update:copy ./armour/backup/armour-$start ./armour $debug
 
+    # -- make install.sh executable and update bash binary
+    if {[file exists ./armour/install.sh]} { 
+        exec chmod u+x ./armour/install.sh
+        debug 0 "\[@\] Armour: made install script executable: \002./armour/install.sh\002"
+        set uname [exec uname]
+        if {$uname in "FreeBSD NetBSD OpenBSD Darwin"} {
+            catch { exec sed -i '' {s|^\#!/bin/bash$|#!/usr/local/bin/bash|} ./armour/test.sh } error
+            if {$error eq ""} { debug 0 "\[@\] Armour: updated \002install.sh\002 bash executable to: \002/usr/local/bin/bash\002" }
+        }
+    }
+
     set runtime [expr [unixtime] - $start]
     debug 0 "\002update:install:\002 script \002installation complete\002 (\002runtime:\002 $runtime secs\002)"
     if {$debug} { set text "tested" } else { set text "complete" }
@@ -17351,7 +17418,7 @@ proc update:install {update} {
     # -- form the note
     set ver $gversion
     set rev $grevision
-    set out "\002Armour\002 script \002v$ver\002 (\002revision:\002 $rev) installation $text (\002runtime:\002 $runtime secs -- \002files:\002 $filecount"
+    set out "\002Armour\002 script \002v$ver\002 (\002revision:\002 $rev) installation $text (\002runtime:\002 $runtime secs -- \002files:\002 $filecount)"
     set note $out; set noteextra ""
     if {$new ne 0} { lappend noteextra "retained \002$exist\002 settings -- found \002$new new config\002 $settext: [join $newsettings]" }
     #if {$existportcount ne 0} { lappend noteextra "\002$existportcount existing $existporttext:\002 [join $existports]" }

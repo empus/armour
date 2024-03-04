@@ -462,6 +462,23 @@ proc ask:abstract:cmd {cmd 0 1 2 3 {4 ""} {5 ""}} {
         return;
     }
 
+    # -- check file directory path
+    if {$cmd in "image speak"} {
+        set filedir [cfg:get ask:path]
+        if {![file isdirectory $filedir]} {
+            # -- directory doesn't exist
+            debug 0 "\002ask:abstract:cmd\002 openai file directory \002cfg(ask:path)\002 doesn't exist: $filedir"
+            reply $type $target "\002error:\002 openai file directory \002cfg(ask:path)\002 doesn't exist: $filedir"
+            return;   
+
+        } elseif {![file writable $filedir]} {
+            # -- directory not writable 
+            debug 0 "\002ask:abstract:cmd\002 openai file directory \002cfg(ask:path)\002 is not writable: $filedir"
+            reply $type $target "\002error:\002 openai file directory \002cfg(ask:path)\002 is not writable: $filedir"
+            return;   
+        }
+    }
+
     set what [lindex $arg 0]
 
     # -- check for blacklisted strings
@@ -1044,7 +1061,7 @@ proc ask:dalle {desc {num "1"} {size "512x512"} {image ""}} {
         set imagedata [http::data $tok]
         http::cleanup $tok
 
-        set tempfile "[speak:randfile].tmp.png"
+        set tempfile "[randfile "png"].tmp.png"
         set path [string trimright [cfg:get ask:path *] "/"]
         set filepath "$path/$tempfile"
         set fd [open $filepath wb]
@@ -1197,7 +1214,7 @@ proc ask:dalle {desc {num "1"} {size "512x512"} {image ""}} {
     http::cleanup $tok
     
     # -- save the image file locally
-    set rand [speak:randfile]
+    set rand [randfile "png"]
     set path [string trimright [cfg:get ask:path *] "/"]
     set fd [open $path/$rand.png wb]
     puts $fd $data
@@ -1335,6 +1352,40 @@ proc jsonstr {data} {
 	}
 	return "\"$new\""
 }
+
+# -- generate a random file
+# -- arm::randfile [length] [chars]
+# -- length to use is provided by config option if not provided
+# -- chars to randomise are defaulted if not provided
+proc randfile {{ext "png"} {length ""} {chars "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"}} {
+    set dir [cfg:get ask:path]
+    if {$length eq ""} { set length 5 }
+    set range [expr {[string length $chars]-1}]
+    set avail 0
+    while {!$avail} {
+        set text ""
+        for {set i 0} {$i < $length} {incr i} {
+            set pos [expr {int(rand()*$range)}]
+            append text [string range $chars $pos $pos]
+        }
+        if {![file exists "$dir/$text.$ext"]} { set avail 1; break; }
+    }
+    return $text
+}
+
+    set avail 0
+    while {!$avail} {
+        set length 5; # -- num of captcha ID chars
+        set chars "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+        set range [expr {[string length $chars]-1}]
+        set code ""
+        for {set i 0} {$i < $length} {incr i} {
+        set pos [expr {int(rand()*$range)}]
+        append code [string range $chars $pos $pos]
+        }
+        set existcode [db:get code captcha code $code]
+        if {$existcode eq ""} { set avail 1; break }
+    }
 
 # -- create openai table
 db:query "CREATE TABLE IF NOT EXISTS openai (\

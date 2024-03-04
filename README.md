@@ -10,6 +10,11 @@ https://armour.bot
 
 # Installation
 
+Interactive installer can be used by typing the below command in your shell:
+```bash
+bash -c "$(curl -fsSL https://armour.bot/install.sh)"
+```
+
 Detailed install instructions and script documentation is found @ [https://armour.bot](https://armour.bot)
 
 # Contact

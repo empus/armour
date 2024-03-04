@@ -179,7 +179,7 @@ set cfg(gline:mask) "G-Lined *"
 set cfg(gline:nomask) "G-lined (AUTO *"
 
 # -- bot realname on IRC
-set cfg(realname) "Armour - www.armour.bot"
+set cfg(realname) "Armour - https://armour.bot"
 
 # -- hostname of services - [undernet.org]
 set cfg(servicehost) "undernet.org"
@@ -420,6 +420,9 @@ set cfg(ban:idents) 1
 # -- how long to set temp adaptive regex bans? - [7d]
 set cfg(ban:time:adapt) "7d"
 
+# -- channel modes to set when channel banlist is full - [+mr]
+set cfg(ban:full:modes) "+mr"
+
 # -- how long (secs) to remember 'newcomers' for (for stringent public chatter rules) - [60]
 # -- stringent rules apply to newcomers after first joining channel:
 # - excessive word repeat
@@ -551,13 +554,13 @@ set cfg(captcha:expired) "kickban"
 set cfg(captcha:expired:bantime) "1h"
 
 # -- kick message for expired responses
-set cfg(captcha:expired:kick) "Armour: your lack of CAPTCHA response is disturbing."
+set cfg(captcha:expired:kick) "Armour: your lack of CAPTCHA response is disturbing. Please try again or login to X."
 
 # -- kick message from web CAPTCHA when kick history is identified
 set cfg(captcha:kick:kick) "Armour: you have a history of abuse."
 
 # -- kick message from web CAPTCHA when IP is rate-limited
-set cfg(captcha:ratelimit:kick) "Armour: you have been CAPTCHA rate-limited.  Please come back later."
+set cfg(captcha:ratelimit:kick) "Armour: you have been CAPTCHA rate-limited.  Please come back later or login to X."
 
 # -- send notice to channel operators when a captcha expectation expires? (0|1) - 1
 set cfg(captcha:expired:ops) 1
@@ -1078,25 +1081,20 @@ set addcmd(ask)         {  arm       1          pub msg dcc  }; # -- requires op
 set addcmd(askmode)     {  arm       1          pub msg dcc  }; # -- requires openai plugin
 set addcmd(and)         {  arm       1          pub msg dcc  }; # -- requires openai plugin
 set addcmd(image)       {  arm       1          pub msg dcc  }; # -- requires openai plugin
-set addcmd(i)           {  arm       1          pub msg dcc  }; # -- shortcut: image
 set addcmd(speak)       {  arm       1          pub msg dcc  }; # -- requires speak plugin
 set addcmd(access)      {  userdb    1          pub msg dcc  }
 set addcmd(cmds)        {  arm       1          pub msg dcc  }
 set addcmd(help)        {  arm       1          pub msg dcc  }
-set addcmd(whois)       {  userdb    1          pub msg dcc  }; # -- shortcut: info
 set addcmd(info)        {  userdb    1          pub msg dcc  }
-set addcmd(i)           {  userdb    1          pub msg dcc  }; # -- shortcut: info
 set addcmd(verify)      {  userdb    1          pub msg dcc  }
 set addcmd(lang)        {  userdb    1          pub msg dcc  }
 set addcmd(set)         {  userdb    1          pub msg dcc  }
 set addcmd(time)        {  userdb    1          pub msg dcc  }
 set addcmd(version)     {  arm       1          pub msg dcc  }
 set addcmd(view)        {  arm       1          pub msg dcc  }
-set addcmd(v)           {  arm       1          pub msg dcc  }; # -- shortcut: view
 set addcmd(stats)       {  arm       1          pub msg dcc  }
 set addcmd(status)      {  arm       1          pub msg dcc  }
 set addcmd(scan)        {  arm       1          pub msg dcc  }
-set addcmd(s)           {  arm       1          pub msg dcc  }; # -- shorcut: search
 set addcmd(search)      {  arm       1          pub msg dcc  }
 set addcmd(scanrbl)     {  arm       1          pub msg dcc  }
 set addcmd(scanport)    {  arm       1          pub msg dcc  }
@@ -1104,7 +1102,6 @@ set addcmd(asn)         {  arm       1          pub msg dcc  }
 set addcmd(country)     {  arm       1          pub msg dcc  }
 set addcmd(note)        {  arm       1          pub msg dcc  }
 set addcmd(exempt)      {  arm       1          pub msg dcc  }
-set addcmd(e)           {  arm       1          pub msg dcc  }; # -- shorcut: exempt
 set addcmd(queue)       {  arm       1          pub msg dcc  }
 set addcmd(ack)         {  trakka    1          pub msg dcc  }
 set addcmd(score)       {  trakka    1          pub msg dcc  }
@@ -1118,21 +1115,14 @@ set addcmd(deop)        {  arm       100        pub msg dcc  }
 set addcmd(voice)       {  arm       100        pub msg dcc  }
 set addcmd(devoice)     {  arm       100        pub msg dcc  }
 set addcmd(kick)        {  arm       100        pub msg dcc  }
-set addcmd(k)           {  arm       100        pub msg dcc  }; # -- shortcut: kick
 set addcmd(ban)         {  arm       100        pub msg dcc  }
-set addcmd(kb)          {  arm       100        pub msg dcc  }; # -- shortcut: kickban
 set addcmd(unban)       {  arm       100        pub msg dcc  }
-set addcmd(ub)          {  arm       100        pub msg dcc  }; # -- shortcut: unban
 set addcmd(topic)       {  arm       100        pub msg dcc  }
 set addcmd(invite)      {  arm       100        pub msg dcc  }
-set addcmd(a)           {  arm       200        pub msg dcc  }; # -- shortcut: add
 set addcmd(mod)         {  arm       200        pub msg dcc  }
-set addcmd(m)           {  arm       200        pub msg dcc  }; # -- shortcut: mod
 set addcmd(black)       {  arm       200        pub msg dcc  }
-set addcmd(b)           {  arm       200        pub msg dcc  }; # -- shortcut: black
 set addcmd(chanscan)    {  arm       300        pub msg dcc  }
 set addcmd(rem)         {  arm       300        pub msg dcc  }
-set addcmd(r)           {  arm       300        pub msg dcc  }; # -- shortcut: rem
 set addcmd(newuser)     {  userdb    400        pub msg dcc  }
 set addcmd(adduser)     {  userdb    400        pub msg dcc  }
 set addcmd(remuser)     {  userdb    400        pub msg dcc  }
