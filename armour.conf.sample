@@ -161,8 +161,9 @@ set cfg(randpass) 10
 # ------------------------------------------------------------------------------------------------
 
 # -- ircd type [1-2] - [1]
-# 1: ircu (Undernet/Quakenet)
+# 1: ircu/Unreal (e.g., Undernet, Quakenet)
 # 2: IRCnet/EFnet
+# 3: InspIRCd/Solanum/ircd-seven
 set cfg(ircd) 1
 
 # -- connected via ZNC bouncer? (0|1) - [0]

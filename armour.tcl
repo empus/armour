@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Mon Mar  4 09:54:15 PST 2024
+# armour.tcl v4.0 autobuild completed on: Fri Mar  8 23:00:10 PST 2024
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -832,7 +832,7 @@ namespace eval arm {
 # ------------------------------------------------------------------------------------------------
 
 # -- this revision is used to match the DB revision for use in upgrades and migrations
-set cfg(revision) "2024030400"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
+set cfg(revision) "2024030900"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
 set cfg(version) "v4.0";        # -- script version
 
 # -- load sqlite (or at least try)
@@ -4329,10 +4329,22 @@ proc arm:cmd:invite {0 1 2 3 {4 ""}  {5 ""}} {
         set chan [userdb:get:chan $user $chan]; # -- predict chan when not given
         set invitelist [lrange $arg 0 end]
     }
+
+
     set cid [db:get id channels chan $chan]
     
     # -- continue for any chan if glob >=500
     set glevel [db:get level levels cid 1 uid $uid]
+
+    set reportchan [cfg:get chan:report]
+    if {$chan eq $reportchan && $user ne "" && $glevel >= 450 } {
+        # -- report chan
+        putquick "INVITE $nick $reportchan"
+        debug 0 "arm:cmd:invite: inviting $tnick to $chan"
+        return;
+
+    }
+
     if {![userdb:isAllowed $nick $cmd $chan $type]} { 
         if {$glevel < 500} { return; } else { set cid 1 }; # -- must be for unregistered chan
     }
@@ -4884,8 +4896,8 @@ proc arm:cmd:mode {0 1 2 3 {4 ""}  {5 ""}} {
             reply $stype $starget "\002usage:\002 mode ?chan? <on|off|secure> \[-nomode\]";
             return;
         }
-    } elseif {[cfg:get ircd $chan] eq 2} {
-        # -- IRCnet/EFnet
+    } else {
+        # -- other
         if {$mode ne "on" && $mode ne "off" && $mode ne ""} {
             reply $stype $starget "\002usage:\002 mode ?chan? <on|off>";
             return;
@@ -6013,7 +6025,7 @@ proc arm:cmd:status {0 1 2 3 {4 ""}  {5 ""}} {
     set wcount [dict size [dict filter $entries script {id data} { expr {[dict get $data type] eq "white"}}]]
     set bcount [dict size [dict filter $entries script {id data} { expr {[dict get $data type] eq "black"}}]]
     
-    reply $type $target "\002server connection:\002 [userdb:timeago ${server-online}] -- \002bot uptime:\002 [userdb:timeago $uptime] -- \002machine:\002 [unames]"
+    reply $type $target "\002server connection:\002 [userdb:timeago ${server-online}] -- \002bot uptime:\002 [userdb:timeago $uptime] -- \002machine:\002 [unames] -- \002mem:\002 [expr [lindex [status mem] 1] / 1014 ]K"
     reply $type $target "\002uptime:\002 [exec uptime]"
     reply $type $target "\002traffic:\002 [expr [lindex [lindex [traffic] 5] 2] / 1024]/KB \[in\] and [expr [lindex [lindex [traffic] 5] 4] / 1024]/KB \[out\]\
         -- \002whitelists:\002 $wcount entries -- \002blacklists:\002 $bcount entries"
@@ -6188,9 +6200,7 @@ proc arm:cmd:add {0 1 2 3 {4 ""}  {5 ""}} {
         reply     { set method "text"    }
         default   { set usage 1;         }
     }
-    
-    putlog "\002arm:cmd:add\002: 0a - usage: $usage  -- method: $method"
-    
+        
     if     {[string index $list 0] eq "w"} { set list "white"   } \
     elseif {[string index $list 0] eq "b"} { set list "black"   } \
     elseif {[string index $list 0] eq "d"} { set list "dronebl" } \
@@ -6323,15 +6333,18 @@ proc arm:cmd:add {0 1 2 3 {4 ""}  {5 ""}} {
     } else {
         # -- limit not specified
         set limit "1:1:1"
-        set reason [lrange $arg $tn end]
+        if {$ischan} {
+            set reason [lrange $arg [expr $tn + 1] end]
+        } else {
+            set reason [lrange $arg $tn end]
+        }
     }
     
     # -- strip the action from the reason if found
-    set first [lindex $reason 0]
-    if {$first eq "kick" || $first eq "kickban" || $first eq "ban" || $first eq "k" \
-        || $first eq "kb" || $first eq "b"} {
-        set reason [lrange $reason 1 end]
-    }
+    #set first [lindex $reason 0]
+    #if {$first in "accept v voice o op b ban k kb"} {
+    #    set reason [lrange $reason 1 end]
+    #}
 
     if {($candronebl || $canircbl) && ($value eq "" || $method eq "")} {
         reply $stype $starget "\002usage:\002 add ?chan? $list <host|ip|last> <value1,value2..> \[comment\]"
@@ -6352,7 +6365,7 @@ proc arm:cmd:add {0 1 2 3 {4 ""}  {5 ""}} {
     #    return;
     #}
         
-    debug 3 "arm:cmd:add: chan: $chan list: $list method: $method value: $value action: $action limit: $limit reason: $reason"
+    debug 3 "arm:cmd:add: chan: $chan -- list: $list -- method: $method -- value: $value -- action: $action -- limit: $limit -- reason: $reason"
     
     # -- check if already exists
     set exists 0
@@ -6793,7 +6806,7 @@ proc arm:cmd:mod {0 1 2 3 {4 ""}  {5 ""}} {
     } else {
         # -- chan not provided
         lassign $arg ids param; set setval [lrange $arg 2 end]
-        set chan [userdb:get:chan $user $tchan]; # -- find a logical chan
+        set tchan [userdb:get:chan $user $chan]; # -- find a logical chan
     }
     set cid [db:get id channels chan $tchan]
     if {![userdb:isAllowed $nick $cmd $tchan $type]} { return; }
@@ -6839,7 +6852,7 @@ proc arm:cmd:mod {0 1 2 3 {4 ""}  {5 ""}} {
                     
         if {$ltype eq "white"} { set list "whitelist" } else { set list "blacklist" }
         
-        putlog "\002cmd:mod:\002 chan: $cthan -- id: $id -- list: $ltype -- method: $method -- value: $value -- param: $param -- setval: $setval"
+        putlog "\002cmd:mod:\002 chan: $tchan -- id: $id -- list: $ltype -- method: $method -- value: $value -- param: $param -- setval: $setval"
 
         set isflag 0
 
@@ -6863,7 +6876,7 @@ proc arm:cmd:mod {0 1 2 3 {4 ""}  {5 ""}} {
             secureonly { set param "onlysecure"; set isflag 1 }
             notsecure  { set param "notsecure"; set isflag 1  }
             onlynew    { set param "onlynew"; set isflag 1    }
-            continue   { set param "continue"; set isflag 1    }
+            continue   { set param "continue"; set isflag 1   }
             silent     { set param "silent"; set isflag 1 }
             ircbl      { set param "ircbl"; set isflag 1 }
             rbl        { set param "ircbl"; set isflag 1 }
@@ -7031,8 +7044,9 @@ proc arm:cmd:showlog {0 1 2 3 {4 ""}  {5 ""}} {
             if {![userdb:isValiduser $tuser]} { reply $type $target "invalid user."; return; }
         } elseif {$i eq "-max" || $i eq "-last"} {
             set max [lindex $text [expr $c + 1]]
-            if {[string index $cmd 0] eq "-" || ![string is digit $max]} { set usage true; } else { set flag_max true; }
-            if {$max > 20} { reply $type $target "maximum of 20 results."; return; }
+            if {$max eq "0" || ![string is digit $max]} { reply $type $target "invalid max (1-5)."; return; }
+            if {[string index $cmd 0] eq "-" } { set usage true; } else { set flag_max true; }
+            if {$max > 5} { reply $type $target "maximum of 5 results."; return; }
         }
         incr c
     }
@@ -7615,10 +7629,13 @@ bind raw - 401 { arm::coroexec arm::raw:nicknoton }
 bind raw - 478 { arm::coroexec arm::raw:fullbanlist }
 
 # -- auto management of mode 'secure'
-bind mode - "* +D" { arm::coroexec arm::mode:add:D }
-bind mode - "* -D" { arm::coroexec arm::mode:rem:D }
-bind mode - "* +d" { arm::coroexec arm::mode:add:d }
-bind mode - "* -d" { arm::coroexec arm::mode:rem:d }
+# -- implement only for ircu derivative ircds
+if {[cfg:get ircd] eq "1"} {
+    bind mode - "* +D" { arm::coroexec arm::mode:add:D }
+    bind mode - "* -D" { arm::coroexec arm::mode:rem:D }
+    bind mode - "* +d" { arm::coroexec arm::mode:add:d }
+    bind mode - "* -d" { arm::coroexec arm::mode:rem:d }
+}
 
 # -- manage global banlist
 bind mode - "* +b" { arm::coroexec arm::mode:add:b }
@@ -11273,6 +11290,9 @@ proc userdb:msg:inituser {nick uhost hand arg} {
     # -- load channels
     db:load:chan
 
+    # -- load users
+    userdb:db:load
+
     reply notc $nick "newuser created. please login: /msg $botnick login $user $randpass"
     reply notc $nick "and then change password: /msg $botnick newpass <newpassword>"
     
@@ -12767,6 +12787,11 @@ proc userdb:pub:login {nick uhost hand chan arg} {
 # -- command: login
 # login <user> <passphrase>
 proc userdb:msg:login {nick uhost hand arg} {
+    if {[userdb:isLogin $nick]} {
+        # -- already logged in
+        reply pub $chan "$nick: mate, you are already authenticated."
+        return;
+    }
     set user [join [lindex $arg 0]]
     set pass [join [lrange $arg 1 end]]
     if {$user eq "" && $pass eq ""} { 
@@ -13344,6 +13369,10 @@ proc userdb:msg:logout {nick uhost hand arg} {
         # -- self logout
         set tuser $user
         set self 1;
+        if {$tuser eq ""} {
+            reply notc $nick "not currently authenticated."; 
+            return;
+        }
     }
 
     # -- check against user

@@ -60,7 +60,7 @@ set net-type "Undernet"
 
 # -- space delimited server list for IRC connections
 # -- change to match your own server(s)
-set servers "irc.undernet.org:6667"
+set servers "irc.undernet.org"
 
 set timezone "UTC"
 set env(TZ) "$timezone$offset"
