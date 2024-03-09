@@ -1,0 +1,2 @@
+%B%command:%B% ask %B%level:%B% %LEVEL% %B%usage:%B% image <rand|+|view|search|del|top|stats|description> [id|num]
+submits question to OpenAI to generate image using DALL-E model.  supports future image recall, statistics, and voting.

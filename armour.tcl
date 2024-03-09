@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v4.0 autobuild completed on: Fri Mar  8 23:00:10 PST 2024
+# armour.tcl v4.0 autobuild completed on: Fri Mar  8 23:52:12 PST 2024
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -832,7 +832,7 @@ namespace eval arm {
 # ------------------------------------------------------------------------------------------------
 
 # -- this revision is used to match the DB revision for use in upgrades and migrations
-set cfg(revision) "2024030900"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
+set cfg(revision) "2024030901"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
 set cfg(version) "v4.0";        # -- script version
 
 # -- load sqlite (or at least try)
@@ -17376,6 +17376,14 @@ proc update:install {update} {
         return;
     }
 
+    # -- ensure new directories exist
+    #foreach newdir "./armour/deploy" {
+    #    if {![file isdirectory ./armour/deploy]} {
+    #        debug 0 "\002update:install:\002 creating new directory: \002$newdir\002"
+    #       exec mkdir $newdir
+    #    }
+    #}
+
     # -- create a true directory backup, as a one time safety net
     if {![file isfile ./armour/backup/armour.tbz2]} {
         debug 0 "\002update:install:\002 \002armour.tbz2\002 doesn't exist... creating \002one time backup\002 of entire directory."
@@ -17875,6 +17883,7 @@ proc update:copy {from to {debug 0}} {
         catch { exec cp -R $from/help $to }
         catch { exec cp -R $from/plugins $to }
         catch { exec cp -R $from/packages $to }
+        catch { exec cp -R $from/deploy $to }
     }
     debug 0 "\002update:copy:\002 copying optional directories from $from to $to"
     if {!$debug || $isbackup} {
