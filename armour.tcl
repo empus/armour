@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v5.0 autobuild completed on: Mon May 20 00:03:36 PDT 2024
+# armour.tcl v5.0 autobuild completed on: Mon May 20 00:38:23 PDT 2024
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -115,6 +115,7 @@ proc cfg:get {setting {chan ""}} {
         routing:alert           { set avoid 1; }
         routing:alert:perc      { set avoid 1; }
         routing:alert:count     { set avoid 1; }
+        chan:method             { set avoid 1; }
     }
     if {[string match "fn:platform:*" $setting] || [string match "fn:user:*" $setting] || [string match "fn:chan" $setting]} { set avoid 1 }; # -- silence noisy Fortnite settings
     
@@ -123,6 +124,7 @@ proc cfg:get {setting {chan ""}} {
     if {!$avoid} { debug 4 "\002cfg:get:\002 retrieving config setting: \002cfg($setting)\002" }
     
     # -- output the config file value for now
+    set cfg(chan:method) "chan"; # -- default to chan for now; TODO: remove after gnuworld updates are in X
     if {[info exists cfg($setting)]} {
         # -- special handling for 'ban' and 'chan:method'
         if {$setting in "ban chan:method"} {
@@ -301,7 +303,7 @@ if {[cfg:get auth:totp *] ne ""} {
 }
 
 # -- ImageMagick (for optional OpenAI image overlays)
-if {[cfg:get ask:enable] eq 1 && [cfg:get ask:image] eq 1 && [cfg:get ask:image:overlay] eq 1} {
+if {[info commands trakka:load] ne ""} { && [cfg:get ask:image] eq 1 && [cfg:get ask:image:overlay] eq 1} {
     debug 0 "\[@\] Armour: checking for \002ImageMagick\002 ..."
     set convert [lindex [exec whereis convert] 1]
     if {$convert eq ""} {
@@ -957,8 +959,8 @@ proc coroexec {args} {
     coroutine coro_[incr ::coroidx] {*}$args
 }
 
-# -- disable commands if 'ask' not enabled
-if {!$cfg(ask:enable)} {
+# -- disable commands if 'openai' plugin not loaded
+if {[info commands trakka:load] eq ""} {
     if {[info exists addcmd(ask)]} { unset addcmd(ask) }
     if {[info exists addcmd(and)]} { unset addcmd(and) }
     if {[info exists addcmd(askmode)]} { unset addcmd(askmode) }
@@ -2084,6 +2086,10 @@ proc cron:ignores {minute hour day month weekday} {
 }
 
 debug 0 "\[@\] Armour: loaded sqlite3 database functions."
+
+# -- load channels into memory
+debug 0 "\[@\] Armour: loading channels into memory..."
+db:load:chan
 
 }
 # -- end namespace
@@ -8392,7 +8398,7 @@ proc raw:join {nick uhost hand chan} {
     dict set nickdata $lnick uhost $uhost
     
     # -- ensure I am opped
-    if {![botisop $chan] && [cfg:get chan:method $chan] eq "chan"} { 
+    if {![botisop $chan]} { 
         putquick "WHO $nick %nuhiat,101"; # -- attempt autologin
         debug 1 "raw:join: $nick joined $chan, but I am not opped -- halting!"
         return; 
@@ -11929,27 +11935,13 @@ proc flud:queue {} {
         if {[cfg:get chan:method $chan] eq "chan"} {
             # -- safety net if not on server, on chan, or not opped
             if {![botonchan $chan] || ![botisop $chan] || $server eq ""} {
-                debug 0 "flud:queue: not on chan $chan or not op... halting"
-                return;
+                debug 0 "flud:queue: not on chan $chan or not op... skipping"
+                continue;
             };
-
-            #foreach client $kicks {
-            #    set sclient [split $client]
-            #    # -- kick users
-            #    if {[info exists kreason($chan,$sclient)]} { 
-            #       # -- safety net
-            #        if {$kreason($chan,$sclient) ne ""} {
-            #            set reason [get:val kreason $chan,$sclient]
-            #            unset kreason($chan,$sclient) 
-            #        }
-            #    }
-            #    debug 0 "\x0303flud:queue: kicking $client from $chan via server\x03"
-            #    kick:chan $chan $client "Armour: $reason"
-            #}
-
         }
 
         # -- send any remaining kicks
+        # TODO: should this be in the above loop, to only kick when chan:method is 'chan'?
         if {$kicks ne ""} { 
             debug 3 "\x0303flud:queue: kicking kicklist ([llength $kicks]) from $chan: [join $kicks]\x03"
             kick:chan $chan $kicks "Armour: $reason"
@@ -18296,7 +18288,7 @@ proc float:check:chan {cid {restart "1"}} {
     
 }
 
-float:check:start; # -- start the timers for active chans
+timer 3 float:check:start; # -- start the timers for active chans
 
 
 # -- store timerID to check for limit adjustment
@@ -18658,7 +18650,7 @@ proc arm:cmd:update {0 1 2 3 {4 ""} {5 ""}} {
 
         if {!$debug} {
             # -- TODO: fix version & revision
-            putnow "QUIT :Loading Armour \002[cfg:get version] (revision: \002[cfg:get revision]\002)"
+            putnow "QUIT :Loading Armour \002[cfg:get version]\002 (revision: \002$grevision\002)"
             restart; # -- restart eggdrop to ensure full script load
         } else {
             reply $type $target "\002info:\002 $modetext mode enabled, restore not installed."
@@ -19666,10 +19658,6 @@ if {[info exists addrbl]} {
 # -- load lists into memory
 debug 0 "\[@\] Armour: loading lists into memory..."
 db:load
-
-# -- load channels into memory
-debug 0 "\[@\] Armour: loading channels into memory..."
-db:load:chan
 
 # ---- unset all vars on a rehash, to start fresh
 
