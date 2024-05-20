@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v5.0 autobuild completed on: Mon May 20 00:38:23 PDT 2024
+# armour.tcl v5.0 autobuild completed on: Mon May 20 03:02:39 PDT 2024
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -1155,6 +1155,9 @@ db:query "CREATE TABLE IF NOT EXISTS settings (\
     setting TEXT NOT NULL,\
     value TEXT DEFAULT 'on'\
     )"
+
+    CREATE TABLE IF NOT EXISTS settings (cid INTEGER, uid INTEGER, setting TEXT NOT NULL, value TEXT DEFAULT 'on');
+    
     
 # -- single values
 # -- special table to record individual values
@@ -19267,8 +19270,13 @@ proc update:config {sampleconf newconf ghdata} {
             # -- set new config value
             set curval [cfg:get $var]
             variable cfg
-            if {![info exists cfg($var)]} { incr new; lappend newsettings $var; }; # -- new config setting
-            if {$curval eq $val} {
+            if {![info exists cfg($var)]} {
+                # -- new setting
+                incr new
+                lappend newsettings $var
+                debug 5 "\002update:config:\002 new config setting $var with config value = $val"
+                puts $fd $line
+            } elseif {$curval eq $val} {
                 # -- value is unchanged
                 incr unchanged
                 debug 5 "\002update:config:\002 unchanged config value: $var = $val"

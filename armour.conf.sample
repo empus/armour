@@ -426,8 +426,8 @@ set cfg(ban:idents) 1
 # -- how long to set temp adaptive regex bans? - [7d]
 set cfg(ban:time:adapt) "7d"
 
-# -- channel modes to set when channel banlist is full - [+mr]
-set cfg(ban:full:modes) "+mr"
+# -- channel modes to set when channel banlist is full - [+r]
+set cfg(ban:full:modes) "+r"
 
 # -- how long (secs) to remember 'newcomers' for (for stringent public chatter rules) - [60]
 # -- stringent rules apply to newcomers after first joining channel:
@@ -755,7 +755,7 @@ set cfg(adapt:types:join) "n i"
 # this will prevent double handling for a given pattern (ie. false positives)
 set cfg(adapt:types:who) "r"
 
-# -- adaptive regex max join rate (clients:seconds:retain) - [2:3:15]
+# -- adaptive regex max join rate (clients:seconds:retain) - [2:1:5]
 # clients: client joins
 # seconds: .. in N seconds
 # retain: & retain common pattern for N seconds (for further joins)
