@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v5.0 autobuild completed on: Mon May 20 04:09:35 PDT 2024
+# armour.tcl v5.0 autobuild completed on: Mon May 20 04:19:54 PDT 2024
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -796,7 +796,7 @@ proc loadcmds {} {
                         }
                     }
                 }
-            } elseif {regexp -- {^\*$} $cmdprefix]} {
+            } elseif {[regexp -- {^\*$} $cmdprefix]} {
                 # -- command prefix * is illegal! (clashes with multi-bot prefix response)
                 debug 0 "\002loadcmds\002: shutting down bot -- illegal configuration 'prefix' of *"
                 die "Armour: illegal configuration 'prefix' of * in cfg(prefix)"
