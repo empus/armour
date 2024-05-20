@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v5.0 autobuild completed on: Mon May 20 10:52:36 PDT 2024
+# armour.tcl v5.0 autobuild completed on: Mon May 20 11:19:29 PDT 2024
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -1042,7 +1042,7 @@ namespace eval arm {
 # ------------------------------------------------------------------------------------------------
 
 # -- this revision is used to match the DB revision for use in upgrades and migrations
-set cfg(revision) "2024052002"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
+set cfg(revision) "2024052003"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
 set cfg(version) "v5.0";        # -- script version
 
 # -- cronjob to periodically delete expired ignores
@@ -14727,8 +14727,7 @@ proc userdb:isValiduser {user} {
 # -- encrypt password (basic md5)
 proc userdb:encrypt {pass} {
     # -- md5sum hashes are diferent to md5 package
-    set os [uname]
-    if {$os eq "Linux"} { return [lindex [exec echo $pass | md5sum] 0] }
+    if {[exec uname] eq "Linux"} { return [lindex [exec echo $pass | md5sum] 0] }
     return [::md5 $pass]; # -- BSD and macOS can use tcllib md5 as it's the same as md5 binary
 }
 
