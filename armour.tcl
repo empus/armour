@@ -832,7 +832,7 @@ namespace eval arm {
 # ------------------------------------------------------------------------------------------------
 
 # -- this revision is used to match the DB revision for use in upgrades and migrations
-set cfg(revision) "2024030901"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
+set cfg(revision) "2024030902"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
 set cfg(version) "v4.0";        # -- script version
 
 # -- load sqlite (or at least try)
