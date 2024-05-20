@@ -1,0 +1,2 @@
+%B%command:%B% ignore -- %B%level:%B% %LEVEL% -- %B%usage:%B% ignore ?chan? <add|rem|view|list|search> [nick!mask] [duration] [reason]
+manage bot's ignore list to temporarily prevent users from using commands. ignore duration is specified in minutes.

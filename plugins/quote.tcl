@@ -87,36 +87,49 @@ bind ctcp - "ACTION" { arm::coroexec arm::quote:action };
 proc quote:cmd:q {0 1 2 3 {4 ""}  {5 ""}} { coroexec quote:cmd:quote $0 $1 $2 $3 $4 $5 }
 
 # -- the main command
-proc quote:cmd:quote {0 1 2 3 {4 ""}  {5 ""}} {
+proc quote:cmd:quote {0 1 2 3 {4 ""} {5 ""}} {
     variable cfg
 	variable quote
 	variable lastspeak; # -- tracks the last line a nick spoke in a chan (by 'chan,nick')
+	variable dbchans
 	lassign [proc:setvars $0 $1 $2 $3 $4 $5] type stype target starget nick uh hand source chan arg
     set cmd "quote"
-		
-	# -- check for integration mode
-	if {$quote(mode) eq 2} {
-		# -- ensure user has required access for command
-		if {![userdb:isAllowed $nick $cmd $chan $type]} { return; }
-		lassign [db:get user,id users curnick $nick] user uid
-		if {$type ne "chan"} { set chan [userdb:get:chan $user $chan]}; # -- find a logical chan
-		set cid [db:get id channels chan $chan]
-		set level [db:get level levels cid $cid uid $uid]
+				
+	lassign [db:get user,id users curnick $nick] user uid
+	if {[string index [lindex $arg 0] 0] eq "#"} {
+		# -- channel name given
+		set chan [lindex $arg 0]
+		set arg [lrange $arg 1 end]
 	} else {
-	  	# -- no Armour, no access level
-		set level 0
-		set cid 1;
-		if {![isop $nick $chan] && ![isvoice $nick $chan]} { return; }
+		# -- chan name not given, figure it out
+		set chan [userdb:get:chan $user $chan]
 	}
-	
-	if {![quote:isEnabled $chan]} { return; }; # -- only continue if setting is on
-
-	set glevel [db:get level levels cid 1 uid $uid]
-
-	# -- end default proc template
-		
 	set what [string tolower [lindex $arg 0]]
 	set tquote [join [lrange $arg 1 end]]
+	if {![quote:isEnabled $chan]} { return; }; # -- only continue if setting is on
+	set cid [db:get id channels chan $chan]
+	set glevel [db:get level levels cid 1 uid $uid]
+	set level [db:get level levels cid $cid uid $uid]
+
+    # -- ensure user has required access for command
+    set allowed 2
+    # -- ensure user has required access for command
+	#set allowed [cfg:get quote:allow]; # -- who can use commands? (1-5)
+                                       #        1: all channel users
+									   #        2: only voiced, opped, and authed users
+                                       #        3: only voiced when not secure mode, opped, and authed users
+                        	           #        4: only opped and authed channel users
+                                       #        5: only authed users with command access
+    set allow 0
+    if {$uid eq ""} { set authed 0 } else { set authed 1 }
+    if {$allowed eq 0} { return; } \
+    elseif {$allowed eq 1} { set allow 1 } \
+    elseif {$allowed eq 2} { if {[isop $nick $chan] || ([isvoice $nick $chan] && [dict get $dbchans $cid mode] ne "secure") || $authed} { set allow 1 } } \
+	elseif {$allowed eq 3} { if {[isop $nick $chan] || [isvoice $nick $chan] || $authed} { set allow 1 } } \
+    elseif {$allowed eq 4} { if {[isop $nick $chan] || $authed} { set allow 1 } } \
+    elseif {$allowed eq 5} { if {$authed} { set allow [userdb:isAllowed $nick $cmd $chan $type] } }
+    if {[userdb:isIgnored $nick $cid]} { set allow 0 }; # -- check if user is ignored
+    if {!$allow} { return; }; # -- client cannot use command
 
 	set done 0; set uselast 0;
 
@@ -532,10 +545,6 @@ proc quote:cmd:quote {0 1 2 3 {4 ""}  {5 ""}} {
 			quote:reply $stype $starget "usage: quote + <id>"
 			return;
 		}
-		if {[string tolower $user] eq "telac" || [string tolower $nick] eq "telac"} {
-			reply $type $target "nope, not for you!"
-			return;
-		}
 		quote:debug 2 "quote:cmd:quote: increase score for quote id=$qid"
 		set qid [quote:db:escape $qid]
 		quote:db:connect
@@ -597,7 +606,7 @@ proc quote:cmd:quote {0 1 2 3 {4 ""}  {5 ""}} {
 
 	if {$done} {
 		# -- create log entry for command use (if integrated to Armour)
-		if {$quote(mode) eq 2} { log:cmdlog BOT $chan $cid $user $uid [string toupper $cmd] [join $arg] $source "" "" "" }
+		if {$quote(mode) eq 2} { log:cmdlog BOT $chan $cid $user $uid [string toupper $cmd] "[join $arg]" "$source" "" "" "" }
 	}
 }
 
@@ -646,7 +655,7 @@ proc quote:cron {minute hour day month weekday} {
 		set randid [quote:db:query "SELECT id FROM quotes WHERE cid='$cid' ORDER BY RANDOM() LIMIT 1"]
 		set query "SELECT quote FROM quotes WHERE id='$randid' AND cid='$cid'"
 		set quote [join [quote:db:query $query]]
-		debug 1 "\002quote:cron\002 sending periodic random quote to $chan: [join $quote]"
+		debug 0 "\002quote:cron\002 sending periodic random quote to $chan: [join $quote]"
 		set lines [split [join $quote] \n]
 		foreach line $lines {
 			quote:reply msg $chan "\002\[id:\002 $randid\002\]\002 [join $line]"
@@ -718,15 +727,21 @@ proc quote:action {nick uhost hand dest keyword text} {
 
 # -- remember the last line a nick spoke in a given channel
 proc quote:addspeak {nick uhost hand chan text} {
-	variable dbchans; # -- dict with database channels
+	variable dbchans;   # -- dict with database channels
+	variable lastspeak; # -- tracks the last line a nick spoke in a chan (by 'chan,ts,nick')
 	set cid [dict keys [dict filter $dbchans script {id dictData} { expr {[dict get $dictData chan] eq $chan} }]]
 	if {$cid eq ""} { return; }; # -- channel not registered
-
 	set snick [split $nick]
-	variable lastspeak;          # -- tracks the last line a nick spoke in a chan (by 'chan,nick')
 	set ts [clock milliseconds]; # -- track when spoken, to have race condition mitigation when someone does 'quote add last <nick>' and they very recently spoke something else
 	set lastspeak($chan,$ts,$snick) $text
-	timer [cfg:get lastspeak:mins $chan] "arm::debug 5 \"quote:pubm: unsetting lastspeak($chan,$ts,$snick)\"; unset arm::lastspeak($chan,$ts,$snick)"
+	timer [cfg:get lastspeak:mins $chan] "arm::quote:unset:lastspeak $chan $ts $snick"
+}
+
+# -- unset the lastspeak
+proc quote:unset:lastspeak {chan ts nick} {
+	variable lastspeak; # -- tracks the last line a nick spoke in a chan (by 'chan,ts,nick')
+	arm::debug 5 "quote:unset:lastspeak: unsetting lastspeak($chan,$ts,$nick)"; 
+	unset lastspeak($chan,$ts,[split $nick])
 }
 
 # -- check if quote is enabled on a channel

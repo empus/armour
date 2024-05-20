@@ -1,0 +1,2 @@
+%B%command:%B% fact -- %B%level:%B% %LEVEL% -- %B%usage:%B% fact
+output a random fact.

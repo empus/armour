@@ -258,8 +258,6 @@ source scripts/userinfo.tcl
 loadhelp userinfo.help
 #source scripts/compat.tcl
 
-if {![file isdirectory "./db"]} { exec mkdir "./db" }
-
 if {[info exists net-type]} {
   switch -- ${net-type} {
     "EFnet" {
@@ -273,5 +271,8 @@ if {[info exists net-type]} {
   }
 }
 
-#source armour/$uservar.conf
+# -- Armour
+if {![file isdirectory "./db"]} { exec mkdir "./db" }
+bind msgm -|- "pass *" ::arm::userdb:msg:pass
+source armour/$uservar.conf
 

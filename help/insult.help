@@ -1,0 +1,2 @@
+%B%command:%B% insult -- %B%level:%B% %LEVEL% -- %B%usage:%B% insult <nick> <reason>
+send an insult to a user, incoporating the given reason.

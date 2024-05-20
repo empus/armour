@@ -8,6 +8,8 @@
 #
 # Abuse and channel management script for eggdrop bots on the IRC networks.
 #
+# https://armour.bot
+#
 # Armour automatic onjoin scanning be be placed in one of three modes:
 #    ON        :    Automatic scans upon client channel /join
 #    SECURE    :    Restricted channel modes (e.g., +Dm) with actions post-scan
@@ -40,7 +42,7 @@
 # WHITELIST ACTIONS:
 # ------------------------------------------------------------------------------------------------
 #
-#    A:    Accept User (exempt scans)
+#    A:    Accept User (exempt scans) -- default
 #    O:    Op User
 #    V:    Voice User
 #
@@ -49,28 +51,19 @@
 # ------------------------------------------------------------------------------------------------
 #
 #    B:    KickBan User
-#
-# ------------------------------------------------------------------------------------------------
-# LIMITATIONS:
-# ------------------------------------------------------------------------------------------------
-#
-#    IPv6 support for client scans does not yet support CIDR
 # 
 # ------------------------------------------------------------------------------------------------
 #
 # Code by       :  Empus @ Undernet - empus@undernet.org
-# Last modified :  2024-03-01
+# Last modified :  2024-05-20
 #
 # Please contact me should you need any assistence, but I hope most config options are explanatory.
 #
-# Issues and feature requests can be submitted on GitHub:
+# Documentation can be found at: https://armour.bot
 #
-#        https://github.com/empus/armour
-#
-# Or by asking in #armour on Undernet
+# Contact me at #armour on Undernet
 #
 # ------------------------------------------------------------------------------------------------
-if {[namespace exists arm]} { namespace delete arm }
 namespace eval arm {
 # ------------------------------------------------------------------------------------------------
 
@@ -86,12 +79,6 @@ namespace eval arm {
 # -- if multiple Armour bots run from the same eggdrop directory, each MUST have a different value
 set cfg(botname) "EDITME"
 
-# -- md5 type (md5|md5sum) - [md5sum]
-# -- make sure this binary suits your system, otherwise passwords will not work!!
-# - linux: md5sum
-# - bsd: md5
-set cfg(md5) "md5sum"
-
 # -- alert users if they don't have a password set? (0|1) - [0]
 set cfg(alert:nopass) 1
 
@@ -104,6 +91,16 @@ set cfg(alert:nopass) 1
 #   ... etc
 set cfg(debug:type) "putloglev"
 
+
+# -- file logging level (0-4) - [0]
+# -- data logged to ./armour/logs/<botname>.log
+# -- levels:
+#       0: most important information
+#       1: gentle verbosity
+#       2: extra information
+#       3: useful for debugging
+#       4: extremely verbose
+set cfg(log:level) 1
 
 
 # ------------------------------------------------------------------------------------------------
@@ -213,22 +210,6 @@ set cfg(char:glob) 1
 # o = op        d = deop        u = userlist
 set cfg(cmd:short) 1
 
-# -- allow use of nickname (with or without nick completion char :) as control char? (0|1) - [1]
-set cfg(char:nick) 1
-
-# -- require tab completion char ':' on nickname prefix?  (0|1) - [1]
-set cfg(char:tab) 0
-
-# -- allow global prefix char '*'  (0|1) - [0]
-set cfg(char:glob) 1
-
-# -- allow command shortcuts? (0|1) - [1]
-# k = kick              kb = kickban      b = black
-# a = add               v = view          r = rem
-# e = exempt            s = search        t = topic
-# o = op                d = deop          u = userlist
-set cfg(cmd:short) 1
-
 # -- default mode on load? (on|off|secure) - [on]
 set cfg(mode) "on"
 
@@ -336,6 +317,30 @@ set cfg(lasthosts) 600
 # -- append the username that set a topic, when set via bot? (0|1) - [1]
 set cfg(topic:who) 0
 
+# -- the frequency in mins to check if topic should be reset when 'autotopic' is enabled - [60]
+set cfg(atopic:period) 60
+
+
+
+# ------------------------------------------------------------------------------------------------
+# FLOAT LIMIT SETTINGS
+# ------------------------------------------------------------------------------------------------
+
+# -- automatically enable FLOATLIM with default values for new channels? (0|1) - [1]
+set cfg(float:auto) 1
+
+# -- the default frequency in seconds to check if limit should be adjusted - [60]
+# -- can be overridden with: modchan <chan> floatperiod <value>
+set cfg(float:period) 60
+
+# -- the default margin to set limit above currentUser count - [10]
+# -- can be overridden with: modchan <chan> floatmargin <value>
+set cfg(float:margin) 10
+
+# -- the grace limit to trigger limit adjustment - [3]
+# -- can be overridden with: modchan <chan> floatgrace <value>
+set cfg(float:grace)  3
+
 
 
 # ------------------------------------------------------------------------------------------------
@@ -393,9 +398,9 @@ set cfg(auth:wait) 0
 # KICKBAN SETTINGS
 # ------------------------------------------------------------------------------------------------
 
-# -- how to set channel kickbans? (chan|x) - [x]
+# -- how to set channel kickbans? (chan|x) - [chan]
 # use "x" to set bans via GNUWorld's mod.cservice service (ie. Undernet's X)
-# otherwise, use 'chan' to set channel kicks and bans
+# otherwise, use 'chan' to set server kicks and bans
 set cfg(ban) "chan"
 
 # -- X ban level (if using X) - [100]
@@ -455,6 +460,9 @@ set cfg(black:kick:value) 0
 
 # -- include blacklist reason in kick messages? (0|1) - [1]
 set cfg(black:kick:reason) 1
+
+# -- auto convert hostnames to IP addresses when using 'add' command for type 'host'? (0|1) - [0]
+set cfg(list:host:convert) 0
 
 # -- run blacklist scans on type 'country' when user has resolved ident? - [0]
 # -- whitelist scans will always run
@@ -601,7 +609,7 @@ set cfg(captcha:ack:ops) 1
 set cfg(ipqs) 0
 
 # -- IPQS API key
-set cfg(ipqs:key) "you-key-here"
+set cfg(ipqs:key) "YOUR-KEY-HERE"
 
 # -- IPQS only match clients with ~ in ident? (0|1) - [1]
 set cfg(ipqs:onlynoident) 1
@@ -620,7 +628,7 @@ set cfg(ipqs:duration) 3600
 
 
 # ------------------------------------------------------------------------------------------------
-# IRBL INTEGRATION SETTINGS
+# IRCBL INTEGRATION SETTINGS
 # ------------------------------------------------------------------------------------------------
 # This section relates to the use of IRCBL integration for for insertion & deletion
 
@@ -628,7 +636,7 @@ set cfg(ipqs:duration) 3600
 set cfg(ircbl) 0;
 
 # -- ircbl.org key
-set cfg(ircbl:key) "your-key-here";
+set cfg(ircbl:key) "YOUR-KEY-HERE";
 
 # -- ircbl.org default addition type - [11]
 set cfg(ircbl:type) 11;
@@ -721,17 +729,17 @@ set cfg(flood:line:autoblack:reason) "(auto) blacklisted from line flood"
 
 
 # ------------------------------------------------------------------------------------------------
-# ADAPTIVE REGEX
+# ADAPTIVE REGEX FLOODNET DETECTION
 # ------------------------------------------------------------------------------------------------
 
-# -- enable adaptive regex onjoin? - [1]
+# -- enable adaptive regex floodnet detection? - [1]
 set cfg(adapt) 1
 
 # -- adaptive regex types on join? (space delimited) - [n i]
 # n  : nickname
 # ni : nick!ident
 # i  : ident
-set cfg(adapt:types:join) "n i ni"
+set cfg(adapt:types:join) "n i"
 
 # -- adaptive regex types after /who (space delimited) - [r]
 # -- used in secure mode or once rname known
@@ -745,17 +753,13 @@ set cfg(adapt:types:join) "n i ni"
 #
 # use types involving rname and do not duplicate those done above in cfg(adapt:types:join)
 # this will prevent double handling for a given pattern (ie. false positives)
-set cfg(adapt:types:who) "nir nr r"
-
-# -- match explicit rname in adaptive regex? (0|1) - [1]
-# -- ie. match only common realnames? (1) -- or likeness patterns? (0) - [0]
-set cfg(adapt:explicit) 0
+set cfg(adapt:types:who) "r"
 
 # -- adaptive regex max join rate (clients:seconds:retain) - [2:3:15]
 # clients: client joins
 # seconds: .. in N seconds
 # retain: & retain common pattern for N seconds (for further joins)
-set cfg(adapt:rate) "2:2:5"
+set cfg(adapt:rate) "2:1:5"
 
 
 
@@ -807,15 +811,6 @@ set cfg(dnotc:operop) 1
 
 # -- frequency (in secs) to find hidden users when in secure mode (chanmode +Dm) - [5]
 set cfg(queue:secure) 5
-
-# -- custom kick queue cycle (secs) - [2]
-set cfg(queue:kick) 2
-
-# -- custom ban queue cycle (secs) - [1]
-set cfg(queue:ban) 1
-
-# -- custom flood queue (miliseconds) - [500]
-set cfg(queue:flud) 500
 
 
 
@@ -947,41 +942,138 @@ set cfg(dronebl:lvl) 500
 set cfg(dronebl:type) 17
 
 
+
+# ------------------------------------------------------------------------------------------------
+# QUOTE PLUGIN -- settings only relevant if optional plugin is loaded: quote
+# ------------------------------------------------------------------------------------------------
+
+# -- who can use the seen command? (1-5) - [2]
+#        1: all channel users
+#        2: all voiced, opped, and authed users
+#        3: only voiced when not secure mode, opped, and authed users
+#        4: only opped and authed channel users
+#        5: only authed users with command access
+set cfg(quote:allow) 2
+
+
+
+# ------------------------------------------------------------------------------------------------
+# SEEN PLUGIN -- settings only relevant if optional plugin is loaded: seen
+# ------------------------------------------------------------------------------------------------
+
+# -- who can use the seen command? (1-5) - [2]
+#        1: all channel users
+#        2: all voiced, opped, and authed users
+#        3: only voiced when not secure mode, opped, and authed users
+#        4: only opped and authed channel users
+#        5: only authed users with command access
+set cfg(seen:allow) 3
+
+
+
+# ------------------------------------------------------------------------------------------------
+# WEATHER PLUGIN -- settings only relevant if optional plugin is loaded: weather
+# https://www.openweathermap.org
+# ------------------------------------------------------------------------------------------------
+
+# -- who can use the weather command? (1-5) - [2]
+#        1: all channel users
+#        2: all voiced, opped, and authed users
+#        3: only voiced when not secure mode, opped, and authed users
+#        4: only opped and authed channel users
+#        5: only authed users with command access
+set cfg(weather:allow) 2
+
+# -- API key for weather data (www.openweathermap.org)
+set cfg(weather:key) "YOUR-KEY-HERE"
+
+# -- units for weather output (metric, imperial, or both) - [both]
+set cfg(weather:units) "both"
+
+
+
+# ------------------------------------------------------------------------------------------------
+# NINJAS PLUGIN -- settings only relevant if optional plugin is loaded: ninjas
+# https://www.api-ninjas.com
+# ------------------------------------------------------------------------------------------------
+
+# -- who can use the commands: joke, dad, history, fact, chuck, cocktail (1-5) - [3]
+#        1: all channel users
+#        2: all voiced, opped, and authed users
+#        3: only voiced when not secure mode, opped, and authed users
+#        4: only opped and authed channel users
+#        5: only authed users with command access
+set cfg(ninjas:allow) 3
+
+# -- API Key (www.ninjas-api.com)
+set cfg(ninjas:key) "YOUR-KEY-HERE"
+
+
+
+# ------------------------------------------------------------------------------------------------
+# HUMOUR PLUGIN -- settings only relevant if optional plugin is loaded: seen
+# https://www.humor-api.com
+# ------------------------------------------------------------------------------------------------
+
+# -- who can use the commands: gif, meme, praise, insult (1-5) - [2]
+#        1: all channel users
+#        2: all voiced, opped, and authed users
+#        3: only voiced when not secure mode, opped, and authed users
+#        4: only opped and authed channel users
+#        5: only authed users with command access
+set cfg(humour:allow) 3
+
+# -- API Key (www.humor-api.com)
+set cfg(humour:key) "YOUR-KEY-HERE"
+
+
+
 # ------------------------------------------------------------------------------------------------
 # OPENAI
 # -- requires 'openai' plugin to be loaded
 # -- requires 'openai' per channel setting to be enabled
 # ------------------------------------------------------------------------------------------------
 
-# -- ChatGPT API token
-# https://platform.openai.com/account/api-keys
+# -- AI service
+# -- perplexity: perplexity.ai
+# -- openai:     openai.com
+set cfg(ask:service) "openai"
+
+# -- AI model:
+# openai:     https://platform.openai.com/docs/models
+#             https://openai.com/api/pricing
+# perplexity: https://docs.perplexity.ai/docs/model-cards
+#             https://docs.perplexity.ai/docs/pricing
+set cfg(ask:model) "gpt-4o"
+
+# -- AI API token
+# OpenAI:     https://platform.openai.com/account/api-keys
+# Perplexity: https://www.perplexity.ai/settings/api
 set cfg(ask:token) "YOUR-TOKEN-HERE"
 
-# -- ChatGPT API organization
+# -- OpenAI ChatGPT API organization
+# NOTE: This is only required if cfg(ask:service) is set to 'openai'
 # https://platform.openai.com/account/org-settings
 set cfg(ask:org) "YOUR-ORG-HERE"
 
-# -- ChatGPT API model
-set cfg(ask:model) "gpt-4-turbo-preview"
-
-# -- ChatGPT query timeout (secs) - [60]
+# -- API query timeout (secs) - [60]
 set cfg(ask:timeout) 60
 
-# -- ChatGPT Max Answer Lines
+# -- API Max Answer Lines
 set cfg(ask:lines) "3"
 
-# -- ChatGPT API temperature
+# -- API temperature
 # The sampling temperature, between 0 and 1. Higher values like 0.8 will make the output more 
 # random, while lower values like 0.2 will make it more focused and deterministic. If set to 0, 
 # the model will use log probability to automatically increase the temperature until certain 
 # thresholds are hit.
 set cfg(ask:temp) "0.7"
 
-# -- ChatGPT chatbot description
+# -- Chatbot description
 # Optional instruction to the chatbot to influence its responses
 set cfg(ask:system) "You are $cfg(botname). Be fun and helpful, pretending to be a sentient robot created by Empus."
 
-# -- ChatGPT system behaviour for all user requests
+# -- API system behaviour for all user requests
 # notes:
 #       * setting is always applied to all requests
 #       * per user per chan behaviour can be set with 'askmode' command
@@ -1001,18 +1093,20 @@ set cfg(ask:blacklist:chans) ""
 # note: this list is only applied to channels listed in cfg(ask:blacklist:chans)
 set cfg(ask:blacklist) "*badword1* *another* *example2*"
 
-# -- ChatGPT conversation memory after initial question (mins) - [60]
+# -- AI conversation memory after initial question (mins) - [60]
 set cfg(ask:mem) 60
 
 # -- send all queries to 'ask' when botnick is used? (0|1) - [1]
 # NOTE: this will prevent all other commands from using the botnick as a command prefix
 set cfg(ask:cmdnick) 1
 
-# -- allow channel ops to send queries even if not logged in? (0|1) - [1]
-set cfg(ask:ops) 1
-
-# -- allow channel voiced users to send queries even if not logged in? (0|1) - [1]
-set cfg(ask:voice) 1
+# -- who can send queries? (1-5) - [3]
+#        1: all channel users
+#        2: all voiced, opped, and authed users
+#        3: only voiced when not secure mode, opped, and authed users
+#        4: only opped and authed channel users
+#        5: only authed users
+set cfg(ask:allow) 3
 
 # -- DALL-E image creation enable? (0|1) - [1]
 set cfg(ask:image) 1
@@ -1042,19 +1136,66 @@ set cfg(ask:rate:act) "dall-e-2"
 # -- absolute path to save DALL-E image PNG files to webserver
 set cfg(ask:path) "/home/armour/www/armour"
 
-# -- how long to retain PNG and mp3 files for? - [30d]
-# acceptable units:
-#   h: hours
-#   d: days
-#   w: weeks
-#
+# --retain PNG and mp3 files for how many days? - [90]
 # notes:
 #   - to keep forever, use empty value
-#   - if 'quote' plugin is loaded, files quotes in weblinks will always be preserved
-set cfg(ask:expire) "90d"
+#   - those with votes or in quotes will remain preserved
+set cfg(ask:expire) "90"
 
 # -- URL root serving PNG files from above path
 set cfg(ask:site) "https://files.armour.bot"
+
+
+
+# ------------------------------------------------------------------------------------------------
+# AI SPEAK (text-to-speech)
+# ------------------------------------------------------------------------------------------------
+
+# -- enable 'speak' functionality? (0|1) - [0]
+set cfg(speak:enable) 0
+
+# -- max number of lines to speak in responses
+set cfg(speak:lines) "4"
+
+# -- text-to-speech service (elevenlabs, openai) - [openai]
+# -- openai:     www.openai.com
+# -- elevenlabs: www.elevenlabs.io
+set cfg(speak:service) "openai"
+
+# -- API query timeout (seconds)
+set cfg(speak:timeout) 30
+
+
+
+# ------------------------------------------------------------------------------------------------
+# OPENAI -- relevant settings only if cfg(speak:service) set to: openai
+# ------------------------------------------------------------------------------------------------
+# -- OpenAI text-to-speech voice (alloy, echo, fable, onyx, nova, shimmer) - [onyx]
+set cfg(speak:openai:voice) "onyx"
+
+# -- OpenAI text-to-speech model - [tts-1]
+set cfg(speak:openai:model) "tts-1"
+
+# -- OpenAI text-to-speech file format mp3, opus, aac, flac
+set cfg(speak:openai:format) "mp3"
+
+
+
+# ------------------------------------------------------------------------------------------------
+# ELEVENLABS -- relevant settings only if cfg(speak:service) set to: elevenlabs
+# www.elevenlabs.io
+# ------------------------------------------------------------------------------------------------
+
+# -- ElevenLabs text-to-speech API key
+set cfg(speak:key) "API-KEY-HERE"
+
+# -- ElevenLabs text-to-speech voice model
+set cfg(speak:model) "eleven_monolingual_v1"
+
+# -- ElevenLabs text-to-speech voice
+# -- https://elevenlabs.io/app/voice-lab
+set cfg(speak:voice) "ZQe5CZNOzWyzPSCn5a3c"
+
 
 
 # ------------------------------------------------------------------------------------------------
@@ -1081,6 +1222,18 @@ set addcmd(askmode)     {  arm       1          pub msg dcc  }; # -- requires op
 set addcmd(and)         {  arm       1          pub msg dcc  }; # -- requires openai plugin
 set addcmd(image)       {  arm       1          pub msg dcc  }; # -- requires openai plugin
 set addcmd(speak)       {  arm       1          pub msg dcc  }; # -- requires speak plugin
+set addcmd(joke)        {  arm       1          pub msg dcc  }; # -- requires ninjas plugin
+set addcmd(dad)         {  arm       1          pub msg dcc  }; # -- requires ninjas plugin
+set addcmd(history)     {  arm       1          pub msg dcc  }; # -- requires ninjas plugin
+set addcmd(fact)        {  arm       1          pub msg dcc  }; # -- requires ninjas plugin
+set addcmd(chuck)       {  arm       1          pub msg dcc  }; # -- requires ninjas plugin
+set addcmd(cocktail)    {  arm       1          pub msg dcc  }; # -- requires ninjas plugin
+set addcmd(weather)     {  arm       1          pub msg dcc  }; # -- requires weather plugin
+#set addcmd(meme)        {  arm       1          pub msg dcc  }; # -- requires humour plugin
+set addcmd(gif)         {  arm       1          pub msg dcc  }; # -- requires humour plugin
+set addcmd(praise)      {  arm       1          pub msg dcc  }; # -- requires humour plugin
+set addcmd(insult)      {  arm       1          pub msg dcc  }; # -- requires humour plugin
+set addcmd(seen)        {  seen	     1			pub msg dcc  }; # -- requires seen plugin
 set addcmd(access)      {  userdb    1          pub msg dcc  }
 set addcmd(cmds)        {  arm       1          pub msg dcc  }
 set addcmd(help)        {  arm       1          pub msg dcc  }
@@ -1090,23 +1243,21 @@ set addcmd(lang)        {  userdb    1          pub msg dcc  }
 set addcmd(set)         {  userdb    1          pub msg dcc  }
 set addcmd(time)        {  userdb    1          pub msg dcc  }
 set addcmd(version)     {  arm       1          pub msg dcc  }
-set addcmd(view)        {  arm       1          pub msg dcc  }
-set addcmd(stats)       {  arm       1          pub msg dcc  }
-set addcmd(status)      {  arm       1          pub msg dcc  }
-set addcmd(scan)        {  arm       1          pub msg dcc  }
-set addcmd(search)      {  arm       1          pub msg dcc  }
-set addcmd(scanrbl)     {  arm       1          pub msg dcc  }
-set addcmd(scanport)    {  arm       1          pub msg dcc  }
 set addcmd(asn)         {  arm       1          pub msg dcc  }
 set addcmd(country)     {  arm       1          pub msg dcc  }
 set addcmd(note)        {  arm       1          pub msg dcc  }
-set addcmd(exempt)      {  arm       1          pub msg dcc  }
-set addcmd(queue)       {  arm       1          pub msg dcc  }
-set addcmd(ack)         {  trakka    1          pub msg dcc  }
-set addcmd(score)       {  trakka    1          pub msg dcc  }
-set addcmd(nudge)       {  trakka    1          pub msg dcc  }
-set addcmd(idle)        {  arm       1          pub msg dcc  }
-set addcmd(ipqs)        {  ipqs      1          pub msg dcc  }
+set addcmd(exempt)      {  arm       100        pub msg dcc  }
+set addcmd(queue)       {  arm       100        pub msg dcc  }
+set addcmd(ack)         {  trakka    100        pub msg dcc  }; # -- requires trakka plugin
+set addcmd(score)       {  trakka    100        pub msg dcc  }; # -- requires trakka plugin
+set addcmd(nudge)       {  trakka    100        pub msg dcc  }; # -- requires trakka plugin
+set addcmd(idle)        {  arm       100        pub msg dcc  }
+set addcmd(ipqs)        {  ipqs      100        pub msg dcc  }; # -- only if configured
+set addcmd(view)        {  arm       100        pub msg dcc  }
+set addcmd(scan)        {  arm       100        pub msg dcc  }
+set addcmd(search)      {  arm       100        pub msg dcc  }
+set addcmd(scanrbl)     {  arm       100        pub msg dcc  }; # -- only if configured
+set addcmd(scanport)    {  arm       100        pub msg dcc  }; # -- only if configured
 set addcmd(mode)        {  arm       100        pub msg dcc  }
 set addcmd(add)         {  arm       100        pub msg dcc  }
 set addcmd(op)          {  arm       100        pub msg dcc  }
@@ -1118,8 +1269,11 @@ set addcmd(ban)         {  arm       100        pub msg dcc  }
 set addcmd(unban)       {  arm       100        pub msg dcc  }
 set addcmd(topic)       {  arm       100        pub msg dcc  }
 set addcmd(invite)      {  arm       100        pub msg dcc  }
+set addcmd(stats)       {  arm       200        pub msg dcc  }
+set addcmd(status)      {  arm       200        pub msg dcc  }
 set addcmd(mod)         {  arm       200        pub msg dcc  }
 set addcmd(black)       {  arm       200        pub msg dcc  }
+set addcmd(captcha)     {  arm       300        pub msg dcc  }; # -- only if configured
 set addcmd(chanscan)    {  arm       300        pub msg dcc  }
 set addcmd(rem)         {  arm       300        pub msg dcc  }
 set addcmd(newuser)     {  userdb    400        pub msg dcc  }
@@ -1129,7 +1283,7 @@ set addcmd(userlist)    {  userdb    400        pub msg dcc  }
 set addcmd(usearch)     {  userdb    400        pub msg dcc  }
 set addcmd(chanlist)    {  userdb    400        pub msg dcc  }
 set addcmd(moduser)     {  userdb    400        pub msg dcc  }
-set addcmd(say)         {  arm       500        pub msg dcc  }
+set addcmd(ignore)      {  arm       450        pub msg dcc  }
 set addcmd(jump)        {  arm       450        pub msg dcc  }
 set addcmd(load)        {  arm       450        pub msg dcc  }
 set addcmd(reload)      {  arm       450        pub msg dcc  }
@@ -1139,11 +1293,14 @@ set addcmd(addchan)     {  userdb    450        pub msg dcc  }
 set addcmd(remchan)     {  userdb    450        pub msg dcc  }
 set addcmd(modchan)     {  userdb    450        pub msg dcc  }
 set addcmd(deluser)     {  userdb    450        pub mdg dcc  }
+set addcmd(say)         {  arm       500        pub msg dcc  }
+set addcmd(deploy)      {  arm       500        pub msg dcc  }
 set addcmd(do)          {  userdb    500        pub msg dcc  }
 set addcmd(die)         {  arm       500        pub msg dcc  }
 set addcmd(conf)        {  arm       500        pub msg dcc  }
 set addcmd(showlog)     {  arm       500        pub msg dcc  }
 set addcmd(update)      {  arm       500        pub msg dcc  }
+
 
 
 # ------------------------------------------------------------------------------------------------
@@ -1154,11 +1311,16 @@ set addcmd(update)      {  arm       500        pub msg dcc  }
 # -- to load plugins, uncomment their line after editing any config parameters in each file
 #set addplugin(quote) "./armour/plugins/quote.tcl";           # -- quote management
 #set addplugin(openai) "./armour/plugins/openai.tcl";         # -- openai (ChatGPT)
-#set addplugin(tell) "./armour/plugins/tell.tcl";             # -- tell
-#set addplugin(trakka) "./armour/plugins/trakka/trakka.tcl";  # -- trakka
+#set addplugin(openai) "./armour/plugins/speak.tcl";          # -- speak (text-to-speech)
+#set addplugin(ninjas) "./armour/plugins/ninjas.tcl";         # -- ninjas (jokes, facts, etc)
+#set addplugin(humour) "./armour/plugins/humour.tcl";         # -- humour (gifs, memes, etc)
+#set addplugin(weather) "./armour/plugins/weather.tcl";       # -- current weather by city
+#set addplugin(seen) "./armour/plugins/seen.tcl";             # -- showing user lastseen
+#set addplugin(tell) "./armour/plugins/tell.tcl";             # -- tell reminders
+#set addplugin(trakka) "./armour/plugins/trakka/trakka.tcl";  # -- trakka scoring for private chans
 #set addplugin(smsbot) "./armour/plugins/smsbot.tcl";         # -- SMS (via smsglobal.com)
 #set addplugin(push) "./armour/plugins/push.tcl";             # -- push (via pushover.net)
-#set addplugin(email) "./armour/plugins/email.tcl";           # -- email
+#set addplugin(email) "./armour/plugins/email.tcl";           # -- send email notes
 
 
 

@@ -1,0 +1,2 @@
+%B%command:%B% seen -- %B%level:%B% %LEVEL% -- %B%usage:%B% seen <nick>
+show the lastseen information for a given user.

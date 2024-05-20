@@ -1,0 +1,2 @@
+%B%command:%B% gif -- %B%level:%B% %LEVEL% -- %B%usage:%B% gif <description>
+search for a GIF based on the given description.

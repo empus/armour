@@ -102,50 +102,55 @@ bind cron - "0 * * * *" arm::ask:cron;          # -- hourly file cleanup cronjob
 bind cron - "30 */3 * * *" arm::ask:cron:image; # -- cronjob every 3 hours at 30mins past the hours
 
 # -- cronjob to flush old files, to preserve disk space
-# -- do not delete files referenced in quotes (if 'quote' plugin is used), or in image votes
+# -- do not delete files referenced in quotes (if 'quote' plugin is used), or when voted
 proc ask:cron {minute hour day month weekday} {
     set ageflush [cfg:get ask:expire]
-    set files [exec find [cfg:get ask:path] ( -name *.png -o -name *.mp3 ) -type f -mtime +$ageflush]
-    debug 1 "\002ask:cron:\002 checking for files older than: $ageflush"
-    set deleted 0; set preserved 0
-    foreach pathfile $files {
-        set file [file tail $pathfile]
+    set ageflush [string trimright $ageflush "d"]; # -- legacy value support
 
-        db:connect
+    set now [clock seconds]
+    db:connect
+    set rows [db:query "SELECT id,type,timestamp,votes,file FROM openai"]
+    set num [llength $rows]; set deleted 0; set preserved 0
+    debug 0 "\002ask:cron:\002 found \002$num\002 files in database -- checking for expired files ($ageflush days)"
+    foreach row $rows {
+        lassign $row id type timestamp votes file
+        set daysold [expr {($now-$timestamp)/86400}]
+        set path [file join [cfg:get ask:path] $file]
         if {[info commands quote:cron] ne ""} {
             # -- plugin loaded, check if file's weblink is quoted
             set qcount [db:query "SELECT count(*) FROM quotes WHERE quote LIKE '%$file%'"]
         } else { set qcount 0 }
 
-        # -- check for image votes
-        set vcount [db:query "SELECT count(*) FROM openai WHERE file = '$file'"]
-        db:close
-        set text ""
-        if {$qcount ne 0} { set text "quoted" } \
-        elseif {$vcount ne 0} { set text "voted" }
-        if {$text ne ""} {
+        if {![file exists $path]} {
+                debug 0 "ask:cron: no such file! \002deleting\002 -- age: $daysold -- days: $path"
+                db:query "DELETE FROM openai WHERE id=$id"
+                incr deleted
+        }
+
+        if {$qcount > 0 || $votes > 0} {
             # -- file is quoted or voted! preserve it
-            debug 3 "\002ask:cron:\002 preserving \002$text\002 file: $pathfile"
+            debug 0 "\002ask:cron:\002 preserving \002quoted or voted\002 file: $path"
             incr preserved
             continue;
         }
-        
-        # -- delete file
-        debug 1 "\002ask:cron:\002 deleting expired file: $pathfile"
-        exec rm $pathfile
-        db:connect
-        db:query "DELETE FROM openai WHERE file = '$file'"
-        db:close
-        incr deleted
+
+        if {$daysold > $ageflush} {
+            debug 0 "ask:cron: deleting old entry: $path -- age: $daysold days"
+            db:query "DELETE FROM openai WHERE id=$id"
+            file delete $path
+            incr deleted
+        }
     }
+    db:close
     if {$deleted > 0} { debug 0 "\002ask:cron:\002 deleted \002$deleted\002 expired files" }
     if {$preserved > 0} { debug 0 "\002ask:cron:\002 preserved \002$preserved\002 expired files (\002quoted or voted\002)" }
+    debug 0 "\002ask:cron:\002 done. [expr {$num-$deleted}] files remaining."
 }
 
 # -- cronjob to output regular random images
 proc ask:cron:image {minute hour day month weekday} { 
 	variable dbchans; # -- dict containing channel data
-	debug 0 "\002ask:cron:image:\002 starting -- minute: $minute -- hour: $hour -- month: $month -- weekday: $weekday"
+	debug 1 "\002ask:cron:image:\002 starting -- minute: $minute -- hour: $hour -- month: $month -- weekday: $weekday"
 	db:connect
 	# -- output for each channel where imagerand is enabled
 	set cids [db:query "SELECT cid FROM settings WHERE setting='imagerand' AND value='on'"]
@@ -165,7 +170,7 @@ proc ask:cron:image {minute hour day month weekday} {
         set desc [lrange $desc 1 end]
         if {$tuser ne ""} { set extra1 " \002user:\002 $tuser --" } else { set extra1 " \002nick:\002 $dbnick --" }
         if {$votes ne 0} { set extra2 " -- \002votes:\002 $votes" } else { set extra2 "" }
-        debug 1 "\002ask:cron:image\002 sending periodic random image to $chan: $weburl -- prompt: $desc"
+        debug 0 "\002ask:cron:image\002 sending periodic random image to $chan: $weburl -- prompt: $desc"
         reply pub $chan "\002\[image:\002 $id\002\]\002$extra1 \002date:\002 [clock format $timestamp -format "%Y-%m-%d"]$extra2 -- \002url:\002 $weburl -- \002prompt:\002 $desc"
 	}
 	db:close
@@ -173,11 +178,13 @@ proc ask:cron:image {minute hour day month weekday} {
 
 
 # -- ask a question
-proc arm:cmd:ask {0 1 2 3 {4 ""}  {5 ""}} {
+proc arm:cmd:ask {0 1 2 3 {4 ""} {5 ""}} {
     variable ask
     lassign [proc:setvars $0 $1 $2 $3 $4 $5] type stype target starget nick uh hand source chan arg 
 
     set cmd "ask"
+
+    set arg [join [join $arg]]
 
     set speak 0; set userprefix 1;
     set what $arg
@@ -190,7 +197,6 @@ proc arm:cmd:ask {0 1 2 3 {4 ""}  {5 ""}} {
     } elseif {[string match "speak*" [lindex $arg 0]]} {
         # -- speak the response instead of in writing
         set speak 1; 
-        #set cmd "speak"
         set what [lrange $arg 1 end]
     } elseif {$first eq "-"} {
         # -- signal to not use the user's 'askmode' prefix
@@ -205,15 +211,22 @@ proc arm:cmd:ask {0 1 2 3 {4 ""}  {5 ""}} {
     if {$cid eq ""} { set cid 1 }; # -- default to global chan when command used in an unregistered chan
 
     # -- ensure user has required access for command
-    if {![userdb:isAllowed $nick $cmd $chan $type] && $chan ne "*"} {
-        # -- check if opped or voiced
-        set err 1
-        if {[isop $nick $chan] && [cfg:get ask:ops *]} { set err 0 };      # -- opped and ops allowed
-        if {[isvoice $nick $chan] && [cfg:get ask:voice *]} { set err 0 }; # -- voiced and voice allowed
-        if {$err} {
-            return;
-        }
-    }
+	set allowed [cfg:get ask:allow];    # -- who can use commands? (1-5)
+                                        #        1: all channel users
+									    #        2: only voiced, opped, and authed users
+                                        #        3: only voiced when not secure mode, opped, and authed users
+                        	            #        4: only opped and authed channel users
+                                        #        5: only authed users with command access
+    set allow 0
+    if {$uid eq ""} { set authed 0 } else { set authed 1 }
+    if {$allowed eq 0} { return; } \
+    elseif {$allowed eq 1} { set allow 1 } \
+	elseif {$allowed eq 3} { if {[isop $nick $chan] || [isvoice $nick $chan] || $authed} { set allow 1 } } \
+    elseif {$allowed eq 3} { if {[isop $nick $chan] || ([isvoice $nick $chan] && [dict get $dbchans $cid mode] ne "secure") || $authed} { set allow 1 } } \
+    elseif {$allowed eq 4} { if {[isop $nick $chan] || $authed} { set allow 1 } } \
+    elseif {$allowed eq 5} { if {$authed} { set allow [userdb:isAllowed $nick $cmd $chan $type] } }
+    if {[userdb:isIgnored $nick $cid]} { set allow 0 }; # -- check if user is ignored
+    if {!$allow} { return; }; # -- client cannot use command
 
     set ison [arm::db:get value settings setting "openai" cid $cid]
     if {$ison ne "on"} {
@@ -288,9 +301,10 @@ proc arm:cmd:ask {0 1 2 3 {4 ""}  {5 ""}} {
         return;
     }
 
-    putlog "arm:cmd:ask: response: $response"
-    regsub -all {"} $response {\\"} eresponse; # -- escape quotes in response
-    putlog "arm:cmd:ask: eresponse: $eresponse"
+    debug 3 "arm:cmd:ask: response: $response"
+    set eresponse $response
+    regsub -all {"} $response {\"} eresponse; # -- escape quotes in response
+    #debug 3 "arm:cmd:ask: eresponse: $eresponse"
     append ask($type,[split $nick],$chan) ", {\"role\": \"assistant\", \"content\": \"$eresponse\"}"
 
     regsub -all {\{} $response {"} response; # -- fix curly braces
@@ -313,7 +327,15 @@ proc arm:cmd:ask {0 1 2 3 {4 ""}  {5 ""}} {
             || [string match "Creating images is beyond my current capabilities,* " $response]} {
             set response "Please adjust the wording of your request, if you want me to create an image."
         }
-        reply $type $target "$nick: $response"
+        #set response [encoding convertto utf-8 $response]
+        putlog "response 1: $response"
+        set response [u2a $response]
+        putlog "response 2: $response"
+        set response2 [encoding convertfrom utf-8 "$response"]
+        #putlog "response 3: $response"
+        reply $type $target "$nick: $response2"
+        #reply $type $target "$nick: [encoding convertfrom utf-8 "$response"]"
+        #putquick "PRIVMSG $target :$nick: [encoding convertto utf-8 $response]"
     }
 
     ask:killtimer [split $type,[split $nick],$chan]; # -- kill any existing ask timer
@@ -324,29 +346,38 @@ proc arm:cmd:ask {0 1 2 3 {4 ""}  {5 ""}} {
 }
 
 # -- continue a conversation
-proc arm:cmd:and {0 1 2 3 {4 ""}  {5 ""}} {
+proc arm:cmd:and {0 1 2 3 {4 ""} {5 ""}} {
     variable ask
     lassign [proc:setvars $0 $1 $2 $3 $4 $5] type stype target starget nick uh hand source chan arg 
 
     set cmd "and"
 
+    set arg [join [join $arg]]; # -- join the arg list
+
     lassign [db:get id,user users curnick $nick] uid user
     set chan [userdb:get:chan $user $chan]; # -- predict chan when not given
 
-    # -- ensure user has required access for command
-    if {![userdb:isAllowed $nick $cmd $chan $type] && $chan ne "*"} {
-        # -- check if opped or voiced
-        set err 1
-        if {[isop $nick $chan] && [cfg:get ask:ops *]} { set err 0 };      # -- opped and ops allowed
-        if {[isvoice $nick $chan] && [cfg:get ask:voice *]} { set err 0 }; # -- voiced and voice allowed
-        if {$err} {
-            return;
-        }
-    }
-    
     set cid [db:get id channels chan $chan]
     if {$cid eq ""} { set cid 1 }; # -- default to global chan when command sued in unregistered channel
 
+    # -- ensure user has required access for command
+	set allowed [cfg:get ask:allow];    # -- who can use commands? (1-5)
+                                        #        1: all channel users
+									    #        2: only voiced, opped, and authed users
+                                        #        3: only voiced when not secure mode, opped, and authed users
+                        	            #        4: only opped and authed channel users
+                                        #        5: only authed users with command access
+    set allow 0
+    if {$uid eq ""} { set authed 0 } else { set authed 1 }
+    if {$allowed eq 0} { return; } \
+    elseif {$allowed eq 1} { set allow 1 } \
+	elseif {$allowed eq 3} { if {[isop $nick $chan] || [isvoice $nick $chan] || $authed} { set allow 1 } } \
+    elseif {$allowed eq 3} { if {[isop $nick $chan] || ([isvoice $nick $chan] && [dict get $dbchans $cid mode] ne "secure") || $authed} { set allow 1 } } \
+    elseif {$allowed eq 4} { if {[isop $nick $chan] || $authed} { set allow 1 } } \
+    elseif {$allowed eq 5} { if {$authed} { set allow [userdb:isAllowed $nick $cmd $chan $type] } }
+    if {[userdb:isIgnored $nick $cid]} { set allow 0 }; # -- check if user is ignored
+    if {!$allow} { return; }; # -- client cannot use command
+    
     set ison [arm::db:get value settings setting "openai" cid $cid]
     if {$ison ne "on"} {
         # -- openai plugin not enabled on chan
@@ -389,7 +420,7 @@ proc arm:cmd:and {0 1 2 3 {4 ""}  {5 ""}} {
     }
 
     # -- add response to conversation history
-    regsub -all {"} $response {\\"} eresponse; # -- escape quotes
+    regsub -all {"} $response {\"} eresponse; # -- escape quotes
     append ask($type,[split $nick],$chan) ", {\"role\": \"assistant\", \"content\": \"$eresponse\"}"
     regsub -all {\{} $response {"} response; # -- fix curly braces
     regsub -all {\}} $response {"} response; # -- fix curly braces
@@ -432,22 +463,37 @@ proc ask:abstract:cmd {cmd 0 1 2 3 {4 ""} {5 ""}} {
         set plural "images"
     } else { set plural $cmd }
 
-    lassign [db:get id,user users curnick $nick] uid user
-    set chan [userdb:get:chan $user $chan]; # -- predict chan when not given
+	lassign [db:get user,id users curnick $nick] user uid
+	if {[string index [lindex $arg 0] 0] eq "#"} {
+		# -- channel name given
+		set chan [lindex $arg 0]
+		set arg [lrange $arg 1 end]
+	} else {
+		# -- chan name not given, figure it out
+		set chan [userdb:get:chan $user $chan]
+	}
 
-    set cid [db:get id channels chan $chan]
-    if {$cid eq ""} { set cid 1 }; # -- default to global chan when command used in an unregistered chan
+	set cid [db:get id channels chan $chan]
+	set glevel [db:get level levels cid 1 uid $uid]
+	set level [db:get level levels cid $cid uid $uid]
 
     # -- ensure user has required access for command
-    if {![userdb:isAllowed $nick $cmd $chan $type] && $chan ne "*"} {
-        # -- check if opped or voiced
-        set err 1
-        if {[isop $nick $chan] && [cfg:get ask:ops *]} { set err 0 };      # -- opped and ops allowed
-        if {[isvoice $nick $chan] && [cfg:get ask:voice *]} { set err 0 }; # -- voiced and voice allowed
-        if {$err} {
-            return;
-        }
-    }
+	set allowed [cfg:get ask:allow];    # -- who can use commands? (1-5)
+                                        #        1: all channel users
+									    #        2: only voiced, opped, and authed users
+                                        #        3: only voiced when not secure mode, opped, and authed users
+                        	            #        4: only opped and authed channel users
+                                        #        5: only authed users with command access
+    set allow 0
+    if {$uid eq ""} { set authed 0 } else { set authed 1 }
+    if {$allowed eq 0} { return; } \
+    elseif {$allowed eq 1} { set allow 1 } \
+	elseif {$allowed eq 3} { if {[isop $nick $chan] || [isvoice $nick $chan] || $authed} { set allow 1 } } \
+    elseif {$allowed eq 3} { if {[isop $nick $chan] || ([isvoice $nick $chan] && [dict get $dbchans $cid mode] ne "secure") || $authed} { set allow 1 } } \
+    elseif {$allowed eq 4} { if {[isop $nick $chan] || $authed} { set allow 1 } } \
+    elseif {$allowed eq 5} { if {$authed} { set allow [userdb:isAllowed $nick $cmd $chan $type] } }
+    if {[userdb:isIgnored $nick $cid]} { set allow 0 }; # -- check if user is ignored
+    if {!$allow} { return; }; # -- client cannot use command
 
     set ison [db:get value settings setting $cmd cid $cid]
     if {$ison ne "on"} {
@@ -683,7 +729,6 @@ proc ask:abstract:cmd {cmd 0 1 2 3 {4 ""} {5 ""}} {
 		set first [join [lindex [db:query $first] 0]]
 		set last [join [lindex [db:query $last] 0]]
 		
-		db:close
 		# -- TODO: move timeago locally to work in standalone
 		set firstago [userdb:timeago $first]
 		set lastago [userdb:timeago $last]
@@ -691,6 +736,22 @@ proc ask:abstract:cmd {cmd 0 1 2 3 {4 ""} {5 ""}} {
 		if {$top ne "" && $isuser eq 0} {
 			reply $type $target "\002top 10 authed requesters:\002 $top"
 		}
+        set now [clock seconds]
+        set rows [db:query "SELECT id,type,timestamp,votes,file FROM openai WHERE cid=$cid AND type='$cmd'"]
+        set num [llength $rows]; set quoted 0; set voted 0
+        foreach row $rows {
+            lassign $row dbid dbtype dbts dbvotes dbfile
+            set daysold [expr {($now-$dbts)/86400}]
+            if {[info commands quote:cron] ne ""} {
+                # -- plugin loaded, check if file's weblink is quoted
+                set qcount [db:query "SELECT count(*) FROM quotes WHERE quote LIKE '%$dbfile%'"]
+            } else { set qcount 0 }
+            if {$qcount > 0} { incr quoted }
+            if {$dbvotes > 0} { incr voted }
+        }
+        db:close
+        set expiry [string trimright [cfg:get ask:expire *] "d"]
+        reply $type $target "\002expire age:\002 $expiry days -- \002preserving:\002 $quoted (quoted), $voted (voted)"
 
     } elseif {$what eq "search" || $what eq "s"} {
 		# -- search
@@ -861,15 +922,8 @@ proc arm:cmd:askmode {0 1 2 3 {4 ""}  {5 ""}} {
     # -- end default proc template
 
     # -- ensure user has required access for command
-    if {![userdb:isAllowed $nick $cmd $chan $type] && $chan ne "*"} {
-        # -- check if opped or voiced
-        set err 1
-        if {[isop $nick $chan] && [cfg:get ask:ops *]} { set err 0 };      # -- opped and ops allowed
-        if {[isvoice $nick $chan] && [cfg:get ask:voice *]} { set err 0 }; # -- voiced and voice allowed
-        if {$err} {
-            return;
-        }
-    }
+    if {![userdb:isAllowed $nick $cmd $chan $type]} { return; }
+
 
     set cid [db:get id channels chan $chan]
     set ison [arm::db:get value settings setting "openai" cid $cid]
@@ -927,9 +981,15 @@ proc ask:query {what first ids key {speak "0"} {userprefix "1"}} {
     variable ask
     http::config -useragent "mozilla" 
     http::register https 443 [list ::tls::socket -autoservername true]
+    set ::http::defaultCharset utf-8
 
     # -- query config
-    set cfgurl "https://api.openai.com/v1/chat/completions"
+    # -- set API URL based on service
+    switch -- [cfg:get ask:service] {
+        openai     { set cfgurl "https://api.openai.com/v1/chat/completions" }
+        perplexity { set cfgurl "https://api.perplexity.ai/chat/completions" }
+        default    { set cfgurl "https://api.openai.com/v1/chat/completions"}
+    }
     set token [cfg:get ask:token *]
     set org [cfg:get ask:org *]
     set model [cfg:get ask:model *]
@@ -942,12 +1002,14 @@ proc ask:query {what first ids key {speak "0"} {userprefix "1"}} {
     #    "temperature": 0.7
     # }
 
-    putlog "ask:query: what: $what"
+    debug 4 "ask:query: what: $what"
     
     regsub -all {"} $what {\\"} ewhat;           # -- escape quotes in question
-    putlog "ask:query: ewhat: $ewhat"
+    #putlog "ask:query: ewhat: $ewhat"
+    #set ewhat $what
     set ewhat [encoding convertto utf-8 $ewhat]; # -- convert to utf-8
-    putlog "ask:query: ewhat now (utf8 convert): $ewhat"
+    #putlog "ask:query: ewhat now (utf8 convert): $ewhat"
+    #set ewhat $what
 
     if {$first} {
         # -- first message in conversation
@@ -992,6 +1054,7 @@ proc ask:query {what first ids key {speak "0"} {userprefix "1"}} {
 
     catch {set tok [http::geturl $cfgurl \
         -method POST \
+        -binary 1 \
         -query $json \
         -headers [list "Authorization" "Bearer $token" "OpenAI-Organization" "$org" "Content-Type" "application/json"] \
         -timeout $timeout \
@@ -1003,26 +1066,29 @@ proc ask:query {what first ids key {speak "0"} {userprefix "1"}} {
     
     set json [http::data $tok]
     debug 3 "\002ChatGPT response JSON:\002 $json"
+    #debug 3 "\002ChatGPT response converted JSON:\002 [encoding convertfrom iso8859-1 $json]"
     set data [json::json2dict $json]
     http::cleanup $tok
 
     if {[dict exists $data error message]} {
         set errmsg [dict get $data error message]
         debug 0 "\002ask:query:\002 OpenAI error: $errmsg"
-        return "1 $errmsg"
+        if {[string match "*could not parse the JSON body of your request*" $errmsg]} {
+            # -- request error; invalid chars
+            #debug 0 "\002ask:query:\002 invalid request characters"
+            return "0 sorry, I didn't understand some invalid request characters."
+        } else {
+            return "1 $errmsg"
+        }
     }
     set choices [dict get $data choices]
     set message [dict get [join $choices] message]
     set content [dict get $message content]
 
-    debug 0 "\002ask:query:\002 content: $content"
-    debug 0 "\002ask:query:002 utf8 encoded content: [encoding convertto utf-8 $content]"
+    debug 3 "\002ask:query:\002 content: $content"
+    #debug 0 "\002ask:query:002 utf8 encoded content: [encoding convertto utf-8 $content]"
 
-    if {[string match "*could not parse the JSON body of your request*" $content]} {
-        # -- request error; invalid chars
-        set content "sorry, I didn't understand some invalid request characters."
-        debug 0 "\002ask:query:\002 invalid request characters"
-    }
+
 
     return "0 $content"
 }
@@ -1409,7 +1475,17 @@ if {[cfg:get ask:cmdnick *] eq 1} {
 if {![info exists ask:rate:count]} { set ask:rate:count 0 }; # -- rate limit tracker
 
 
-putlog "\[@\] Armour: loaded ChatGPT plugin (ask, image)"
+proc u2a s {
+    set res {} 
+    foreach i [split $s {}] {
+        ::scan $i %c c
+        if {$c < 128} {append res $i} else {append res \\u[format %04.4X $c]}
+    }
+    set res
+}
+
+
+putlog "\[@\] Armour: loaded OpenAI plugin (ask, and, askmode, image)"
 
 # ------------------------------------------------------------------------------------------------
 }; # -- end namespace

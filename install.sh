@@ -10,6 +10,7 @@
 #           -i              Install Armour (and optionally, eggdrop)
 #           -a              Add a new bot to existing Armour install
 #           -l              Load Armour on an existing eggdrop with Armour already configured
+#           -f <file>       Deploy an additional Armour bot non-interactively from a deployment file
 #           -h, --help      Display script options
 #
 # --------------------------------------------------------------------------------------------
@@ -26,14 +27,17 @@
 # --------------------------------------------------------------------------------------------
 
 
-ARMOUR_VER="v4.0"
+ARMOUR_VER="v5.0"
 ARMOUR_GIT="https://github.com/empus/armour"
 EGGDROP_VER="1.9.5"
 EGGDROP_URL="https://ftp.eggheads.org/pub/eggdrop/source/1.9/eggdrop-1.9.5.tar.gz"
 
 set -u
 shopt -s nocasematch # -- case insensitive matching
-stty erase '^?'      # -- fix backspace with 'read'
+if [ -t 0 ]; then
+    # -- interactive terminal
+    stty erase '^?'      # -- fix backspace with 'read'
+fi
 
 abort() {
     printf "%s\n" "$@" >&2
@@ -116,7 +120,6 @@ else
 fi
 
 # -- set OS specific package manager and packages
-MD5="md5sum"
 PKG_OATHTOOL="oathtool"
 PKG_IMAGEMAGICK="imagemagick"
 GNUSED=1
@@ -131,7 +134,7 @@ if [[ -n "${ARMOUR_ON_LINUX-}" ]]; then
         SYSTEM="CentOS"
         PKGMGR="yum"
         PKGMGR_ARGS="install -y"
-        PACKAGES="gcc epel-release curl git tcl tcl-devel tcltls sqlite-devel"
+        PACKAGES="gcc make epel-release curl git tcl tcl-devel tcltls sqlite3 sqlite-devel"
         PKG_IMAGEMAGICK="ImageMagick"
     else
         if [ -f "/etc/os-release" ]; then
@@ -149,16 +152,15 @@ elif [[ -n "${ARMOUR_ON_BSD-}" ]]; then
     PKGMGR_ARGS="install -y"
     PACKAGES="curl git tcl tcllib tcltls sqlite3 tcl-sqlite3"
     PKG_IMAGEMAGICK="ImageMagick7"
-    MD5="md5"
+    PKG_OATHTOOL="oath-toolkit"
     GNUSED=0
 elif [[ -n "${ARMOUR_ON_MACOS-}" ]]; then
     SYSTEM="macOS"
     PKGMGR="brew"
     PKGMGR_ARGS="install"
     #PACKAGES="curl git tcl tcllib tcltls sqlite3 tcl-sqlite3 oath-toolkit imagemagick"
-    PACKAGES="curl git tcl sqlite3 oath-toolkit imagemagick"
+    PACKAGES="curl git tcl sqlite3 oath-toolkit"
     PKG_OATHTOOL="oath-toolkit"
-    MD5="md5"
     GNUSED=0
 fi
 
@@ -182,6 +184,22 @@ getc() {
 ring_bell() {
     if [[ -t 1 ]]; then
         printf "\a"
+    fi
+}
+
+# -- get first IP on primary NIC
+getIP() {
+    local interface
+    if [[ " FreeBSD NetBSD OpenBSD Darwin " == *" $OS "* ]]; then
+        # -- BSD or macOS
+        interface=$(route -n get default | grep interface | awk '{print $2}')
+        IPADDRESS=$(ifconfig $interface | grep "inet " | awk '{print $2}')
+    else
+        # -- Linux
+        IPADDRESS=$(ip route get 1 | awk 'NR==1 {print $(NF-2)}')
+    fi
+    if [[ $IPADDRESS == "" ]]; then
+        IPADDRESS="127.0.0.1"
     fi
 }
 
@@ -574,6 +592,7 @@ install_armour() {
     ohai "Copying ${tty_green}armour/armour.conf.sample${tty_reset} to ${tty_green}armour/${BOTNAME}.conf${tty_reset} ..."
     echo
     cp armour.conf.sample ${BOTNAME}.conf
+    chmod u+x install.sh
 }
 
 # -- configure Armour *.conf settings
@@ -598,12 +617,7 @@ armour_setting() {
     else
         ohai "[${tty_blue}Setting${tty_reset}] ${tty_green}$setting_name${tty_reset}:"
     fi
-    if [ $1 == "md5" ]; then
-        echo "    The md5 utility on the machine for password hashing."
-        echo "    Use md5 for ${tty_green}Linux${tty_reset} or ${tty_green}md5sum${tty_reset} for BSD machines"
-        NOEMPTY=1
-        
-    elif [ $1 == "register" ]; then
+    if [ $1 == "register" ]; then
         echo "    Allow users to register their own bot usernames using the ${tty_green}register${tty_reset} command? Enter ${tty_green}1${tty_reset} to enable or ${tty_green}0${tty_reset} to disable:"
         echo "    If the next ${tty_green}cfg(register:inchan)${tty_reset} setting includes channels, this command will only work for users inside the beloe channels."
         NOEMPTY=1
@@ -892,6 +906,37 @@ check_eggdrop_settings() {
                 echo
             else
 
+                if [ "$setting_name" == "vhost4" ]; then
+                    # -- obtain primary NIC IP
+                    getIP
+                    current_value="$IPADDRESS"
+                fi
+
+                if [ "$setting_name" == "altnick" ]; then
+                    # -- default to nick-
+                    current_value="${BOTNICK}-"
+                fi
+
+                if [ "$setting_name" == "username" ]; then
+                    # -- default to nick-
+                    current_value=$(whoami)
+                fi
+
+                # -- default server based on network
+                if [ "$setting_name" == "servers" ]; then
+                    if [ "$NETWORK" == "Undernet" ]; then
+                        current_value="irc.undernet.org"
+                    elif [ "$NETWORK" == "DALnet" ]; then
+                        current_value="irc.dal.net"
+                    elif [ "$NETWORK" == "IRCnet" ]; then
+                        current_value="irc.ircnet.com"
+                    elif [ "$NETWORK" == "EFnet" ]; then
+                        current_value="irc.efnet.org"
+                    elif [ "$NETWORK" == "Quakenet" ]; then
+                        current_value="irc.quakenet.org"
+                    fi
+                fi
+
                 # -- describe setting
                 eggdrop_setting "$setting_name"
 
@@ -905,13 +950,21 @@ check_eggdrop_settings() {
                 REALNAME="${new_value}"
             fi
 
+            if [[ "$setting_name" == "nick" ]]; then
+                BOTNICK="${new_value}"
+            fi
+
+            if [[ "$setting_name" == "network" ]]; then
+                NETWORK="${new_value}"
+            fi
+
             # -- new setting line
             updated_line="set $setting_name \"$new_value\""
             ohai "[${tty_blue}Updated${tty_reset}] config line: ${tty_green}$updated_line${tty_reset}"
             echo
             
             # -- replace the line
-            if [ ! $GNUSED ]; then
+            if [ $GNUSED == 0 ]; then
                 sed -i '' "s|^set $setting_name .*$|$updated_line|" "$EGGDROP_FILE"
             else
                 sed -i "s|^set $setting_name .*$|$updated_line|" "$EGGDROP_FILE"
@@ -924,7 +977,7 @@ check_eggdrop_settings() {
     # -- do the 'listen' line
     eggdrop_setting "_port"
     ask_for_setting_value "port number" "1231"
-    if [ ! $GNUSED ]; then
+    if [ $GNUSED == 0 ]; then
         sed -i '' "s|^listen .*$|listen $new_value all|" "$EGGDROP_FILE"
     else
         sed -i "s|^listen .*$|listen $new_value all|" "$EGGDROP_FILE"
@@ -937,14 +990,14 @@ check_eggdrop_settings() {
     ask_for_setting_value "oidentd" "0"
     if [ "$new_value" == "1" ]; then
         # -- load ident module and uncomment ident-method
-        if [ ! $GNUSED ]; then
+        if [ $GNUSED == 0 ]; then
             sed -i '' "s|^\#loadmodule ident$|loadmodule ident|" "$EGGDROP_FILE"
         else
             sed -i "s|^\#loadmodule ident$|loadmodule ident|" "$EGGDROP_FILE"
         fi
         ohai "[${tty_blue}Updated${tty_reset}] config line: ${tty_green}loadmodule ident${tty_reset}"
         echo
-        if [ ! $GNUSED ]; then
+        if [ $GNUSED == 0 ]; then
             sed -i '' "s|^\#set ident-method 0|set ident-method 0|" "$EGGDROP_FILE"
         else
             sed -i "s|^\#set ident-method 0|set ident-method 0|" "$EGGDROP_FILE"
@@ -961,7 +1014,7 @@ check_armour_settings() {
     ohai "Armour settings ..."
     echo
 
-    SETTING_LIST="botname md5 register register:inchan ircd znc realname servicehost prefix chan:nocmd chan:def chan:report auth:user auth:pass auth:totp auth:mech auth:serv:nick auth:serv:host xhost:ext auth:hide auth:rand auth:wait ban portscan"
+    SETTING_LIST="botname register register:inchan ircd znc realname servicehost prefix chan:nocmd chan:def chan:report auth:user auth:pass auth:totp auth:mech auth:serv:nick auth:serv:host xhost:ext auth:hide auth:rand auth:wait ban portscan"
     NOAUTH=0
     REGISTER=0
     cd ${ARMOUR_INSTALL_DIR}
@@ -1031,11 +1084,6 @@ check_armour_settings() {
                 ohai "Using ${tty_green}DALnet${tty_reset} value for ${tty_green}$setting_name${tty_reset}: ${tty_blue}$new_value${tty_reset}"
                 echo
 
-            elif [ "${setting_name}" == "md5" ]; then
-                ohai "Setting ${tty_green}md5${tty_reset} binary to: ${tty_green}${MD5}${tty_reset}"
-                new_value="${MD5}"
-                echo
-
             elif [[ "${NOAUTH}" == "1" && " ${AUTH_SETTINGS} " == *" $setting_name "* ]]; then
                 ohai "Ignored setting: ${tty_green}${setting_name}${tty_reset}"
                 echo
@@ -1080,7 +1128,7 @@ check_armour_settings() {
             echo
             
             # -- replace the line
-            if [ ! $GNUSED ]; then
+            if [ $GNUSED == 0 ]; then
                 sed -i '' "s|^set cfg($setting_name) .*$|$updated_line|" "$ARMOUR_FILE"
             else
                 sed -i "s|^set cfg($setting_name) .*$|$updated_line|" "$ARMOUR_FILE"
@@ -1135,7 +1183,7 @@ show_success() {
     echo
     echo "    Support can be obtained by visiting ${tty_green}#armour${tty_reset} on ${tty_green}Undernet${tty_reset}, or emailing ${tty_blue}Empus${tty_reset} at ${tty_blue}empus@undernet.org${tty_reset}"
     echo
-    echo "    When debugging issuesm it is helpful to show output from the eggdrop partyline (DCC), with debug levels enabled:"
+    echo "    When debugging issues, it is helpful to show output from the eggdrop partyline (DCC), with debug levels enabled:"
     echo
     echo "        ${tty_blue}.console +1${tty_reset}"
     echo "        ${tty_blue}.console +2${tty_reset}"
@@ -1230,10 +1278,20 @@ optional_support() {
 # -- start the eggdrop
 start_eggdrop() {
     local input
-    echo
-    ohai "Do you wish to start the eggdrop now? (${tty_green}Y${tty_reset})es or (${tty_green}N${tty_reset})o"
-    echo 
-    getc input
+    local extra
+    input=
+    extra=
+    if [[ $LAUNCH == "0" ]]; then
+        echo
+        ohai "Do you wish to start the eggdrop now? (${tty_green}Y${tty_reset})es or (${tty_green}N${tty_reset})o"
+        echo 
+        getc input
+    else
+        # -- auto launch the eggdrop
+        extra="> /dev/null 2>&1"
+        input="y"
+    fi
+
     if [[ "${input}" == 'y' ]]; then
         EGG_STARTED=1
         ohai "Starting ${tty_green}eggdrop${tty_reset} from ${tty_green}${EGGDROP_INSTALL_DIR}${tty_reset}..."
@@ -1242,11 +1300,11 @@ start_eggdrop() {
         if [[ "$NEW_EGGDROP" == true || "$ADD_BOT" == true ]]; then
             echo "    ${tty_green}./eggdrop -m ${BOTNAME}.conf${tty_reset}"
             echo
-            ./eggdrop -m ${BOTNAME}.conf
+            ./eggdrop -m ${BOTNAME}.conf > /dev/null 2>&1
         else
             echo "    ${tty_green}./eggdrop ${BOTNAME}.conf${tty_reset}"
             echo
-            ./eggdrop ${BOTNAME}.conf
+            ./eggdrop ${BOTNAME}.conf > /dev/null 2>&1
         fi
     
     elif [[ "${input}" == 'n' ]]; then
@@ -1417,7 +1475,7 @@ load_armour() {
 
     # -- replace the line
     ohai "Uncommenting the ${tty_yellow}source armour/\$uservar.conf${tty_reset} line in ${tty_green}${EGGDROP_INSTALL_DIR}/${BOTNAME}.conf${tty_reset}"
-    if [ ! $GNUSED ]; then
+    if [ $GNUSED == 0 ]; then
         sed -i '' "s|^\#source armour/\$uservar.conf$|source armour/\$uservar.conf|" "${BOTNAME}.conf"
     else
         sed -i "s|^\#source armour/\$uservar.conf$|source armour/\$uservar.conf|" "${BOTNAME}.conf"
@@ -1482,6 +1540,14 @@ deploy_from_file() {
     exit
     fi
     DEPLOY_FILE=$2
+
+    # -- auto launch eggdrop?
+    if [[ "$3" == "-y" ]]; then
+        LAUNCH=1
+    else
+        LAUNCH=0
+    fi
+
     if [ ! -f ${DEPLOY_FILE} ]; then
         echo "${tty_red}Error${tty_reset}: Armour deployment file ${tty_green}${DEPLOY_FILE}${tty_reset} does not exist."
         abort
@@ -1528,7 +1594,7 @@ deploy_from_file() {
     EGG_SET=("uservar" "nick" "botnet-nick")
     for setting in "${EGG_SET[@]}"; do
         updated_line="set $setting \"${BOTNAME}\""
-        if [ ! $GNUSED ]; then
+        if [ $GNUSED == 0 ]; then
             sed -i '' "s|^set $setting .*$|$updated_line|" "$EGGDROP_FILE"
         else
             sed -i "s|^set $setting .*$|$updated_line|" "$EGGDROP_FILE"
@@ -1540,11 +1606,8 @@ deploy_from_file() {
     while IFS= read -r line; do
         # -- check for line match
         if [[ "$line" =~ ^[^\=]+\=.*$ ]]; then
-            setting_name=$(echo "$line" | sed 's/^\([^=]\+\)=.*/\1/')
-            current_value=$(echo "$line" | sed 's/^[^=]\+=\(.*\)/\1/')
-            current_value="${current_value//\"}"
-
-            #echo "setting_name: $setting_name -- current_value: $current_value"
+            setting_name=$(echo "$line" | sed 's/=\(.*\)$//')
+            current_value=$(echo "$line" | sed -E 's/.*="?([^"]*)"?.*/\1/')
 
             # -- ignore settings which are not required for basic deployments
             if [[ " $SETTINGS_EGGDROP " == *" $setting_name "* ]]; then
@@ -1552,7 +1615,7 @@ deploy_from_file() {
                 if [ "${setting_name}" == "listenport" ]; then
                     updated_line="listen $current_value all"
                     # -- replace the line
-                    if [ ! $GNUSED ]; then
+                    if [ $GNUSED == 0 ]; then
                         sed -i '' "s|^listen .*$|listen $current_value all|" "$EGGDROP_FILE"
                     else
                         sed -i "s|^listen .*$|listen $current_value all|" "$EGGDROP_FILE"
@@ -1564,7 +1627,7 @@ deploy_from_file() {
                 else
                     updated_line="set $setting_name \"$current_value\""
                     # -- replace the line
-                    if [ ! $GNUSED ]; then
+                    if [ $GNUSED == 0 ]; then
                         sed -i '' "s|^set $setting_name .*$|$updated_line|" "$EGGDROP_FILE"
                     else
                         sed -i "s|^set $setting_name .*$|$updated_line|" "$EGGDROP_FILE"
@@ -1573,7 +1636,9 @@ deploy_from_file() {
 
                 ohai "[${tty_blue}Updated${tty_reset}] ${tty_green}eggdrop${tty_reset} config line: ${tty_green}$updated_line${tty_reset}"
                 
-            elif [[ " $SETTINGS_ARMOUR " == *" $setting_name "* ]]; then
+            fi
+            
+            if [[ " $SETTINGS_ARMOUR " == *" $setting_name "* ]]; then
                 # -- Armour setting
                 if [ "${setting_name}" == "ircd" ]; then
                     if [ "$current_value" == "1" ]; then
@@ -1583,16 +1648,14 @@ deploy_from_file() {
                     fi
                 fi
                 updated_line="set cfg($setting_name) \"$current_value\""
-                ohai "[${tty_blue}Updated${tty_reset}]  ${tty_green}Armour${tty_reset} config line: ${tty_green}$updated_line${tty_reset}"
+                ohai "[${tty_blue}Updated${tty_reset}] ${tty_green}Armour${tty_reset} config line: ${tty_green}$updated_line${tty_reset}"
                 #echo
                 # -- replace the line
-                if [ ! $GNUSED ]; then
+                if [ $GNUSED == 0 ]; then
                     sed -i '' "s|^set cfg($setting_name) .*$|$updated_line|" "$ARMOUR_FILE"
                 else
                     sed -i "s|^set cfg($setting_name) .*$|$updated_line|" "$ARMOUR_FILE"
                 fi
-            else
-                continue;
             fi
         fi
     done < "$DEPLOY_FILE"
@@ -1600,28 +1663,19 @@ deploy_from_file() {
     # -- deal with oidentd in eggdrop
     if [ "$OIDENTD" == "1" ]; then
         # -- load ident module and uncomment ident-method
-        if [ ! $GNUSED ]; then
+        if [ $GNUSED == 0 ]; then
             sed -i '' "s|^\#loadmodule ident$|loadmodule ident|" "$EGGDROP_FILE"
         else
             sed -i "s|^\#loadmodule ident$|loadmodule ident|" "$EGGDROP_FILE"
         fi
         ohai "[${tty_blue}Updated${tty_reset}] ${tty_green}eggdrop${tty_reset} config line: ${tty_green}loadmodule ident${tty_reset}"
-        if [ ! $GNUSED ]; then
+        if [ $GNUSED == 0 ]; then
             sed -i '' "s|^\#set ident-method 0|set ident-method 0|" "$EGGDROP_FILE"
         else
             sed -i "s|^\#set ident-method 0|set ident-method 0|" "$EGGDROP_FILE"
         fi
         ohai "[${tty_blue}Updated${tty_reset}] ${tty_green}eggdrop${tty_reset} config line: ${tty_green}set ident-method 0${tty_reset}"
     fi
-
-    # -- deal with md5 binary in armour.conf
-    updated_line="set cfg(md5) \"${MD5}\""
-    if [ ! $GNUSED ]; then
-        sed -i '' "s|^set cfg($setting_name) .*$|$updated_line|" "$ARMOUR_FILE"
-    else
-        sed -i "s|^set cfg($setting_name) .*$|$updated_line|" "$ARMOUR_FILE"
-    fi
-    ohai "[${tty_blue}Updated${tty_reset}]  ${tty_green}Armour${tty_reset} config line: ${tty_green}$updated_line${tty_reset}"
 
     echo
     ohai "Done!"
@@ -1651,6 +1705,8 @@ usage() {
     echo
     exit "${1:-0}"
 }
+
+LAUNCH=0
 
 # -- check usage
 if [[ $# -gt 0 ]]; then

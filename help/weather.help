@@ -1,0 +1,2 @@
+%B%command:%B% weather -- %B%level:%B% %LEVEL% -- %B%usage:%B% weather [location]
+show the current weather for a given location.  include country, if required. location is optional if user has %B%city%B% set against their user.  %B%shortcut:%B% w [location]

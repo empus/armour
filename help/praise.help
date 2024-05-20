@@ -1,0 +1,2 @@
+%B%command:%B% praise -- %B%level:%B% %LEVEL% -- %B%usage:%B% praise <nick> <reason>
+send praise to a user, incoporating the given reason.
