@@ -1233,7 +1233,7 @@ set addcmd(weather)     {  arm       1          pub msg dcc  }; # -- requires we
 set addcmd(gif)         {  arm       1          pub msg dcc  }; # -- requires humour plugin
 set addcmd(praise)      {  arm       1          pub msg dcc  }; # -- requires humour plugin
 set addcmd(insult)      {  arm       1          pub msg dcc  }; # -- requires humour plugin
-set addcmd(seen)        {  seen	     1			pub msg dcc  }; # -- requires seen plugin
+set addcmd(seen)        {  seen	     1          pub msg dcc  }; # -- requires seen plugin
 set addcmd(access)      {  userdb    1          pub msg dcc  }
 set addcmd(cmds)        {  arm       1          pub msg dcc  }
 set addcmd(help)        {  arm       1          pub msg dcc  }

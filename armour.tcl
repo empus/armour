@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v5.0 autobuild completed on: Mon May 20 09:13:22 PDT 2024
+# armour.tcl v5.0 autobuild completed on: Mon May 20 09:25:59 PDT 2024
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -1042,7 +1042,7 @@ namespace eval arm {
 # ------------------------------------------------------------------------------------------------
 
 # -- this revision is used to match the DB revision for use in upgrades and migrations
-set cfg(revision) "2024052000"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
+set cfg(revision) "2024052001"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
 set cfg(version) "v5.0";        # -- script version
 
 # -- cronjob to periodically delete expired ignores
