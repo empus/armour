@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v5.0 autobuild completed on: Mon May 20 05:34:30 PDT 2024
+# armour.tcl v5.0 autobuild completed on: Mon May 20 08:14:29 PDT 2024
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -8179,12 +8179,14 @@ proc arm:cmd:deploy {0 1 2 3 {4 ""} {5 ""}} {
         set fval [string trimright $fval \"]
 
         # -- check if setting exists in deploy file
-        if {[exec egrep "^$fset\=" ./armour/deploy/$botname.ini] eq ""} { set invalid 1 }
+        debug 3 "\002cmd:deploy:\002 checking deploy/$botname.ini for setting: $fset"
+        set err [catch {exec egrep "^$fset\=" ./armour/deploy/$botname.ini} result]
+        if {$err ne 0} { set invalid 1 }
 
         if {$invalid} {
             exec rm ./armour/deploy/$botname.ini
-            debug 1 "\002cmd:deploy:\002 invalid deployment setting: $setting -- deleted ./armour/deploy/$botname.ini"
-            reply $type $target "\002error:\002 invalid deployment setting: $setting"
+            debug 1 "\002cmd:deploy:\002 invalid deployment setting: $fset -- deleted ./armour/deploy/$botname.ini"
+            reply $type $target "\002error:\002 invalid deployment setting: $fset"
             return;
         }
 
@@ -8200,7 +8202,7 @@ proc arm:cmd:deploy {0 1 2 3 {4 ""} {5 ""}} {
         if {$os in "FreeBSD OpenBSD NetBSD Darwin"} {
             exec sed -i '' "s|^$fset=.*$|$updated_line|" ./armour/deploy/$botname.ini
         } else {
-            exec sed -i "s|^s|^$fset=.*$|$updated_line|" ./armour/deploy/$botname.ini
+            exec sed -i "s|^$fset=.*$|$updated_line|" ./armour/deploy/$botname.ini
         }
         debug 1 "\002cmd:deploy:\002 updated line in ./armour/deploy/$botname.ini: $updated_line"
         incr count
@@ -8256,7 +8258,7 @@ proc arm:cmd:deploy {0 1 2 3 {4 ""} {5 ""}} {
     if {$iserror} {
         debug 0 "\002cmd:deploy:\002 error deploying bot: $botname -- deleted ./armour/deploy/$botname.ini -- \002error:\002 $error"
         reply $type $target "\002error:\002 deployment failed! -- \002reason:\002 $error"
-        exec rm ./armour/deploy/$botname.ini
+        #exec rm ./armour/deploy/$botname.ini
         return;
     }
     set pid [exec cat pid.$botname]
@@ -9547,7 +9549,7 @@ proc mode:add:o {nick uhost hand chan mode target} {
         unset data:ctcp($nick,$chan)        
     }
 
-    # -- FLOATLIM
+    # -- FLOATLIM & AUTOTOPIC
     # -- check if the floating limit needs to be set
     if {$target eq $botnick} {
         set cid [dict keys [dict filter $dbchans script {id dictData} { 
@@ -18239,7 +18241,7 @@ proc float:check:chan {cid {restart "1"}} {
 
     debug 5 "\002float:check:chan:\002 checking FLOATLIM for $chan -- cid: $cid"
 
-    if {![dict exists $dbchans $cid floatlim]} { putlog "skipping $chan (cid: $cid) -- no floatlim in dbchans"; continue; }
+    if {![dict exists $dbchans $cid floatlim]} { return; }; # -- FLOATLIM not set for chan
     set floatlim [dict get $dbchans $cid floatlim]
     if {$floatlim eq "off" || $floatlim eq ""} { 
         # -- FLOATLIM is off
@@ -19119,9 +19121,9 @@ proc update:install {update {local 0}} {
             exec chmod u+x ./armour/install.sh
             debug 0 "\[@\] Armour: made install script executable: \002./armour/install.sh\002"
             set uname [exec uname]
-            if {$uname in "FreeBSD NetBSD OpenBSD Darwin"} {
-                catch { exec sed -i '' {s|^\#!/bin/bash$|#!/usr/local/bin/bash|} ./armour/install.sh } error
-                if {$error eq ""} { debug 0 "\[@\] Armour: updated \002install.sh\002 bash executable to: \002/usr/local/bin/bash\002" }
+            if {$uname in "FreeBSD NetBSD OpenBSD"} {
+                set error [catch { exec sed -i '' {s|^\#!/bin/bash$|#!/usr/local/bin/bash|} ./armour/install.sh } result]
+                if {$error eq 0} { debug 0 "\[@\] Armour: updated \002install.sh\002 bash executable to: \002/usr/local/bin/bash\002" }
             }
         }
 
@@ -19144,11 +19146,11 @@ proc update:install {update {local 0}} {
     set note $out; set noteextra ""
     if {$new ne 0} { lappend noteextra "retained \002$exist\002 settings -- found \002$new new config\002 $settext: [join $newsettings]" }
     #if {$existportcount ne 0} { lappend noteextra "\002$existportcount existing $existporttext:\002 [join $existports]" }
-    if {$newportcount ne 0} { lappend noteextra "\002$newportcount new scan $newporttext:\002 [join $newports]" }
+    if {$newportcount ne 0} { lappend noteextra "\002$newportcount unused scan $newporttext:\002 [join $newports]" }
     #if {$existrblcount ne 0} { lappend noteextra "\002$existrblcount existing $existrbltext:\002 [join $existrbls]" }
-    if {$newrblcount ne 0} { lappend noteextra "\002$newrblcount new $newrbltext:\002 [join $newrbls]" }
+    if {$newrblcount ne 0} { lappend noteextra "\002$newrblcount unused $newrbltext:\002 [join $newrbls]" }
     #if {$existplugincount ne 0} { lappend noteextra "\002$existplugincount existing $existplugintext:\002 [join $existplugins]" }
-    if {$newplugincount ne 0} { lappend noteextra "\002$newplugincount new $newplugintext found:\002 [join $newplugins]" }
+    if {$newplugincount ne 0} { lappend noteextra "\002$newplugincount unused $newplugintext found:\002 [join $newplugins]" }
     if {$noteextra ne ""} { append note " -- [join $noteextra " -- "]" }
     append note "\)"
     debug 0 "\002update:install:\002 sending note: $note"

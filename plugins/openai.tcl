@@ -458,6 +458,7 @@ proc arm:cmd:image {0 1 2 3 {4 ""} {5 ""}} {
 proc ask:abstract:cmd {cmd 0 1 2 3 {4 ""} {5 ""}} {
     lassign [proc:setvars $0 $1 $2 $3 $4 $5] type stype target starget nick uh hand source chan arg 
 
+    putlog "ask:abstract:cmd: started: $cmd -- type: $type -- nick: $nick -- chan: $chan -- arg: $arg"
     if {$cmd eq "image"} {
         if {![cfg:get ask:image]} { return; }; # -- DALL-E image creation disabled
         set plural "images"
@@ -486,6 +487,7 @@ proc ask:abstract:cmd {cmd 0 1 2 3 {4 ""} {5 ""}} {
                                         #        5: only authed users with command access
     set allow 0
     if {$uid eq ""} { set authed 0 } else { set authed 1 }
+    putlog "allowed: $allowed"
     if {$allowed eq 0} { return; } \
     elseif {$allowed eq 1} { set allow 1 } \
 	elseif {$allowed eq 2} { if {[isop $nick $chan] || [isvoice $nick $chan] || $authed} { set allow 1 } } \
@@ -493,6 +495,7 @@ proc ask:abstract:cmd {cmd 0 1 2 3 {4 ""} {5 ""}} {
     elseif {$allowed eq 4} { if {[isop $nick $chan] || $authed} { set allow 1 } } \
     elseif {$allowed eq 5} { if {$authed} { set allow [userdb:isAllowed $nick $cmd $chan $type] } }
     if {[userdb:isIgnored $nick $cid]} { set allow 0 }; # -- check if user is ignored
+    putlog "allow: $allow -- nick: $nick -- chan: $chan -- cid: $cid -- authed: $authed"
     if {!$allow} { return; }; # -- client cannot use command
 
     set ison [db:get value settings setting $cmd cid $cid]
