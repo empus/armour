@@ -1,4 +1,4 @@
-%B%command:%B% update -- %B%level:%B% %LEVEL% -- %B%usage:%B% <check|install|restore|branches> [branch]
-using %B%check%B% will find available script updates. automatic updates will occur if configured, otherwise the %B%install%B% parameter can be used to apply updates. 
+%B%command:%B% update -- %B%level:%B% %LEVEL% -- %B%usage:%B% <check|info|install|restore|branches> [branch]
+using %B%check%B% will find available script updates. use %B%info%B% to show last commit details. automatic updates will occur if configured, otherwise the %B%install%B% parameter can be used to apply updates. 
 when using %B%install%B% or %B%restore%B%, optionally add %B%-t%B% to test installs without applying file change. the %B%-f%B% option can be used to force updates even if already running a newer version to a github repo. 
 using %B%restore%B% will restore the previous script version. optional github %B%branch%B% can be specified to override the configured default. %B%branches%B% will list all available github branches.

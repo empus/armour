@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v5.0 autobuild completed on: Mon May 20 09:27:39 PDT 2024
+# armour.tcl v5.0 autobuild completed on: Mon May 20 09:43:49 PDT 2024
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -18497,6 +18497,7 @@ proc update:cron {minute hour day month weekday} {
 # -- command: update
 # usage: update <check|install|restore|branches> [branch]
 # check: check for update, with optional github branch
+# info: show details of last commit, with optional github branch
 # install: install update, with optional github branch
 # restore: restore last script backup
 # branches: show available github branches
@@ -18513,7 +18514,7 @@ proc arm:cmd:update {0 1 2 3 {4 ""} {5 ""}} {
 
     if {$action ne "check" && $action ne "install" && $action ne "info" && $action ne "restore" && $action ne "branches" \
         && $action ne "c" && $action ne "i" && $action ne "r" && $action ne "b"} {
-        reply $stype $starget "usage: update <check|install|restore|branches> \[branch\]"
+        reply $stype $starget "usage: update <check|info|install|restore|branches> \[branch\]"
         return;
     }
 
