@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v5.0 autobuild completed on: Mon May 20 09:43:49 PDT 2024
+# armour.tcl v5.0 autobuild completed on: Mon May 20 10:52:36 PDT 2024
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -1042,7 +1042,7 @@ namespace eval arm {
 # ------------------------------------------------------------------------------------------------
 
 # -- this revision is used to match the DB revision for use in upgrades and migrations
-set cfg(revision) "2024052001"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
+set cfg(revision) "2024052002"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
 set cfg(version) "v5.0";        # -- script version
 
 # -- cronjob to periodically delete expired ignores
@@ -14726,7 +14726,10 @@ proc userdb:isValiduser {user} {
 
 # -- encrypt password (basic md5)
 proc userdb:encrypt {pass} {
-    return [::md5 $pass]
+    # -- md5sum hashes are diferent to md5 package
+    set os [uname]
+    if {$os eq "Linux"} { return [lindex [exec echo $pass | md5sum] 0] }
+    return [::md5 $pass]; # -- BSD and macOS can use tcllib md5 as it's the same as md5 binary
 }
 
 
@@ -18387,7 +18390,10 @@ debug 0 "\[@\] Armour: loaded support functions."
 # 'update' command to check, install, restore the last script backup, or list github branches
 #
 # usage:
-#     update <check|install|restore|branches> [branch]
+#     update <check|info|install|restore|branches> [branch] [-t] [-f]
+#
+#     -t: run in test mode (download only, don't install)
+#     -f: force download & install (ignore lock files)
 #
 # Handling where multiple Armour bots run from a common eggdrop install directory:
 #
@@ -18510,7 +18516,8 @@ proc arm:cmd:update {0 1 2 3 {4 ""} {5 ""}} {
     # -- end cmd proc template
 
     lassign $arg action branch
-    if {$branch eq "" || $branch eq "-f" || $branch eq "-t"} { set branch [cfg:get update:branch] }; # -- revert to config branch (default of master)
+    set cfgbranch [cfg:get update:branch]
+    if {$branch eq "" || $branch eq "-f" || $branch eq "-t"} { set branch $cfgbranch }; # -- revert to config branch (default of master)
 
     if {$action ne "check" && $action ne "install" && $action ne "info" && $action ne "restore" && $action ne "branches" \
         && $action ne "c" && $action ne "i" && $action ne "r" && $action ne "b"} {
@@ -18713,8 +18720,9 @@ proc arm:cmd:update {0 1 2 3 {4 ""} {5 ""}} {
         set author [dict get $scommit author]
         set aname [dict get $author name]
         set commitdate [dict get $author date]
+        if {$branch ne $cfgbranch} { set xtra "$branch" } else { set xtra "" }
         reply $type $target "\002branch:\002 $bname -- \002message:\002 $commitmsg -- \002commit:\002 [userdb:timeago [clock scan $commitdate]] ago\
-             -- \002url:\002 https://github.com/empus/armour/commit/$sha -- \002usage:\002 update install"
+             -- \002url:\002 https://github.com/empus/armour/commit/$sha -- \002usage:\002 update install $xtra"
     } 
 
     # -- create log entry for command use
@@ -19150,10 +19158,10 @@ proc update:install {update {local 0}} {
     set rev $grevision
     if {!$local} {
         # -- script downloaded & installed
-        set out "\002Armour\002 script \002v$ver\002 (\002revision:\002 $rev) installation $text (\002runtime:\002 $runtime secs -- \002files:\002 $filecount"
+        set out "\002Armour\002 script \002v$ver\002 (\002revision:\002 $rev) installation $text (\002runtime:\002 $runtime secs -- \002files:\002 $filecount)"
     } else {
         # -- applied local script (already updated from another bot)
-        set out "\002Armour\002 script \002v$ver\002 (\002revision:\002 $rev) installation $text (\002runtime:\002 $runtime secs"
+        set out "\002Armour\002 script \002v$ver\002 (\002revision:\002 $rev) installation $text (\002runtime:\002 $runtime secs)"
     }
     set note $out; set noteextra ""
     if {$new ne 0} { lappend noteextra "retained \002$exist\002 settings -- found \002$new new config\002 $settext: [join $newsettings]" }
@@ -19179,19 +19187,19 @@ proc update:install {update {local 0}} {
         set prefix "\002info:\002"; set add ""
         #if {$existportcount ne 0} { lappend add "retained \002$existportcount\002 existing \002$existporttext\002 ([join $existports ", "])" }
         #if {$existportcount ne 0} { lappend add "retained \002$existportcount\002 existing scan \002$existporttext\002" }
-        if {$newportcount ne 0} { lappend add "found \002$newportcount\002 available new scan \002$newporttext\002 ([join $newports ", "])" }
+        if {$newportcount ne 0} { lappend add "found \002$newportcount\002 unused scan \002$newporttext\002 ([join $newports ", "])" }
         if {$add ne ""} { reply $type $target "$prefix [join $add " -- "]" }
 
         set add ""
         #if {$existrblcount ne 0} { lappend add "retained \002$existrblcount\002 existing \002$existrbltext\002 ([join $existrbls ", "])" }
         #if {$existrblcount ne 0} { lappend add "retained \002$existrblcount\002 existing \002$existrbltext\002" }
-        if {$newrblcount ne 0} { lappend add "found \002$newrblcount\002 available new \002$newrbltext\002 ([join $newrbls ", "])" }
+        if {$newrblcount ne 0} { lappend add "found \002$newrblcount\002 unused \002$newrbltext\002 ([join $newrbls ", "])" }
         if {$add ne ""} { reply $type $target "$prefix [join $add " -- "]" }
 
         set add ""
         #if {$existplugincount ne 0} { lappend add "retained \002$existplugincount\002 existing \002$existplugintext\002" }
         #if {$existplugincount ne 0} { lappend add "retained \002$existplugincount\002 existing \002$existplugintext\002 ([join $existplugins ", "])" }
-        if {$newplugincount ne 0} { lappend add "found \002$newplugincount\002 available new \002$newplugintext\002 ([join $newplugins ", "])" }
+        if {$newplugincount ne 0} { lappend add "found \002$newplugincount\002 unused \002$newplugintext\002 ([join $newplugins ", "])" }
         if {$add ne ""} { reply $type $target "$prefix [join $add " -- "]" }
     }
 
