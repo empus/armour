@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v5.0 autobuild completed on: Mon May 20 03:02:39 PDT 2024
+# armour.tcl v5.0 autobuild completed on: Mon May 20 03:11:44 PDT 2024
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -1154,10 +1154,7 @@ db:query "CREATE TABLE IF NOT EXISTS settings (\
     uid INTEGER,\
     setting TEXT NOT NULL,\
     value TEXT DEFAULT 'on'\
-    )"
-
-    CREATE TABLE IF NOT EXISTS settings (cid INTEGER, uid INTEGER, setting TEXT NOT NULL, value TEXT DEFAULT 'on');
-    
+    )"    
     
 # -- single values
 # -- special table to record individual values
