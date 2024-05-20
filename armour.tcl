@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v5.0 autobuild completed on: Mon May 20 03:11:44 PDT 2024
+# armour.tcl v5.0 autobuild completed on: Mon May 20 04:09:35 PDT 2024
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -298,17 +298,17 @@ if {[cfg:get auth:totp *] ne ""} {
     set oathtool [lindex [exec whereis oathtool] 1]
     if {$oathtool eq ""} {
         debug 0 "\[@\] Armour: \x0304(error)\x03 \002oathtool\002 not found, cannot generate TOTP token. \002Try:\002 sudo $pkgManager $pkg_oathtool"
-        return;
+        putnotc [cfg:get chan:report] "Armour: \002oathtool\002 not found, cannot generate TOTP token. \002Try:\002 sudo $pkgManager $pkg_oathtool"
     }
 }
 
 # -- ImageMagick (for optional OpenAI image overlays)
-if {[info commands trakka:load] ne ""} { && [cfg:get ask:image] eq 1 && [cfg:get ask:image:overlay] eq 1} {
+if {[info commands ask:cron] ne "" && [cfg:get ask:image] eq 1 && [cfg:get ask:image:overlay] eq 1} {
     debug 0 "\[@\] Armour: checking for \002ImageMagick\002 ..."
     set convert [lindex [exec whereis convert] 1]
     if {$convert eq ""} {
         debug 0 "\[@\] Armour: \x0304(error)\x03 \002ImageMagick\002 not found, cannot overlay images. \002Try:\002 sudo $pkgManager $pkg_imagemagick"
-        return;
+        putnotc [cfg:get chan:report] "Armour: \002ImageMagick\002 not found, cannot overlay images. \002Try:\002 sudo $pkgManager $pkg_imagemagick"
     }
 }
 
@@ -18564,6 +18564,7 @@ proc arm:cmd:update {0 1 2 3 {4 ""} {5 ""}} {
         }
 
         # -- check if the latest version is already installed locally (i.e., by another bot in the same instal directory)
+        set doit 0
         if {[file exists ./armour/.install]} {
             lassign [exec cat ./armour/.install] iver irevision
             if {$iver eq $gversion && $iver eq $gversion} {
@@ -18577,15 +18578,21 @@ proc arm:cmd:update {0 1 2 3 {4 ""} {5 ""}} {
                 dict set armupdate response [list $type $target]
                 dict set armupdate dirfiles 0
                 update:install $armupdate 1; # -- local update from existing script install
+            } else {
+                # -- local version is different from github version
+                # -- download & install
+                set doit 1
             }
         } else {
-
+            # -- no local install file, so download & install
+            set doit 1
+        }
+        if {$doit} {
             # -- start the install... download first
             debug 0 "\002cmd:update:\002 starting script upgrade to \002version:\002 $gversion (\002revision:\002 $grevision -- \002branch:\002 $branch)"
             reply $type $target "starting script upgrade to \002version:\002 $gversion (\002revision:\002 $grevision -- \002branch:\002 $branch)"
             dict set ghdata response [list $type $target]
             update:download $ghdata
-
         }
 
     } elseif {$action eq "restore" || $action eq "r"} {
