@@ -221,7 +221,7 @@ proc arm:cmd:ask {0 1 2 3 {4 ""} {5 ""}} {
     if {$uid eq ""} { set authed 0 } else { set authed 1 }
     if {$allowed eq 0} { return; } \
     elseif {$allowed eq 1} { set allow 1 } \
-	elseif {$allowed eq 3} { if {[isop $nick $chan] || [isvoice $nick $chan] || $authed} { set allow 1 } } \
+	elseif {$allowed eq 2} { if {[isop $nick $chan] || [isvoice $nick $chan] || $authed} { set allow 1 } } \
     elseif {$allowed eq 3} { if {[isop $nick $chan] || ([isvoice $nick $chan] && [dict get $dbchans $cid mode] ne "secure") || $authed} { set allow 1 } } \
     elseif {$allowed eq 4} { if {[isop $nick $chan] || $authed} { set allow 1 } } \
     elseif {$allowed eq 5} { if {$authed} { set allow [userdb:isAllowed $nick $cmd $chan $type] } }
@@ -371,7 +371,7 @@ proc arm:cmd:and {0 1 2 3 {4 ""} {5 ""}} {
     if {$uid eq ""} { set authed 0 } else { set authed 1 }
     if {$allowed eq 0} { return; } \
     elseif {$allowed eq 1} { set allow 1 } \
-	elseif {$allowed eq 3} { if {[isop $nick $chan] || [isvoice $nick $chan] || $authed} { set allow 1 } } \
+	elseif {$allowed eq 2} { if {[isop $nick $chan] || [isvoice $nick $chan] || $authed} { set allow 1 } } \
     elseif {$allowed eq 3} { if {[isop $nick $chan] || ([isvoice $nick $chan] && [dict get $dbchans $cid mode] ne "secure") || $authed} { set allow 1 } } \
     elseif {$allowed eq 4} { if {[isop $nick $chan] || $authed} { set allow 1 } } \
     elseif {$allowed eq 5} { if {$authed} { set allow [userdb:isAllowed $nick $cmd $chan $type] } }
@@ -488,7 +488,7 @@ proc ask:abstract:cmd {cmd 0 1 2 3 {4 ""} {5 ""}} {
     if {$uid eq ""} { set authed 0 } else { set authed 1 }
     if {$allowed eq 0} { return; } \
     elseif {$allowed eq 1} { set allow 1 } \
-	elseif {$allowed eq 3} { if {[isop $nick $chan] || [isvoice $nick $chan] || $authed} { set allow 1 } } \
+	elseif {$allowed eq 2} { if {[isop $nick $chan] || [isvoice $nick $chan] || $authed} { set allow 1 } } \
     elseif {$allowed eq 3} { if {[isop $nick $chan] || ([isvoice $nick $chan] && [dict get $dbchans $cid mode] ne "secure") || $authed} { set allow 1 } } \
     elseif {$allowed eq 4} { if {[isop $nick $chan] || $authed} { set allow 1 } } \
     elseif {$allowed eq 5} { if {$authed} { set allow [userdb:isAllowed $nick $cmd $chan $type] } }
