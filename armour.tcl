@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v5.0 autobuild completed on: Mon May 20 08:14:29 PDT 2024
+# armour.tcl v5.0 autobuild completed on: Mon May 20 09:13:22 PDT 2024
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -960,7 +960,7 @@ proc coroexec {args} {
 }
 
 # -- disable commands if 'openai' plugin not loaded
-if {[info commands trakka:load] eq ""} {
+if {[info commands ask:query] eq ""} {
     if {[info exists addcmd(ask)]} { unset addcmd(ask) }
     if {[info exists addcmd(and)]} { unset addcmd(and) }
     if {[info exists addcmd(askmode)]} { unset addcmd(askmode) }
@@ -971,18 +971,18 @@ if {[cfg:get ask:model] eq "perplexity"} {
     if {[info exists addcmd(and)]} { unset addcmd(and) }
 }
 
-# -- disable commands if 'image' not enabled
-if {!$cfg(ask:image)} {
+# -- disable commands if 'image' not enabled or openai plugin not loaded
+if {!$cfg(ask:image) || [info commands ask:query] eq ""} {
     if {[info exists addcmd(image)]} { unset addcmd(image) }
 }
 
-# -- disable command if 'speak' not enabled
-if {!$cfg(speak:enable)} {
+# -- disable command if 'speak' not enabled or speak plugin not loaded
+if {!$cfg(speak:enable) || [info commands speak:query] eq ""} {
     if {[info exists addcmd(speak)]} { unset addcmd(speak) }
 }
 
 # -- disable command if CAPTCHA not enabled
-if {!$cfg(captcha) || $cfg(captcha:type) != "web"} {
+if {!$cfg(captcha) || $cfg(captcha:type) ne "web"} {
     if {[info exists addcmd(captcha)]} { unset addcmd(captcha) }
 }
 
@@ -1006,8 +1006,19 @@ if {[info commands ninjas:cmd] eq ""} {
 # -- disable commands if `humour` plugin not loaded
 if {[info commands humour:cmd] eq ""} {
     if {[info exists addcmd(gif)]} { unset addcmd(gif) }
+    if {[info exists addcmd(meme)]} { unset addcmd(meme) }
     if {[info exists addcmd(praise)]} { unset addcmd(praise) }
     if {[info exists addcmd(insult)]} { unset addcmd(insult) }
+}
+
+# -- disable commands if `weather` plugin not loaded
+if {[info commands arm:cmd:weather] eq ""} {
+    if {[info exists addcmd(weather)]} { unset addcmd(weather) }
+}
+
+# -- disable commands if `seen` plugin not loaded
+if {[info commands arm:cmd:seen] eq ""} {
+    if {[info exists addcmd(seen)]} { unset addcmd(seen) }
 }
 
 
