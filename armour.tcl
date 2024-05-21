@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v5.0 autobuild completed on: Mon May 20 11:19:29 PDT 2024
+# armour.tcl v5.0 autobuild completed on: Mon May 20 21:43:13 PDT 2024
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -1017,7 +1017,7 @@ if {[info commands arm:cmd:weather] eq ""} {
 }
 
 # -- disable commands if `seen` plugin not loaded
-if {[info commands arm:cmd:seen] eq ""} {
+if {[info commands seen:cmd:seen] eq ""} {
     if {[info exists addcmd(seen)]} { unset addcmd(seen) }
 }
 
@@ -1042,7 +1042,7 @@ namespace eval arm {
 # ------------------------------------------------------------------------------------------------
 
 # -- this revision is used to match the DB revision for use in upgrades and migrations
-set cfg(revision) "2024052003"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
+set cfg(revision) "2024052100"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
 set cfg(version) "v5.0";        # -- script version
 
 # -- cronjob to periodically delete expired ignores

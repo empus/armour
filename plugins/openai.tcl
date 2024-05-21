@@ -180,6 +180,7 @@ proc ask:cron:image {minute hour day month weekday} {
 # -- ask a question
 proc arm:cmd:ask {0 1 2 3 {4 ""} {5 ""}} {
     variable ask
+    variable dbchans
     lassign [proc:setvars $0 $1 $2 $3 $4 $5] type stype target starget nick uh hand source chan arg 
 
     set cmd "ask"
@@ -348,6 +349,7 @@ proc arm:cmd:ask {0 1 2 3 {4 ""} {5 ""}} {
 # -- continue a conversation
 proc arm:cmd:and {0 1 2 3 {4 ""} {5 ""}} {
     variable ask
+    variable dbchans
     lassign [proc:setvars $0 $1 $2 $3 $4 $5] type stype target starget nick uh hand source chan arg 
 
     set cmd "and"
@@ -456,6 +458,7 @@ proc arm:cmd:image {0 1 2 3 {4 ""} {5 ""}} {
 # -- avoids code duplication
 # -- 'cmd' will be "image" or "speak"
 proc ask:abstract:cmd {cmd 0 1 2 3 {4 ""} {5 ""}} {
+    variable dbchans
     lassign [proc:setvars $0 $1 $2 $3 $4 $5] type stype target starget nick uh hand source chan arg 
 
     putlog "ask:abstract:cmd: started: $cmd -- type: $type -- nick: $nick -- chan: $chan -- arg: $arg"
