@@ -550,6 +550,9 @@ set cfg(captcha:type) "text"
 # -- only required if cfg(captcha:type) is "text"
 set cfg(captcha:id) "your@emailaddress.com"
 
+# -- send CAPTCHA challenge to user via notice or privmsg? (notice|privmsg) - [notice]
+set cfg(captcha:method) "notice"
+
 # -- send an opnotice when a question is sent to a user? (0|1) - [1]
 set cfg(captcha:opnotc) 1
 

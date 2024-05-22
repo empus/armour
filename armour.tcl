@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v5.0 autobuild completed on: Wed May 22 01:32:07 PDT 2024
+# armour.tcl vv5.0 autobuild completed on: Wed May 22 09:08:47 PDT 2024
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -975,7 +975,7 @@ namespace eval arm {
 # ------------------------------------------------------------------------------------------------
 
 # -- this revision is used to match the DB revision for use in upgrades and migrations
-set cfg(revision) "2024052101"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
+set cfg(revision) "2024052300"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
 set cfg(version) "v5.0";        # -- script version
 #set cfg(version) "v[lindex [exec grep version ./armour/.version] 1]"; # -- script version
 #set cfg(revision) [lindex [exec grep revision ./armour/.version] 1];  # -- YYYYMMDDNN (allows for 100 revisions in a single day)
@@ -16025,7 +16025,7 @@ proc captcha:scan {nick uhost chan {id ""}} {
             
             # -- send the question to the client!
             debug 3 "\002captcha:scan\002: sending question to $nick for $chan: $question"
-            putquick "NOTICE $nick :\002Attention!\002 To talk in $chan, please answer the following question correctly: $question"
+            putquick "[cfg:get captcha:method $chan] $nick :\002Attention!\002 To talk in $chan, please answer the following question correctly: $question"
             
             utimer [cfg:get captcha:time $chan] "arm::captcha:check $nick $uhost $chan $id"; # -- time limit for captcha
             
@@ -16310,7 +16310,7 @@ proc captcha:web {nick uhost ip chan {asn ""} {country ""} {subnet ""}} {
 
     # -- send the question to the client!
     debug 3 "\002captcha:web\002: sending CAPTCHA link to $nick (country: $country -- ASN: $asn -- subnet: $subnet) for $chan: $url"
-    putquick "NOTICE $nick :\002Attention!\002 To talk in $chan, please complete the following CAPTCHA challenge: $url"
+    putquick "[cfg:get captcha:method $chan] $nick :\002Attention!\002 To talk in $chan, please complete the following CAPTCHA challenge: $url"
     
     utimer $secs "arm::captcha:check $nick $uhost $chan $code 1"; # -- time limit for captcha
     
@@ -18247,7 +18247,8 @@ if {![info exists atopic:timer]} {
     # -- no cached after timer ID
     set atopic:timer [after [expr [cfg:get atopic:period] * 60 * 1000] arm::atopic:check]
 } else {
-    if {[catch { after info $atopic:timer }]} {
+    set err [catch { after info ${atopic:timer} } res]
+    if {$err eq 1} {
         # -- cached after timer ID exists but is invalid
         set atopic:timer [after [expr [cfg:get atopic:period] * 60 * 1000] arm::atopic:check]
     }
