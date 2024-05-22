@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v5.0 autobuild completed on: Mon May 20 21:43:13 PDT 2024
+# armour.tcl v5.0 autobuild completed on: Wed May 22 01:32:07 PDT 2024
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -959,73 +959,6 @@ proc coroexec {args} {
     coroutine coro_[incr ::coroidx] {*}$args
 }
 
-# -- disable commands if 'openai' plugin not loaded
-if {[info commands ask:query] eq ""} {
-    if {[info exists addcmd(ask)]} { unset addcmd(ask) }
-    if {[info exists addcmd(and)]} { unset addcmd(and) }
-    if {[info exists addcmd(askmode)]} { unset addcmd(askmode) }
-}
-
-# -- disable 'and' command is AI model is 'perplexity' (not supported)
-if {[cfg:get ask:model] eq "perplexity"} {
-    if {[info exists addcmd(and)]} { unset addcmd(and) }
-}
-
-# -- disable commands if 'image' not enabled or openai plugin not loaded
-if {!$cfg(ask:image) || [info commands ask:query] eq ""} {
-    if {[info exists addcmd(image)]} { unset addcmd(image) }
-}
-
-# -- disable command if 'speak' not enabled or speak plugin not loaded
-if {!$cfg(speak:enable) || [info commands speak:query] eq ""} {
-    if {[info exists addcmd(speak)]} { unset addcmd(speak) }
-}
-
-# -- disable command if CAPTCHA not enabled
-if {!$cfg(captcha) || $cfg(captcha:type) ne "web"} {
-    if {[info exists addcmd(captcha)]} { unset addcmd(captcha) }
-}
-
-# -- disable commands if `trakka` plugin not loaded
-if {[info commands trakka:load] eq ""} {
-    if {[info exists addcmd(ack)]} { unset addcmd(ack) }
-    if {[info exists addcmd(nudge)]} { unset addcmd(nudge) }
-    if {[info exists addcmd(score)]} { unset addcmd(score) }
-}
-
-# -- disable commands if `ninjas` plugin not loaded
-if {[info commands ninjas:cmd] eq ""} {
-    if {[info exists addcmd(joke)]} { unset addcmd(joke) }
-    if {[info exists addcmd(dad)]} { unset addcmd(dad) }
-    if {[info exists addcmd(chuck)]} { unset addcmd(chuck) }
-    if {[info exists addcmd(fact)]} { unset addcmd(fact) }
-    if {[info exists addcmd(history)]} { unset addcmd(history) }
-    if {[info exists addcmd(cocktail)]} { unset addcmd(cocktail)}
-}
-
-# -- disable commands if `humour` plugin not loaded
-if {[info commands humour:cmd] eq ""} {
-    if {[info exists addcmd(gif)]} { unset addcmd(gif) }
-    if {[info exists addcmd(meme)]} { unset addcmd(meme) }
-    if {[info exists addcmd(praise)]} { unset addcmd(praise) }
-    if {[info exists addcmd(insult)]} { unset addcmd(insult) }
-}
-
-# -- disable commands if `weather` plugin not loaded
-if {[info commands arm:cmd:weather] eq ""} {
-    if {[info exists addcmd(weather)]} { unset addcmd(weather) }
-}
-
-# -- disable commands if `seen` plugin not loaded
-if {[info commands seen:cmd:seen] eq ""} {
-    if {[info exists addcmd(seen)]} { unset addcmd(seen) }
-}
-
-
-# -- load the actual commands!
-loadcmds
-
-
 debug 0 "\[@\] Armour: loaded command binds."
 
 }
@@ -1042,8 +975,10 @@ namespace eval arm {
 # ------------------------------------------------------------------------------------------------
 
 # -- this revision is used to match the DB revision for use in upgrades and migrations
-set cfg(revision) "2024052100"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
+set cfg(revision) "2024052101"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
 set cfg(version) "v5.0";        # -- script version
+#set cfg(version) "v[lindex [exec grep version ./armour/.version] 1]"; # -- script version
+#set cfg(revision) [lindex [exec grep revision ./armour/.version] 1];  # -- YYYYMMDDNN (allows for 100 revisions in a single day)
 
 # -- cronjob to periodically delete expired ignores
 bind cron - {0 * * * *} arm::cron:ignores 
@@ -18562,8 +18497,9 @@ proc arm:cmd:update {0 1 2 3 {4 ""} {5 ""}} {
 
     # -- set force mode value
     if {[lsearch $arg "-f"] >= 0} { 
-        if {[file isfile ./armour/backup/.lock]} { exec rm -f ./armour/backup/.lock }
+        if {[file isfile ./armour/backup/.lock]} { exec rm -f ./armour/backup/.lock };
         if {[file isfile ./armour/backup/.install-lock]} { exec rm -f ./armour/backup/.install-lock }
+        if {[file isfile ./armour/backup/.install] && ($action eq "install" || $action eq "i")} { exec rm -f ./armour/backup/.install }; # -- delete cache of local install
     }
 
     # -- check for available update
@@ -18587,7 +18523,7 @@ proc arm:cmd:update {0 1 2 3 {4 ""} {5 ""}} {
         set doit 0
         if {[file exists ./armour/.install]} {
             lassign [exec cat ./armour/.install] iver irevision
-            if {$iver eq $gversion && $iver eq $gversion} {
+            if {$iver eq $gversion && $irevision eq $gversion} {
                 # -- local armour.tcl install is same as github version
                 # -- we don't need to download from github, just use the local copy and merge configs
                 debug 0 "\002cmd:update:\002 script \002v$gversion\002 (\002revision:\002 $grevision) already installed locally.... \002applying.\002"
@@ -19577,6 +19513,10 @@ proc update:copy {from to {debug 0}} {
         catch { exec cp -R $from/packages $to }
         catch { exec cp -R $from/deploy $to }
     }
+    debug 0 "\002update:copy:\002 copying dotfiles from $from to $to"
+    if {!$debug || $isbackup} {
+        catch { exec cp -R $from/.version $to }
+    }
     debug 0 "\002update:copy:\002 copying optional directories from $from to $to"
     if {!$debug || $isbackup} {
         if {[file isdirectory $from/emails]} { catch { exec cp -R $from/emails $to } }
@@ -19852,7 +19792,7 @@ init:autologin
 
 
 # ------------------------------------------------------------------------------------------------
-# plugin loader
+# plugin loader -- must be done outside the arm namespace
 # ------------------------------------------------------------------------------------------------
 foreach plugin [array names arm::addplugin] {
     lassign [array get arm::addplugin $plugin] name file
@@ -19862,9 +19802,79 @@ foreach plugin [array names arm::addplugin] {
         arm::debug 0 "\002(plugin load error)\002:$name\: $::errorInfo"
     }
 }
+
 # ------------------------------------------------------------------------------------------------
-arm::loadcmds; # -- load all commands (incl. plugins)
+namespace eval arm {
 # ------------------------------------------------------------------------------------------------
 
-arm::debug 0 "\[@\] Armour: loaded [arm::cfg:get version *] (empus@undernet.org)"
+# -- disable commands if 'openai' plugin not loaded
+if {[info commands ask:query] eq ""} {
+    if {[info exists addcmd(ask)]} { unset addcmd(ask) }
+    if {[info exists addcmd(and)]} { unset addcmd(and) }
+    if {[info exists addcmd(askmode)]} { unset addcmd(askmode) }
+}
 
+# -- disable 'and' command is AI model is 'perplexity' (not supported)
+if {[cfg:get ask:model] eq "perplexity"} {
+    if {[info exists addcmd(and)]} { unset addcmd(and) }
+}
+
+# -- disable commands if 'image' not enabled or openai plugin not loaded
+if {!$cfg(ask:image) || [info commands ask:query] eq ""} {
+    if {[info exists addcmd(image)]} { unset addcmd(image) }
+}
+
+# -- disable command if 'speak' not enabled or speak plugin not loaded
+if {!$cfg(speak:enable) || [info commands speak:query] eq ""} {
+    if {[info exists addcmd(speak)]} { unset addcmd(speak) }
+}
+
+# -- disable command if CAPTCHA not enabled
+if {!$cfg(captcha) || $cfg(captcha:type) ne "web"} {
+    if {[info exists addcmd(captcha)]} { unset addcmd(captcha) }
+}
+
+# -- disable commands if `trakka` plugin not loaded
+if {[info commands trakka:load] eq ""} {
+    if {[info exists addcmd(ack)]} { unset addcmd(ack) }
+    if {[info exists addcmd(nudge)]} { unset addcmd(nudge) }
+    if {[info exists addcmd(score)]} { unset addcmd(score) }
+}
+
+# -- disable commands if `ninjas` plugin not loaded
+if {[info commands ninjas:cmd] eq ""} {
+    if {[info exists addcmd(joke)]} { unset addcmd(joke) }
+    if {[info exists addcmd(dad)]} { unset addcmd(dad) }
+    if {[info exists addcmd(chuck)]} { unset addcmd(chuck) }
+    if {[info exists addcmd(fact)]} { unset addcmd(fact) }
+    if {[info exists addcmd(history)]} { unset addcmd(history) }
+    if {[info exists addcmd(cocktail)]} { unset addcmd(cocktail)}
+}
+
+# -- disable commands if `humour` plugin not loaded
+if {[info commands humour:cmd] eq ""} {
+    if {[info exists addcmd(gif)]} { unset addcmd(gif) }
+    if {[info exists addcmd(meme)]} { unset addcmd(meme) }
+    if {[info exists addcmd(praise)]} { unset addcmd(praise) }
+    if {[info exists addcmd(insult)]} { unset addcmd(insult) }
+}
+
+# -- disable commands if `weather` plugin not loaded
+if {[info commands arm:cmd:weather] eq ""} {
+    if {[info exists addcmd(weather)]} { unset addcmd(weather) }
+}
+
+# -- disable commands if `seen` plugin not loaded
+if {[info commands seen:cmd:seen] eq ""} {
+    if {[info exists addcmd(seen)]} { unset addcmd(seen) }
+}
+
+# ------------------------------------------------------------------------------------------------
+loadcmds; # -- load all commands (incl. plugins)
+# ------------------------------------------------------------------------------------------------
+
+debug 0 "\[@\] Armour: loaded [arm::cfg:get version *] (empus@undernet.org)"
+
+# ------------------------------------------------------------------------------------------------
+}; # -- end namespace
+# ------------------------------------------------------------------------------------------------

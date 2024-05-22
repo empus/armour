@@ -521,8 +521,8 @@ proc quote:cmd:quote {0 1 2 3 {4 ""} {5 ""}} {
 		set first "$first ORDER BY timestamp ASC LIMIT 1"
 		set last "$last ORDER BY timestamp DESC LIMIT 1"
 
-		set first [join [lindex [db:query $first] 0]]
-		set last [join [lindex [db:query $last] 0]]
+		set first [join [lindex [quote:db:query $first] 0]]
+		set last [join [lindex [quote:db:query $last] 0]]
 		
 		quote:db:close
 		# -- TODO: move timeago locally to work in standalone
