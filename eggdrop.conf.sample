@@ -43,9 +43,6 @@ set realname "Armour -- https://armour.bot"
 # -- UTC time offset
 set offset "+5"
 
-# -- listen address for bot & user telnet sessions
-set listen-addr "127.0.0.1"
-
 # -- bot bind address for outgoing connection
 set vhost4 "172.16.164.1"
 

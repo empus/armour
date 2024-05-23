@@ -832,16 +832,12 @@ eggdrop_setting() {
         echo "    The ${tty_green}UTC${tty_reset} timezone offset for the bot. e.g., ${tty_green}+5${tty_reset}"
         NOEMPTY=1
 
-    elif [ $1 == "listen-addr" ]; then
-        echo "    The ${tty_green}listen address${tty_reset} used to accept bot and telnet connections on."
-        NOEMPTY=1
-
     elif [ $1 == "vhost4" ]; then
-        echo "    The ${tty_green}IPv4${tty_reset} bind address for outgoing IRC server connections."
+        echo "    The ${tty_green}IPv4${tty_reset} bind address for IPv4 outgoing IRC server connections."
         NOEMPTY=1
 
     elif [ $1 == "vhost6" ]; then
-        echo "    The ${tty_green}IPv6${tty_reset} bind address for outgoing IRC server connections. Leave empty if not using IPv6."
+        echo "    The ${tty_green}IPv6${tty_reset} bind address for IPv6 outgoing IRC server connections. Leave empty if not using IPv6."
 
     elif [ $1 == "net-type" ]; then
         echo "    The ${tty_green}network type${tty_reset} of the IRC network. Options are:"
@@ -881,7 +877,7 @@ check_eggdrop_settings() {
     ohai "Eggdrop settings ..."
     echo
 
-    SETTING_LIST="uservar nick altnick botnet-nick username owner admin network realname offset listen-addr vhost4 net-type servers"
+    SETTING_LIST="uservar nick altnick botnet-nick username owner admin network realname offset vhost4 vhost6 net-type servers"
     cd ${EGGDROP_INSTALL_DIR}
     EGGDROP_FILE="${BOTNAME}.conf"
 
@@ -1579,7 +1575,7 @@ deploy_from_file() {
     cp armour/armour.conf.sample armour/${BOTNAME}.conf
 
     SETTINGS_ARMOUR="botname register register:inchan ircd znc realname servicehost prefix chan:nocmd chan:def chan:report auth:user auth:pass auth:totp auth:mech auth:serv:nick auth:serv:host xhost:ext auth:hide auth:rand auth:wait ban portscan"
-    SETTINGS_EGGDROP="uservar nick altnick botnet-nick username owner admin network realname offset listen-addr listenport vhost4 net-type servers oidentd"
+    SETTINGS_EGGDROP="uservar nick altnick botnet-nick username owner admin network realname offset listenport vhost4 vhost6 net-type servers oidentd"
 
     DEPLOY_FILE="${ARMOUR_INSTALL_DIR}/${DEPLOY_FILE}"
 

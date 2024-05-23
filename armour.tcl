@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v5.0 autobuild completed on: Thu May 23 01:53:04 PDT 2024
+# armour.tcl v5.0 autobuild completed on: Thu May 23 10:08:32 PDT 2024
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -975,7 +975,7 @@ namespace eval arm {
 # ------------------------------------------------------------------------------------------------
 
 # -- this revision is used to match the DB revision for use in upgrades and migrations
-set cfg(revision) "2024052301"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
+set cfg(revision) "2024052400"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
 set cfg(version) "v5.0";        # -- script version
 #set cfg(version) "v[lindex [exec grep version ./armour/.version] 1]"; # -- script version
 #set cfg(revision) [lindex [exec grep revision ./armour/.version] 1];  # -- YYYYMMDDNN (allows for 100 revisions in a single day)
@@ -8049,7 +8049,7 @@ proc arm:cmd:captcha {0 1 2 3 {4 ""} {5 ""}} {
 #    usage: deploy <bot> [setting1=value1 setting2=value2 settingN=valueN...]
 proc arm:cmd:deploy {0 1 2 3 {4 ""} {5 ""}} {
     global botnet-nick network altnick realname owner admin network 
-    global servers net-type offset listen-addr vhost4 oidentd username
+    global servers net-type offset vhost4 vhost6 oidentd username
     lassign [proc:setvars $0 $1 $2 $3 $4 $5] type stype target starget nick uh hand source chan arg 
  
     set cmd "deploy"
@@ -8159,7 +8159,7 @@ proc arm:cmd:deploy {0 1 2 3 {4 ""} {5 ""}} {
 
     # -- special handling
     if {![info exists oidentd]} { set oidentd 0 }
-    foreach setting "botname altnick realname owner admin network servers net-type offset listen-addr vhost4 oidentd username" {
+    foreach setting "botname altnick realname owner admin network servers net-type offset vhost4 vhost6 oidentd username" {
         if {$setting in $done} { continue; }; # -- don't rewrite those specified manually
         set pos [lsearch "$setting=*" $settings]
         if {$pos eq -1} {
