@@ -305,7 +305,6 @@ proc arm:cmd:ask {0 1 2 3 {4 ""} {5 ""}} {
     debug 3 "arm:cmd:ask: response: $response"
     set eresponse $response
     regsub -all {"} $response {\"} eresponse; # -- escape quotes in response
-    #debug 3 "arm:cmd:ask: eresponse: $eresponse"
     append ask($type,[split $nick],$chan) ", {\"role\": \"assistant\", \"content\": \"$eresponse\"}"
 
     regsub -all {\{} $response {"} response; # -- fix curly braces
@@ -323,20 +322,11 @@ proc arm:cmd:ask {0 1 2 3 {4 ""} {5 ""}} {
         set rowid [ask:abstract:insert speak $nick $user $cid $ref $what]
         reply $type $target "$nick: $ref (\002id:\002 $rowid\002)\002"
     } else {
-        #set response [encoding convertfrom utf-8 $response]; # -- convert from utf-8
         if {[string match "I'm sorry, but as a text-based AI, I cannot create images.*" $response] \
             || [string match "Creating images is beyond my current capabilities,* " $response]} {
             set response "Please adjust the wording of your request, if you want me to create an image."
         }
-        #set response [encoding convertto utf-8 $response]
-        putlog "response 1: $response"
-        set response [u2a $response]
-        putlog "response 2: $response"
-        set response2 [encoding convertfrom utf-8 "$response"]
-        #putlog "response 3: $response"
-        reply $type $target "$nick: $response2"
-        #reply $type $target "$nick: [encoding convertfrom utf-8 "$response"]"
-        #putquick "PRIVMSG $target :$nick: [encoding convertto utf-8 $response]"
+        reply $type $target "$nick: [encoding convertfrom utf-8 "$response"]"
     }
 
     ask:killtimer [split $type,[split $nick],$chan]; # -- kill any existing ask timer
@@ -428,7 +418,7 @@ proc arm:cmd:and {0 1 2 3 {4 ""} {5 ""}} {
     regsub -all {\}} $response {"} response; # -- fix curly braces
 
     # -- output response
-    debug 1 "\002OpenAI answer:\002 $response"
+    debug 4 "\002OpenAI answer:\002 $response"
 
     if {$speak} {
         set iserror [speak:query $eresponse]
@@ -439,7 +429,7 @@ proc arm:cmd:and {0 1 2 3 {4 ""} {5 ""}} {
         set ref [lindex $iserror 1]
         reply $type $target "$nick: $ref"
     } else {
-        #set response [encoding convertfrom utf-8 $response]; # -- convert from utf-8
+        set response [encoding convertfrom utf-8 $response]; # -- convert from utf-8
         reply $type $target "$nick: $response"
     }
     
@@ -1056,7 +1046,7 @@ proc ask:query {what first ids key {speak "0"} {userprefix "1"}} {
 
     set json "{\"model\": \"$model\", \"messages\": \[$ask($key)\], \"temperature\": [cfg:get ask:temp *]}"
 
-    debug 3 "\002ChatGPT POST JSON:\002 $json"
+    debug 5 "\002ask:query:\002 POST JSON: $json"
 
     catch {set tok [http::geturl $cfgurl \
         -method POST \
@@ -1071,8 +1061,7 @@ proc ask:query {what first ids key {speak "0"} {userprefix "1"}} {
     if {[lindex $iserror 0] eq 1} { return $iserror; }; # -- errors
     
     set json [http::data $tok]
-    debug 3 "\002ChatGPT response JSON:\002 $json"
-    #debug 3 "\002ChatGPT response converted JSON:\002 [encoding convertfrom iso8859-1 $json]"
+    debug 5 "\002ask:query:\002 response JSON: $json"
     set data [json::json2dict $json]
     http::cleanup $tok
 
@@ -1091,11 +1080,7 @@ proc ask:query {what first ids key {speak "0"} {userprefix "1"}} {
     set message [dict get [join $choices] message]
     set content [dict get $message content]
 
-    debug 3 "\002ask:query:\002 content: $content"
-    #debug 0 "\002ask:query:002 utf8 encoded content: [encoding convertto utf-8 $content]"
-
-
-
+    debug 5 "\002ask:query:\002 content: $content"
     return "0 $content"
 }
 
@@ -1154,11 +1139,6 @@ proc ask:dalle {desc {num "1"} {size "512x512"} {image ""}} {
         set params [list -H "Authorization: Bearer $token" -F image=@$filepath.new -F n=1 -F size=$size]
         
         catch {set data [exec curl --silent {*}$params $url]}
-
-        debug 4 "data: $data"
-
-        debug 4 "ask:dalle: deleting temp file: $filepath"
-        debug 4 "ask:dalle: temp file: $filepath.new"
         exec rm $filepath
         exec rm "$filepath.new"
 

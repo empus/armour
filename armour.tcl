@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl vv5.0 autobuild completed on: Wed May 22 09:08:47 PDT 2024
+# armour.tcl v5.0 autobuild completed on: Thu May 23 01:53:04 PDT 2024
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -975,7 +975,7 @@ namespace eval arm {
 # ------------------------------------------------------------------------------------------------
 
 # -- this revision is used to match the DB revision for use in upgrades and migrations
-set cfg(revision) "2024052300"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
+set cfg(revision) "2024052301"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
 set cfg(version) "v5.0";        # -- script version
 #set cfg(version) "v[lindex [exec grep version ./armour/.version] 1]"; # -- script version
 #set cfg(revision) [lindex [exec grep revision ./armour/.version] 1];  # -- YYYYMMDDNN (allows for 100 revisions in a single day)
@@ -4126,13 +4126,16 @@ proc arm:cmd:conf {0 1 2 3 {4 ""} {5 ""}} {
             set long [split $i :]
             # -- protect some sensitive vars
             switch -- $i {
-                auth:pass { continue; }
-                auth:totp { continue; }
-                ipqs:key  { continue; }
-                ircbl:key { continue; }
-                ask:token { continue; }
-                ask:org   { continue; }
-                speak:key { continue; }
+                auth:pass   { continue; }
+                auth:totp   { continue; }
+                ipqs:key    { continue; }
+                ircbl:key   { continue; }
+                ask:token   { continue; }
+                ask:org     { continue; }
+                speak:key   { continue; }
+                humour:key  { continue; }
+                ninjas:key  { continue; }
+                weather:key { continue; }
             }
             if {[string match $var $i] || [string match $var $long]} { lappend thelist $i }
         }

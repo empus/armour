@@ -117,10 +117,10 @@ proc arm:cmd:weather {0 1 2 3 {4 ""} {5 ""}} {
     set emoji [weather:emoji $code]
 
     if {$cfgUnits eq "metric"} {
-        reply $type $target "\002weather -\002 $city, $country: $emoji\\002$temp\002 °C, \002$humidity\002 % humidity, \002$windspeed\002 km/h wind,\
+        reply $type $target "\002weather -\002 $city, $country: $emoji\002$temp\002 °C, \002$humidity\002 % humidity, \002$windspeed\002 km/h wind,\
             \002$cloudcover\002 % cloud cover (\002$clouds\002). Sunrise: \002$sunrise\002 / Sunset: \002$sunset\002"
     } elseif {$cfgUnits eq "imperial"} {
-        reply $type $target "\002weather -\002 $city, $country: $emoji\\002$temp\002 °F, \002$humidity\002 % humidity, \002$windspeed\002 mph wind,\
+        reply $type $target "\002weather -\002 $city, $country: $emoji\002$temp\002 °F, \002$humidity\002 % humidity, \002$windspeed\002 mph wind,\
             \002$cloudcover\002 % cloud cover (\002$clouds\002). Sunrise: \002$sunrise\002 / Sunset: \002$sunset\002"
     } elseif {$cfgUnits eq "both"} {
         set tempF [format "%.1f" [expr ($temp * 9/5) + 32]]
