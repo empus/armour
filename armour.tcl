@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v5.0 autobuild completed on: Fri May 24 23:00:08 PDT 2024
+# armour.tcl v5.0 autobuild completed on: Sat May 25 03:38:46 PDT 2024
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -975,7 +975,7 @@ namespace eval arm {
 # ------------------------------------------------------------------------------------------------
 
 # -- this revision is used to match the DB revision for use in upgrades and migrations
-set cfg(revision) "2024052502"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
+set cfg(revision) "2024052503"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
 set cfg(version) "v5.0";        # -- script version
 #set cfg(version) "v[lindex [exec grep version ./armour/.version] 1]"; # -- script version
 #set cfg(revision) [lindex [exec grep revision ./armour/.version] 1];  # -- YYYYMMDDNN (allows for 100 revisions in a single day)
@@ -8171,9 +8171,10 @@ proc arm:cmd:deploy {0 1 2 3 {4 ""} {5 ""}} {
         incr count
     }
 
-    # -- special handling
+    # -- special handling for eggdrop settings
     if {![info exists oidentd]} { set oidentd 0 }
-    foreach setting "botname altnick realname owner admin network servers net-type offset vhost4 vhost6 oidentd username" {
+    set eggSettings "botname altnick realname owner admin network servers net-type offset vhost4 vhost6 oidentd username"
+    foreach setting $eggSettings {
         if {$setting in $done} { continue; }; # -- don't rewrite those specified manually
         set pos [lsearch "$setting=*" $settings]
         if {$pos eq -1} {
@@ -8197,6 +8198,28 @@ proc arm:cmd:deploy {0 1 2 3 {4 ""} {5 ""}} {
             incr count
         }
     }
+
+
+    # -- special handling for Armour settings
+    set armSettings "prefix chan:def chan:report chan:nocmd ban ircd znc auth:user auth:pass auth:totp auth:hide auth:rand \
+        auth:wait servicehost auth:mech auth:serv:nick auth:serv:host xhost:ext register register:inchan portscan oidentd"
+    foreach setting $armSettings {
+        if {$setting in $done} { continue; }; # -- don't rewrite those specified manually
+        set pos [lsearch "$setting=*" $settings]
+        if {$pos eq -1} {
+            # -- default to existing var
+            set val [cfg:get $setting]
+            set updated_line "$setting=\"$val\""
+            if {$os in "FreeBSD OpenBSD NetBSD Darwin"} {
+                exec sed -i '' "s|^$setting=.*$|$updated_line|" ./armour/deploy/$botname.ini
+            } else {
+                exec sed -i "s|^$setting=.*$|$updated_line|" ./armour/deploy/$botname.ini
+            }
+            debug 1 "\002cmd:deploy:\002 updated line in ./armour/deploy/$botname.ini: $updated_line"
+            incr count
+        }
+    }
+
     file delete "./armour/deploy/$botname.ini''"; # -- delete sed backup file
     debug 1 "\002cmd:deploy:\002 finished creating deployment file: ./armour/deploy/$botname.ini (updated \002$count\002 lines)"
 
@@ -13772,7 +13795,7 @@ proc userdb:cmd:verify {0 1 2 3 {4 ""}  {5 ""}} {
     # -- check for ignores, in case the VERIFY is being done because a user is confused why the bot isn't responding
     # -- only check for ignores for a channel the VERIFY command was used from
     set hit 0
-    putlog "\002type: $type -- source: $source -- target: $target -- trgnick: $trgnick -- tuser: $tuser -- chan: $chan"
+    debug 4 "\002userdb:cmd:verify:\002 type: $type -- source: $source -- target: $target -- trgnick: $trgnick -- tuser: $tuser -- chan: $chan"
     if {$type eq "pub"} {
         set cid [dict keys [dict filter $dbchans script {id dictData} { 
             expr {[string tolower [dict get $dictData chan]] eq [string tolower $target]} 
@@ -13784,10 +13807,6 @@ proc userdb:cmd:verify {0 1 2 3 {4 ""}  {5 ""}} {
                 db:connect
                 set ignores [db:query "SELECT id,mask FROM ignores WHERE cid='$cid' AND expire_ts > [clock seconds]"]
                 db:close
-                if {$ignores eq ""} {
-                    # -- no ignores for chan
-                    return 0;
-                }
                 foreach ignore $ignores {
                     lassign $ignore iid imask
                     if {[string match -nocase $imask $tnuh]} {
