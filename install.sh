@@ -200,7 +200,7 @@ getIPv4() {
         # -- unknown
         IP4ADDRESS=""
     fi
-    ohai "IP4ADDRESS: $IP4ADDRESS"
+    #ohai "IP4ADDRESS: $IP4ADDRESS"
 }
 
 # -- get first IPv6 on primary NIC, skipping the link-local address
@@ -215,7 +215,7 @@ getIPv6() {
     else
         IP6ADDRESS=""
     fi
-    ohai "IP6ADDRESS: $IP6ADDRESS"
+    #ohai "IP6ADDRESS: $IP6ADDRESS"
 }
 
 # -- look for next available port
@@ -227,7 +227,7 @@ getPort() {
         # -- BSD or macOS
         echo "BSD or macOS: $OS"
         for ((PORT=$START_PORT; PORT<=$END_PORT; PORT++)); do
-            if ! netstat -an | grep -E ".*\.$port .*LISTEN" >/dev/null 2>&1; then
+            if ! netstat -an | grep -E ".*\.$PORT .*LISTEN" >/dev/null 2>&1; then
                 break
             fi
         done
@@ -240,7 +240,7 @@ getPort() {
             fi
         done
     fi 
-    ohai "PORT: $PORT"
+    #ohai "PORT: $PORT"
 }
 
 wait_for_user() {

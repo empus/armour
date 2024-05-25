@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v5.0 autobuild completed on: Fri May 24 22:41:23 PDT 2024
+# armour.tcl v5.0 autobuild completed on: Fri May 24 23:00:08 PDT 2024
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -975,7 +975,7 @@ namespace eval arm {
 # ------------------------------------------------------------------------------------------------
 
 # -- this revision is used to match the DB revision for use in upgrades and migrations
-set cfg(revision) "2024052501"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
+set cfg(revision) "2024052502"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
 set cfg(version) "v5.0";        # -- script version
 #set cfg(version) "v[lindex [exec grep version ./armour/.version] 1]"; # -- script version
 #set cfg(revision) [lindex [exec grep revision ./armour/.version] 1];  # -- YYYYMMDDNN (allows for 100 revisions in a single day)
@@ -8225,7 +8225,7 @@ proc arm:cmd:deploy {0 1 2 3 {4 ""} {5 ""}} {
         return;
     }
     set pid [exec cat pid.$botname]
-    reply $type $target "done! eggdrop \002$botname\002 started (\002PID:\002 $pid) -- initialise via: \002/msg $botname hello\002"
+    reply $type $target "done! new bot \002$botname\002 running (\002PID:\002 $pid) -- initialise via: \002/msg $botname hello\002"
 
     # -- create log entry for command use
     log:cmdlog BOT * 1 $user $uid [string toupper $cmd] "$log" "$source" "" "" ""
