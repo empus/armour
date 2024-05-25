@@ -187,20 +187,60 @@ ring_bell() {
     fi
 }
 
-# -- get first IP on primary NIC
-getIP() {
-    local interface
+# -- get first IPv4 address on primary NIC
+getIPv4() {
+    # -- check for 'ip' command
+    if command -v ip > /dev/null; then
+        # -- Linux
+        IP4ADDRESS=$(ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v '127.0.0.1' | head -n 1)
+    elif command -v ifconfig > /dev/null; then
+        # -- BSD or macOS
+        IP4ADDRESS=$(ifconfig | grep -E 'inet [0-9]' | grep -v '127.0.0.1' | awk '{print $2}' | head -n 1)
+    else
+        # -- unknown
+        IP4ADDRESS=""
+    fi
+    ohai "IP4ADDRESS: $IP4ADDRESS"
+}
+
+# -- get first IPv6 on primary NIC, skipping the link-local address
+getIPv6() {
+    # -- check for 'ip' command
+    if command -v ip > /dev/null; then
+        # -- Linux
+        IP6ADDRESS=$(ip -6 addr show | grep -oP '(?<=inet6\s)[\da-fA-F:]+(?=/)' | grep -vE '^::1$|^fe80:' | head -n 1)
+    elif command -v ifconfig > /dev/null; then
+        # -- macOS or BSD systems
+        IP6ADDRESS=$(ifconfig | grep -E 'inet6 ' | grep -vE 'inet6 ::1|inet6 fe80' | awk '{print $2}' | head -n 1)
+    else
+        IP6ADDRESS=""
+    fi
+    ohai "IP6ADDRESS: $IP6ADDRESS"
+}
+
+# -- look for next available port
+getPort() {
+    # -- allow for 100 x unique ports (and bots)
+    START_PORT=42420
+    END_PORT=42519
     if [[ " FreeBSD NetBSD OpenBSD Darwin " == *" $OS "* ]]; then
         # -- BSD or macOS
-        interface=$(route -n get default | grep interface | awk '{print $2}')
-        IPADDRESS=$(ifconfig $interface | grep "inet " | awk '{print $2}')
+        echo "BSD or macOS: $OS"
+        for ((PORT=$START_PORT; PORT<=$END_PORT; PORT++)); do
+            if ! netstat -an | grep -E ".*\.$port .*LISTEN" >/dev/null 2>&1; then
+                break
+            fi
+        done
     else
         # -- Linux
-        IPADDRESS=$(ip route get 1 | awk 'NR==1 {print $(NF-2)}')
-    fi
-    if [[ $IPADDRESS == "" ]]; then
-        IPADDRESS="127.0.0.1"
-    fi
+        echo "Linux: $OS"
+        for ((PORT=$START_PORT; PORT<=$END_PORT; PORT++)); do
+            if ! lsof -iTCP:$PORT -sTCP:LISTEN >/dev/null 2>&1; then
+                break
+            fi
+        done
+    fi 
+    ohai "PORT: $PORT"
 }
 
 wait_for_user() {
@@ -786,7 +826,37 @@ ask_for_setting_value() {
         warn "Setting ${tty_green}$setting_name${tty_reset} must have a ${tty_green}numeric${tty_reset} value."
         echo
         ask_for_setting_value "$setting_name" "$current_value"
+    
     fi
+
+    # -- ensure IPv4 address is really not required
+    if [[ "${setting_name}" == "vhost4"  && "${new_value}" == "" ]]; then
+        NOIP4=0
+        local input
+        read -p "${tty_yellow}Warning:${tty_reset} Are you sure you do ${tty_yellow}not${tty_reset} want to set an IPv4 address? Enter (${tty_green}Y${tty_reset})es or (${tty_green}N${tty_reset})o: " input </dev/tty
+        echo
+        if [ "${input}" == "n" ]; then
+            echo
+            ask_for_setting_value "$setting_name" "$current_value"
+        else
+            NOIP4=1
+        fi
+    fi
+
+    # -- require IPv6 address if IPv4 address is not set
+    if [[ "${setting_name}" == "vhost6" && "${NOIP4}" == 1 && ! "${new_value}" =~ ^[a-fA-F0-9:.]+$ ]]; then
+        # -- not a valid IPv6 address
+        warn "Setting ${tty_green}$setting_name${tty_reset} must have a valid ${tty_green}IPv6${tty_reset} address as no IPv4 address is set."
+        echo
+        ask_for_setting_value "$setting_name" "$current_value"
+    fi
+
+    # -- if we got here, it's a valid value
+    echo
+    ohai "Setting ${tty_green}$setting_name${tty_reset} to: ${tty_blue}$new_value${tty_reset}"
+    echo
+
+    
 }
 
 eggdrop_setting() {
@@ -834,7 +904,7 @@ eggdrop_setting() {
 
     elif [ $1 == "vhost4" ]; then
         echo "    The ${tty_green}IPv4${tty_reset} bind address for IPv4 outgoing IRC server connections."
-        NOEMPTY=1
+        #NOEMPTY=1
 
     elif [ $1 == "vhost6" ]; then
         echo "    The ${tty_green}IPv6${tty_reset} bind address for IPv6 outgoing IRC server connections. Leave empty if not using IPv6."
@@ -852,7 +922,7 @@ eggdrop_setting() {
         NOEMPTY=1
 
     elif [ $1 == "servers" ]; then
-        echo "    The space delimited ${tty_green}server(s)${tty_reset} to connect to on IRC"
+        echo "    The ${tty_green}space${tty_reset} delimited ${tty_green}server(s)${tty_reset} to connect to on IRC"
         NOEMPTY=1
     
     elif [ $1 == "_port" ]; then
@@ -903,9 +973,15 @@ check_eggdrop_settings() {
             else
 
                 if [ "$setting_name" == "vhost4" ]; then
-                    # -- obtain primary NIC IP
-                    getIP
-                    current_value="$IPADDRESS"
+                    # -- obtain primary NIC IPv4 address
+                    getIPv4
+                    current_value="$IP4ADDRESS"
+                fi
+
+                if [ "$setting_name" == "vhost6" ]; then
+                    # -- obtain primary NIC IPv6 address
+                    getIPv6
+                    current_value="$IP6ADDRESS"
                 fi
 
                 if [ "$setting_name" == "altnick" ]; then
@@ -972,7 +1048,11 @@ check_eggdrop_settings() {
 
     # -- do the 'listen' line
     eggdrop_setting "_port"
-    ask_for_setting_value "port number" "1231"
+    getPort
+    NUMERIC=1
+    NOEMPTY=1
+    BINARY=0
+    ask_for_setting_value "port number" $PORT
     if [ $GNUSED == 0 ]; then
         sed -i '' "s|^listen .*$|listen $new_value all|" "$EGGDROP_FILE"
     else
@@ -983,6 +1063,8 @@ check_eggdrop_settings() {
 
     # -- ask about oidentd usage
     eggdrop_setting "_oidentd"
+    NOEMPTY=1
+    BINARY=1
     ask_for_setting_value "oidentd" "0"
     if [ "$new_value" == "1" ]; then
         # -- load ident module and uncomment ident-method
@@ -1289,7 +1371,6 @@ start_eggdrop() {
     fi
 
     if [[ "${input}" == 'y' ]]; then
-        EGG_STARTED=1
         ohai "Starting ${tty_green}eggdrop${tty_reset} from ${tty_green}${EGGDROP_INSTALL_DIR}${tty_reset}..."
         echo
         cd ${EGGDROP_INSTALL_DIR}
@@ -1301,6 +1382,16 @@ start_eggdrop() {
             echo "    ${tty_green}./eggdrop ${BOTNAME}.conf${tty_reset}"
             echo
             ./eggdrop ${BOTNAME}.conf > /dev/null 2>&1
+        fi
+        get_eggdrop_pid
+        if [ "$PID" == "" ]; then
+            # -- eggdrop no longer running... must have crashed?
+            ring_bell
+            echo "${tty_red}Error${tty_reset}: Eggdrop unable to start.  Check logs for errors or try starting manually."
+            echo
+            abort
+        else
+            EGG_STARTED=1
         fi
     
     elif [[ "${input}" == 'n' ]]; then
@@ -1609,6 +1700,12 @@ deploy_from_file() {
             if [[ " $SETTINGS_EGGDROP " == *" $setting_name "* ]]; then
                 # -- eggdrop setting
                 if [ "${setting_name}" == "listenport" ]; then
+                    if [[ "$current_value" == "" || "$current_value" == "1231" ]]; then
+                        # -- find an available port
+                        getPort
+                        ohai "[${tty_blue}Updated${tty_reset}] ${tty_green}listen port${tty_reset} to: ${tty_green}$PORT${tty_reset}"
+                        current_value="$PORT"
+                    fi
                     updated_line="listen $current_value all"
                     # -- replace the line
                     if [ $GNUSED == 0 ]; then
@@ -1621,6 +1718,19 @@ deploy_from_file() {
                         OIDENTD=1
                     fi
                 else
+                    if [ "$current_value" == "" ]; then
+                        if [ "${setting_name}" == "vhost4" ]; then
+                            # -- find IPv4 address
+                            getIPv4
+                            ohai "[${tty_blue}Updated${tty_reset}] ${tty_green}IPv6${tty_reset} to: ${tty_green}$IP4ADDRESS${tty_reset}"
+                            current_value="$IP4ADDRESS"
+                        elif [ "${setting_name}" == "vhost6" ]; then
+                            # -- find IPv6 address
+                            getIPv6
+                            ohai "[${tty_blue}Updated${tty_reset}] ${tty_green}IPv6${tty_reset} to: ${tty_green}$IP6ADDRESS${tty_reset}"
+                            current_value="$IP6ADDRESS"
+                        fi
+                    fi
                     updated_line="set $setting_name \"$current_value\""
                     # -- replace the line
                     if [ $GNUSED == 0 ]; then

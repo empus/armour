@@ -17,9 +17,9 @@ ircd=1
 znc=0
 
 offset="+5"
-vhost4="127.0.0.1"
+vhost4=""
 vhost6=""
-listenport=1231
+listenport=""
 
 auth:user=""
 auth:pass=""

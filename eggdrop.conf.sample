@@ -44,10 +44,10 @@ set realname "Armour -- https://armour.bot"
 set offset "+5"
 
 # -- bot bind address for outgoing connection
-set vhost4 "172.16.164.1"
+set vhost4 ""
 
 # -- bot IPv6 bind address for outgoing connections
-#set vhost6 "2001:db5::c005:b07"
+set vhost6 ""
 
 # -- listen port for bot & user telnet sessions
 listen 1231 all
