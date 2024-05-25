@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v5.0 autobuild completed on: Sat May 25 03:38:46 PDT 2024
+# armour.tcl v5.0 autobuild completed on: Sat May 25 03:49:51 PDT 2024
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -975,7 +975,7 @@ namespace eval arm {
 # ------------------------------------------------------------------------------------------------
 
 # -- this revision is used to match the DB revision for use in upgrades and migrations
-set cfg(revision) "2024052503"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
+set cfg(revision) "2024052504"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
 set cfg(version) "v5.0";        # -- script version
 #set cfg(version) "v[lindex [exec grep version ./armour/.version] 1]"; # -- script version
 #set cfg(revision) [lindex [exec grep revision ./armour/.version] 1];  # -- YYYYMMDDNN (allows for 100 revisions in a single day)
@@ -8073,12 +8073,22 @@ proc arm:cmd:deploy {0 1 2 3 {4 ""} {5 ""}} {
     set log "$chan [join $arg]"; set log [string trimright $log " "]
 
     set botname [lindex $arg 0]
-    set settings [lrange $arg 1 end]
-    if {$botname eq ""} {
+    set defchan [lindex $arg 1]
+    set settings [lrange $arg 2 end]
+    if {$botname eq "" || $defchan eq ""} {
         # -- botname must be given
-        reply $stype $starget "\002usage:\002 deploy <bot> \[setting1=value1 setting2=value2 settingN=valueN...\]"
+        reply $stype $starget "\002usage:\002 deploy <bot> <chan> \[setting1=value1 setting2=value2 settingN=valueN...\]"
         return;
     }
+
+    # -- add default channel
+    set chanpos [lsearch "chan:def=*" $settings]
+    if {$chanpos ne -1} {
+        # -- already specified in <chan> param
+        reply $stype $starget "\002error:\002 default channel already specified with \002<chan>\002 parameter."
+        return;
+    }
+    append settings " chan:def=$defchan"
 
     # -- check for install script
     if {![file exists "./armour/install.sh"]} {
