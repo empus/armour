@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v5.0 autobuild completed on: Fri May 24 22:33:38 PDT 2024
+# armour.tcl v5.0 autobuild completed on: Fri May 24 22:41:23 PDT 2024
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -975,7 +975,7 @@ namespace eval arm {
 # ------------------------------------------------------------------------------------------------
 
 # -- this revision is used to match the DB revision for use in upgrades and migrations
-set cfg(revision) "2024052500"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
+set cfg(revision) "2024052501"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
 set cfg(version) "v5.0";        # -- script version
 #set cfg(version) "v[lindex [exec grep version ./armour/.version] 1]"; # -- script version
 #set cfg(revision) [lindex [exec grep revision ./armour/.version] 1];  # -- YYYYMMDDNN (allows for 100 revisions in a single day)
@@ -1690,11 +1690,11 @@ proc db:upgrade {} {
         if {!$upgrade} { debug 0 "\[@\] Armour: beginning db migration from $revision to $confrev" }
         set upgrade 1;
         if {[file exists ./armour/deploy/undernet.ini.sample]} { 
-            exec cp ./armour/undernet.ini.sample ./armour/deploy/undernet.ini
+            exec cp ./armour/deploy/undernet.ini.sample ./armour/deploy/undernet.ini
             debug 0 "\[@\] Armour: copied \002./armour/deploy/undernet.ini.sample\002 to \002./armour/deploy/undernet.ini\002"
         }
         if {[file exists ./armour/deploy/dalnet.ini.sample]} { 
-            exec cp ./armour/dalnet.ini.sample ./armour/deploy/dalnet.ini
+            exec cp ./armour/deploy/dalnet.ini.sample ./armour/deploy/dalnet.ini
             debug 0 "\[@\] Armour: copied \002./armour/deploy/dalnet.ini.sample\002 to \002./armour/deploy/dalnet.ini\002"
         }
     }
