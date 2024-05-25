@@ -260,6 +260,9 @@ set cfg(exempt:time) 5
 # -- allow users to set their own channel greetings? (0|1) - [1]
 set cfg(greet:self) 1
 
+# -- add cronjob for bots created with 'deploy' command? (0|1) - [1]
+set cfg(deploy:cron) 1
+
 
 
 # ------------------------------------------------------------------------------------------------

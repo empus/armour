@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v5.0 autobuild completed on: Sat May 25 03:49:51 PDT 2024
+# armour.tcl v5.0 autobuild completed on: Sat May 25 05:43:36 PDT 2024
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -975,7 +975,7 @@ namespace eval arm {
 # ------------------------------------------------------------------------------------------------
 
 # -- this revision is used to match the DB revision for use in upgrades and migrations
-set cfg(revision) "2024052504"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
+set cfg(revision) "2024052505"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
 set cfg(version) "v5.0";        # -- script version
 #set cfg(version) "v[lindex [exec grep version ./armour/.version] 1]"; # -- script version
 #set cfg(revision) [lindex [exec grep revision ./armour/.version] 1];  # -- YYYYMMDDNN (allows for 100 revisions in a single day)
@@ -8212,7 +8212,7 @@ proc arm:cmd:deploy {0 1 2 3 {4 ""} {5 ""}} {
 
     # -- special handling for Armour settings
     set armSettings "prefix chan:def chan:report chan:nocmd ban ircd znc auth:user auth:pass auth:totp auth:hide auth:rand \
-        auth:wait servicehost auth:mech auth:serv:nick auth:serv:host xhost:ext register register:inchan portscan oidentd"
+        auth:wait servicehost auth:mech auth:serv:nick auth:serv:host xhost:ext register register:inchan portscan"
     foreach setting $armSettings {
         if {$setting in $done} { continue; }; # -- don't rewrite those specified manually
         set pos [lsearch "$setting=*" $settings]
@@ -8257,6 +8257,29 @@ proc arm:cmd:deploy {0 1 2 3 {4 ""} {5 ""}} {
         #exec rm ./armour/deploy/$botname.ini
         return;
     }
+
+    # -- bot started; add cronjob
+    if {[cfg:get deploy:cron]} {
+        if {[file exists ./scripts/autobotchk]} {
+            if {![file executable ./scripts/autobotchk]} {
+                exec chmod u+x ./scripts/autobotchk
+            }
+            set err [catch { exec ./scripts/autobotchk $botname.conf -5 -noemail } res]
+            if {$err eq 0} {
+                debug 0 "\002cmd:deploy:\002 added cronjob for $botname"
+                # -- fix 'userfile="db/$uservar.user"' line in botchk
+                set newline "userfile=\"db/$botname.user\""
+                if {$os in "FreeBSD OpenBSD NetBSD Darwin"} {
+                    exec sed -i '' "s|^userfile=.*$|$newline|" ./$botname.botchk
+                } else {
+                    exec sed -i "s|^userfile=.*$|$newline|" ./$botname.botchk
+                }
+            } else {
+                debug 0 "\002cmd:deploy:\002 error adding cronjob for $botname: $res"
+            }
+        }
+    }
+
     set pid [exec cat pid.$botname]
     reply $type $target "done! new bot \002$botname\002 running (\002PID:\002 $pid) -- initialise via: \002/msg $botname hello\002"
 
@@ -19140,10 +19163,10 @@ proc update:install {update {local 0}} {
     set rev $grevision
     if {!$local} {
         # -- script downloaded & installed
-        set out "\002Armour\002 script \002v$ver\002 (\002revision:\002 $rev) installation $text (\002runtime:\002 $runtime secs -- \002files:\002 $filecount)"
+        set out "\002Armour\002 script \002v$ver\002 (\002revision:\002 $rev) installation $text (\002runtime:\002 $runtime secs -- \002files:\002 $filecount"
     } else {
         # -- applied local script (already updated from another bot)
-        set out "\002Armour\002 script \002v$ver\002 (\002revision:\002 $rev) installation $text (\002runtime:\002 $runtime secs)"
+        set out "\002Armour\002 script \002v$ver\002 (\002revision:\002 $rev) installation $text (\002runtime:\002 $runtime secs"
     }
     set note $out; set noteextra ""
     if {$new ne 0} { lappend noteextra "retained \002$exist\002 settings -- found \002$new new config\002 $settext: [join $newsettings]" }
