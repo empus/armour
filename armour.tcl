@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v5.0 autobuild completed on: Sat May 25 05:43:36 PDT 2024
+# armour.tcl v5.0 autobuild completed on: Thu May 30 01:17:10 PDT 2024
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -975,7 +975,7 @@ namespace eval arm {
 # ------------------------------------------------------------------------------------------------
 
 # -- this revision is used to match the DB revision for use in upgrades and migrations
-set cfg(revision) "2024052505"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
+set cfg(revision) "2024053000"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
 set cfg(version) "v5.0";        # -- script version
 #set cfg(version) "v[lindex [exec grep version ./armour/.version] 1]"; # -- script version
 #set cfg(revision) [lindex [exec grep revision ./armour/.version] 1];  # -- YYYYMMDDNN (allows for 100 revisions in a single day)
@@ -13597,7 +13597,7 @@ proc userdb:cmd:register {0 1 2 3 {4 ""}  {5 ""}} {
             db:close
             if {$online} {
                 putquick "NOTICE $mgrnick :(\002note\002 from $tuser -- \002id:\002 $rowid): $note"
-                debug 0 "userdb:cmd:adduser: notified $mgruser ($mgrnick![getchanhost $mgrnick]) that $nick!$uhost registered user: $usernames"
+                debug 0 "userdb:cmd:adduser: notified $mgruser ($mgrnick![getchanhost $mgrnick]) that $nick!$uh registered user: $usernames"
             }
         }
     }
@@ -15614,6 +15614,10 @@ proc userdb:nearestindex {text index {char " "}} {
 
 
 proc userdb:timeago {lasttime} {
+    
+    # -- safety net for never seen
+    if {$lasttime eq "" || $lasttime eq 0} { return "0" }
+
     set utime [unixtime]
     if {$lasttime >= $utime} {
      set totalyear [expr $lasttime - $utime]
