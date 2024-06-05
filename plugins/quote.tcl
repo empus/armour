@@ -134,18 +134,27 @@ proc quote:cmd:quote {0 1 2 3 {4 ""} {5 ""}} {
 	set done 0; set uselast 0;
 
 	# -- view random quote
+	# -- rand [search]
 	if {$what eq "" || $what eq "rand" || $what eq "random" || $what eq "r"} {
 		# -- show random quote
 		quote:debug 2 "quote:cmd:quote: random"
+		# -- wrap the search in * for wildcard as a quote will never be one word
+		set search $tquote
+		if {[string index $search 0] ne "*"} { set search "*$search" }
+		set length [string length $search]
+		if {[string index $search [expr $length - 1]] ne "*"} { set search "$search*" }
+		regsub -all {\*} $search {%} search
+		regsub -all {\?} $search {_} search
+		set search [quote:db:escape $search]
 		quote:db:connect
-		set query "SELECT id,nick,uhost,user,timestamp,quote FROM quotes WHERE cid='$cid' ORDER BY random() LIMIT 1"
+		set query "SELECT id,nick,uhost,user,timestamp,quote FROM quotes WHERE cid='$cid' AND lower(quote) LIKE '[string tolower $search]' ORDER BY random() LIMIT 1"
 		set row [join [quote:db:query $query]]
 		quote:db:close
 		lassign $row id tnick tuhost tuser timestamp
 		set tquote [join [lrange $row 5 end]]
 		if {$row eq ""} {
 			# -- empty db
-			quote:reply $type $target "quote db empty."
+			quote:reply $type $target "no quote found."
 			return;
 		}
 		set lines [split [join $tquote] \n]

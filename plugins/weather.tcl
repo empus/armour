@@ -55,14 +55,16 @@ proc arm:cmd:weather {0 1 2 3 {4 ""} {5 ""}} {
     if {!$allow} { return; }; # -- client cannot use command
 
     set city [lrange $arg 0 end]
-    if {$city eq ""} {
-        set dbcity [join [db:get value settings setting city uid $uid]]
-        if {$dbcity ne ""} {
-            set city $dbcity
-        } else {
-            reply $type $target "\002usage:\002 weather <city>"
-            return;
-        }
+    if {$city eq "" && $uid eq ""} {
+        reply $type $target "\002usage:\002 weather <city>"
+        return;
+    }
+    set dbcity [join [db:get value settings setting city uid $uid]]
+    if {$dbcity ne "" && $city eq ""} {
+        set city $dbcity
+    } elseif {$city eq "" && $dbcity eq ""} {
+        reply $type $target "\002usage:\002 weather <city>"
+        return;
     }
 
     set cfgUnits [cfg:get weather:units $chan]

@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v5.0 autobuild completed on: Thu May 30 01:17:10 PDT 2024
+# armour.tcl v5.0 autobuild completed on: Wed Jun  5 02:15:04 PDT 2024
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -975,7 +975,7 @@ namespace eval arm {
 # ------------------------------------------------------------------------------------------------
 
 # -- this revision is used to match the DB revision for use in upgrades and migrations
-set cfg(revision) "2024053000"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
+set cfg(revision) "2024060500"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
 set cfg(version) "v5.0";        # -- script version
 #set cfg(version) "v[lindex [exec grep version ./armour/.version] 1]"; # -- script version
 #set cfg(revision) [lindex [exec grep revision ./armour/.version] 1];  # -- YYYYMMDDNN (allows for 100 revisions in a single day)
@@ -4774,7 +4774,7 @@ proc arm:cmd:ban {0 1 2 3 {4 ""} {5 ""}} {
     }
     
     debug 1 "arm:cmd:ban: banning $length targets from $chan"
-    
+    set kicklist ""; # -- nicks to kick
     if {[cfg:get chan:method $chan] eq "chan"} {
         # -- set via server
         set noton ""; set hit 0; set tbanlist ""
@@ -4785,8 +4785,20 @@ proc arm:cmd:ban {0 1 2 3 {4 ""} {5 ""}} {
                 set tmask $item; set tident $tmask; set thost "";
                 set tnick 0; set hit 1
                 debug 2 "arm:cmd:ban: item is hostmask: $tmask"
+
+                # -- find nicks on chan that match this host
+                foreach mnick [chanlist $chan] {
+                    set muh "$mnick![getchanhost $mnick $chan]"
+                    if {[string match $tmask "$muh"]} {
+                        if {$mnick ni $kicklist} {
+                            lappend kicklist $mnick
+                            debug 2 "arm:cmd:ban: found nick $mnick matching hostmask $tmask in $chan"
+                        }
+                    }
+                }
             } else {
                 # -- nickname
+                lappend kicklist $item; # -- add nick to kicklist
                 if {[onchan $item $chan]} {
                     lassign [split [getchanhost $item $chan] @] tident thost
                     set tnick $item; set hit 1; 
@@ -4807,6 +4819,11 @@ proc arm:cmd:ban {0 1 2 3 {4 ""} {5 ""}} {
         if {$tbanlist ne ""} {
             mode:ban $chan $tbanlist $reason $duration 100
         }
+        # -- send the kicks
+        if {$kicklist ne ""} {
+            kick:chan $chan $kicklist $reason
+        }
+
         if {$noton ne ""} {
             reply $type $target "\002missing:\002 [join $noton ", "]"
         }
@@ -13855,7 +13872,7 @@ proc userdb:cmd:verify {0 1 2 3 {4 ""}  {5 ""}} {
 
     # -- ensure target user exists
     if {$tuser eq ""} { 
-        set text "$trgnick is not authenticated";
+        set text "$trgnick is not authenticated.";
     } else {
         set text "[join [userdb:user:get nick nick $trgnick]] is authenticated as $tuser (\002level:\002 [userdb:get:level $tuser $chan])"
     }
@@ -16557,8 +16574,8 @@ proc captcha:watchdog {} {
      }
     utimer 10 ::arm::captcha:watchdog
 }
-captcha:web:check; # -- check the CAPTCHA checking (on 2 sec timer)
-captcha:watchdog;  # -- start the watchdog (on 10 sec timer) -- in case the CAPTCHA check timer fails
+utimer 10 captcha:web:check; # -- check the CAPTCHA checking (on 2 sec timer)
+utimer 10 captcha:watchdog;  # -- start the watchdog (on 10 sec timer) -- in case the CAPTCHA check timer fails
 
 # -- print timers, one per line
 proc timerlist {} {
@@ -17681,7 +17698,8 @@ proc mode:ban {chan banlist reason {duration "7d"} {level "100"} {notnext ""}} {
         debug 0 "mode:ban: no nicks provided for BAN in $chan"
         return;
     }
-    set method [cfg:get chan:method $chan]
+    #set method [cfg:get chan:method $chan]; # -- TODO: put back after GNUWorld update
+    set method [cfg:get ban $chan]
     set length [llength $banlist]
     if {$notnext eq ""} { set next "-next" } else { set next "" }
     if {$method eq "chan"} {
