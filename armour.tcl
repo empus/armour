@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v5.0 autobuild completed on: Fri Jun  7 08:05:04 PDT 2024
+# armour.tcl v5.0 autobuild completed on: Fri Jun  7 08:25:42 PDT 2024
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -964,7 +964,7 @@ namespace eval arm {
 # ------------------------------------------------------------------------------------------------
 
 # -- this revision is used to match the DB revision for use in upgrades and migrations
-set cfg(revision) "2024060800"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
+set cfg(revision) "2024060801"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
 set cfg(version) "v5.0";        # -- script version
 #set cfg(version) "v[lindex [exec grep version ./armour/.version] 1]"; # -- script version
 #set cfg(revision) [lindex [exec grep revision ./armour/.version] 1];  # -- YYYYMMDDNN (allows for 100 revisions in a single day)
@@ -5239,7 +5239,7 @@ proc arm:cmd:mode {0 1 2 3 {4 ""} {5 ""}} {
             reply $type $target "$nick: cannot change mode, I'm not opped${xtra}."
             return;
         }
-        if {![botisop $chan] && [string tolower [cfg:get chan:method $chan]] eq "x"} { 
+        if {![botisop $chan] && [string tolower [cfg:get chan:method $chan]] eq "chan"} { 
             debug 0 "arm:cmd:mode: chan $chan set to \002secure\002 mode but cannot set MODE +Dm... manual chan mode change required."
             reply $type $target "$nick: scanner mode changed, but I am not opped.  Manual mode required: \002/mode $chan +Dm\002"
         } else {
@@ -17596,12 +17596,6 @@ proc mode:chan {chan mode} {
         # -- server MODE
         debug 0 "mode:chan: sending MODE via server for $chan: $mode"
         putquick "MODE $chan $mode" -next
-    } elseif {$method eq "xold"} {
-        # -- GNUWorld MODE
-        # TODO: replace with GNUWorld when it has 'MODE' command
-        debug 0 "mode:chan: sending MODE via server for $chan: $mode"
-        putquick "MODE $chan $mode" -next
-
     } elseif {$method eq "x"} {
         # -- GNUWorld MODE
         set servnick [cfg:get auth:serv:nick]
@@ -17616,7 +17610,7 @@ proc mode:chan {chan mode} {
             if {[info exists data:kicks($chan)]} {
                 set kicklist [get:val data:kicks $chan]
                 if {$kicklist ne ""} {
-                    putlog "\x0304mode:chan: kicklist not empty: length: [llength $kicklist]\x03"
+                    debug 0 "\x0304mode:chan: kicklist not empty: length: [llength $kicklist]\x03"
                     set reason "Armour: floodnet detected"
                     set data:kicks($chan) ""
                     kick:chan $chan $kicklist $reason
@@ -17655,13 +17649,6 @@ proc kick:chan {chan kicklist reason} {
         foreach nick $kicklist {
             debug 0 "kick:chan: sending KICK via server for $nick in $chan: $reason"
             putquick "KICK $chan $nick :$reason"
-        }
-    } elseif {$method eq "xold"} {
-        # -- GNUWorld KICK
-        set servnick [cfg:get auth:serv:nick]
-        foreach nick $kicklist {
-            debug 0 "kick:chan: sending KICK via $servnick (GNUWorld) for $nick in $chan: $reason"
-            putquick "PRIVMSG $servnick :KICK $chan $nick $reason"
         }
     } elseif {$method eq "x"} {
         # -- GNUWorld KICK
@@ -17729,13 +17716,6 @@ proc mode:unban {chan unbanlist} {
             debug 0 "mode:unban: executing: MODE $chan $modes [join [lrange $unbanlist 0 5]]"
             putquick "MODE $chan $modes [join [lrange $unbanlist 0 5]]"
             set unbanlist [lreplace $unbanlist 0 5]
-        }
-    } elseif {$method eq "xold"} {
-        # -- GNUWorld UNBAN
-        set servnick [cfg:get auth:serv:nick]
-        foreach mask $unbanlist {
-            debug 0 "mode:unban: sending UNBAN via $servnick (GNUWorld) for $mask in $chan"
-            putquick "PRIVMSG $servnick :UNBAN $chan $mask"
         }
     } elseif {$method eq "x"} {
         set servnick [cfg:get auth:serv:nick]
