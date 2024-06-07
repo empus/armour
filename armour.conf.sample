@@ -406,6 +406,11 @@ set cfg(auth:wait) 0
 # otherwise, use 'chan' to set server kicks and bans
 set cfg(ban) "chan"
 
+# -- method to use for modes, kicks, and topics? (chan|x) - [chan]
+# -- chan: set via server
+# -- x:    set via GNUWorld (X)
+set cfg(chan:method) "chan"
+
 # -- X ban level (if using X) - [100]
 set cfg(ban:level) "100"
 

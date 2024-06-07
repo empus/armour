@@ -191,8 +191,10 @@ proc arm:cmd:ask {0 1 2 3 {4 ""} {5 ""}} {
     set what $arg
     # -- allow to continue a conversation if first character is '+' or '.'
     set first [string index $arg 0]
+    set firstword [string trimleft [string tolower [lindex $arg 0]] ,]
     set length [string length $arg]
-    if {$first eq "+" || $first eq "."} {
+    # -- triggers to continue existing conversation
+    if {$first in "+ ." || $firstword in "and but ok sure oh ohh ah ahh eek no yes nope yep"} {
         arm:cmd:and $0 $1 $2 $3 $4 [string range $arg 1 $length]
         return;
     } elseif {[string match "speak*" [lindex $arg 0]]} {

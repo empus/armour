@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v5.0 autobuild completed on: Wed Jun  5 02:15:04 PDT 2024
+# armour.tcl v5.0 autobuild completed on: Fri Jun  7 08:05:04 PDT 2024
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -123,20 +123,9 @@ proc cfg:get {setting {chan ""}} {
 
     if {!$avoid} { debug 4 "\002cfg:get:\002 retrieving config setting: \002cfg($setting)\002" }
     
-    # -- output the config file value for now
-    set cfg(chan:method) "chan"; # -- default to chan for now; TODO: remove after gnuworld updates are in X
     if {[info exists cfg($setting)]} {
         # -- special handling for 'ban' and 'chan:method'
         if {$setting in "ban chan:method"} {
-
-            # -- MOVE TO armour.conf.sample WHEN GNUWORLD IS UPDATED
-            #
-            # -- method to use for modes, kicks, and topics? (chan|x) - [chan]
-            # i.e., to set via server or through X (GNUWorld)
-            #set cfg(chan:method) "chan"
-            # -- END MOVE
-
-            if {$setting eq "chan:method"} { return "chan" }; # -- TODO: remove after gnuworld updates are in X
             if {[string tolower $cfg($setting)] eq "x" && $chan eq "*" || $chan eq ""} { return $cfg($setting) }; # -- honour the setting when chan is global
             # -- only use X if it's on the channel
             if {[string tolower $cfg($setting)] eq "x" && [cfg:get auth:serv:nick] ne "" && [onchan [cfg:get auth:serv:nick] $chan]} {
@@ -975,7 +964,7 @@ namespace eval arm {
 # ------------------------------------------------------------------------------------------------
 
 # -- this revision is used to match the DB revision for use in upgrades and migrations
-set cfg(revision) "2024060500"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
+set cfg(revision) "2024060800"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
 set cfg(version) "v5.0";        # -- script version
 #set cfg(version) "v[lindex [exec grep version ./armour/.version] 1]"; # -- script version
 #set cfg(revision) [lindex [exec grep revision ./armour/.version] 1];  # -- YYYYMMDDNN (allows for 100 revisions in a single day)
@@ -17698,8 +17687,7 @@ proc mode:ban {chan banlist reason {duration "7d"} {level "100"} {notnext ""}} {
         debug 0 "mode:ban: no nicks provided for BAN in $chan"
         return;
     }
-    #set method [cfg:get chan:method $chan]; # -- TODO: put back after GNUWorld update
-    set method [cfg:get ban $chan]
+    set method [cfg:get chan:method $chan]; # -- TODO: put back after GNUWorld update
     set length [llength $banlist]
     if {$notnext eq ""} { set next "-next" } else { set next "" }
     if {$method eq "chan"} {

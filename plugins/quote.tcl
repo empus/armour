@@ -166,18 +166,18 @@ proc quote:cmd:quote {0 1 2 3 {4 ""} {5 ""}} {
 	} elseif {$what eq "view" || $what eq "v"} {
 		# -- view specific quote
 		set id [lindex $arg 1]
-		quote:debug 2 "quote:cmd:quote: view $id"
+		debug 2 "quote:cmd:quote: view $id"
 		if {$id eq "" || ![regexp -- {^\d+$} $id]} {
 			quote:reply $stype $starget "usage: quote view <id> \[-more\]"
 			return;
 		}
+
 		quote:db:connect
-		set query "SELECT id,nick,uhost,user,timestamp,quote FROM quotes \
+		set query "SELECT id,nick,uhost,user,timestamp,score,quote FROM quotes \
 			WHERE id='$id' AND cid='$cid'"
 		set row [join [quote:db:query $query]]
 		quote:db:close
-		lassign $row id tnick tuhost tuser timestamp
-		set tquote [join [lrange $row 5 end]]
+		lassign $row id tnick tuhost tuser timestamp votes tquote
 		if {$id eq ""} {
 			# -- no such quote
 			quote:reply $type $target "no such quote."
@@ -186,24 +186,34 @@ proc quote:cmd:quote {0 1 2 3 {4 ""} {5 ""}} {
 		if {[lindex $arg 2] eq "-more"} { set more 1 } else { set more 0 }
 		# -- TODO: put the timeago script locally, for standalone mode
 		set added [userdb:timeago $timestamp]
-		#putlog "\002quote:\002 tquote: $tquote"
 		set lines [split [join $tquote] \n]
+
 		foreach line $lines {
-			quote:reply $type $target "\002\[id:\002 $id\002\]\002 [join $line]"
+			if {[regexp -- {^<([^>]+)> \001ACTION} $line -> tnick]} {
+				# -- fix action
+				set line "* $tnick [lrange $line 2 end]"
+			}
+			quote:reply $type $target "$line"
 		}
 		set done 1
 		if {$tuser eq ""} {
 			# -- user not authed
 			if {$more} { 
 				if {$tuhost ne "user@host"} {
-					quote:reply $type $target "\002\[nick:\002 $tnick -- \002uhost:\002 $tuhost -- \002added:\002 $added\002\]\002"
+					set string "\002\[nick:\002 $tnick -- \002uhost:\002 $tuhost -- \002added:\002 $added"
 				} else {
-					quote:reply $type $target "\002\[nick:\002 $tnick -- \002added:\002 $added\002\]\002"
+					set string "\002\[nick:\002 $tnick -- \002added:\002 $added"
 				}
+				if {$votes > 0} { append string " -- \002votes:\002 $votes" }
+				quote:reply $type $target "$string\002\]\002"
 			}			
 		} else {
 			# -- user was authed
-			if {$more} { quote:reply $type $target "\002\[user:\002 $tuser -- \002bywho:\002 $tnick!$tuhost -- \002added:\002 $added\002\]\002" }
+			if {$more} {
+				set string "\002\[user:\002 $tuser -- \002bywho:\002 $tnick!$tuhost -- \002added:\002 $added"
+				if {$votes > 0} { append string " -- \002votes:\002 $votes" }
+				quote:reply $type $target "$string\002\]\002"
+			}
 		}
 		
 	# -- search quotes
@@ -340,9 +350,9 @@ proc quote:cmd:quote {0 1 2 3 {4 ""} {5 ""}} {
 		}
 
 		if {$tnick eq ""} { set tnick "*"}; # -- default to the last nick who spoke
-		if {$lines <= 0} { set lines 1 } elseif {$lines eq ""} { set lines 1 }; # -- default to 1 x line
+		if {$lines eq "+" || $lines <= 0} { set lines 1 } elseif {$lines eq ""} { set lines 1 }; # -- default to 1 x line
 		if {$lines eq 1 && [llength $tnicks] > 1} { set lines [llength $tnicks]}
-		if {$ignore eq ""} { set ignore 0 }; # -- ignore zero lines by default
+		if {$ignore eq "" || $ignore eq "+"} { set ignore 0 }; # -- ignore zero lines by default
 
 		set ltnick [string tolower $tnick]
 		set sorted [join [lsort -decreasing [array names lastspeak]]]
@@ -350,7 +360,9 @@ proc quote:cmd:quote {0 1 2 3 {4 ""} {5 ""}} {
 		foreach key $sorted {
 			lassign [split $key ,] tchan tts atnick
 			debug 3 "\002quote:\002 looping: key: tchan: $tchan -- tts: $tts: -- $atnick: [join $atnick] -- chan: $chan -- ltnick: $ltnick -- lines: $lines"
-			debug 3 "\002quote:\002 lastspeak line: [get:val lastspeak $tchan,$tts,$atnick]"
+			set lastline [get:val lastspeak $tchan,$tts,$atnick]
+			debug 3 "\002quote:\002 lastspeak line: $lastline"
+			#regsub -all {[^\s]+ACTION} $lastline {ACTION} lastline
 			if {[string tolower $chan] ne [string tolower $tchan]} { continue; }
 			debug 4 "atnick: $atnick -- tnicks: $tnicks"
 			if {[string tolower [join $atnick]] in [string tolower $tnicks] || $tnick eq "*"} {
@@ -360,12 +372,12 @@ proc quote:cmd:quote {0 1 2 3 {4 ""} {5 ""}} {
 				if {$secs >= [expr [clock seconds] - $race]} { continue; }; # -- ignore this line, it's too recent
 				if {$ignore > 0 && $icount < $ignore} { incr icount; continue; }; # -- ignore the last N lines from the list of nicks (as a total)
 				set found 1; # -- mark it as found
-				debug 3 "\002quote:\002 appending lquote: [get:val lastspeak $tchan,$tts,$atnick] -- count: $count"
+				debug 3 "\002quote:\002 appending lquote: $lastline -- count: $count"
 				lappend asort $tts,$atnick
 				set repeat 1;
 				incr count
 			}
-			# -- stop when we have reached the required line count
+			# -- stop when we have reached the required line countƒ
 			if {$count eq $lines} {
 				set ascending [lsort -increasing $asort]
 				foreach tsnick $ascending {
@@ -399,6 +411,11 @@ proc quote:cmd:quote {0 1 2 3 {4 ""} {5 ""}} {
 			return;		
 		}
 		
+		# -- check for + for upvote and remove if present
+		if {[lrange $tquote end end] eq "+"} {
+			set tquote [lrange $tquote 0 end-1]
+		}
+
 		quote:debug 2 "quote:cmd:quote: add $tquote"
 		if {$tquote eq ""} {
 			quote:reply $stype $starget "usage: quote add <quote>"
@@ -447,6 +464,15 @@ proc quote:cmd:quote {0 1 2 3 {4 ""} {5 ""}} {
 					set query [db:query "INSERT INTO tweets (tid,qid) VALUES ('$tid','$rowid')"]
 					quote:debug 0 "quote:cmd:quote: inserted tweet into tweets table (tid: $tid -- qid: $rowid)"
 				}
+			}
+		}
+
+		# -- check if + is added on the end, to also upvote the new quote
+		if {[lrange $arg end end] eq "+"} {
+			switch -- $type {
+				pub { quote:cmd:quote $0 $1 $2 $3 $4 "+ $rowid" }
+				msg { quote:cmd:quote $0 $1 $2 $3 "+ $rowid" }
+				dcc { quote:cmd:quote $0 $1 $2 "+ $rowid" }
 			}
 		}
 
@@ -714,14 +740,18 @@ proc quote:pubm {nick uhost hand chan text} {
 			return;
 		}
 	}
+	if {[regexp -- {^\001ACTION} $text]} { 
+		# -- ignoring ACTION
+		return;
+	} 
 	quote:addspeak $nick $uhost $hand [string tolower $chan] "<$nick> $text";
 }
 
 # -- remember the last line a nick spoke in a given channel (action)
 proc quote:action {nick uhost hand dest keyword text} { 
 	# -- only process channel actions 
-	if {[string index $dest 0] ne "#"} { return; }
-	set action "* $nick $text"
+	if {[string index $dest 0] ne "#"} { return; }	
+	set action "* $nick [lrange $text 0 end]"
 
 	# -- check for correction regex
 	if {[regexp {^s/([^\/]*)/([^\/]*)/$} $action]} {
