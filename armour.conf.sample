@@ -350,6 +350,12 @@ set cfg(float:grace)  3
 # SERVICE AUTHENTICATION SETTINGS
 # ------------------------------------------------------------------------------------------------
 
+# -- method to use for channel actions? (1-3) - [1]
+# 1: use server for all actions
+# 2: use X for BAN, UNBAN, and KICK, but server for everything else
+# 3: use X for everything: BAN, UNBAN, KICK, MODE, TOPIC, OP, DEOP, VOICE, DEVOICE
+set cfg(chan:method) "1"
+
 # -- authentication username
 # leave blank if login not used or handled in another script
 # leave blank if using NickServ auth mechanism below
@@ -400,16 +406,6 @@ set cfg(auth:wait) 0
 # ------------------------------------------------------------------------------------------------
 # KICKBAN SETTINGS
 # ------------------------------------------------------------------------------------------------
-
-# -- how to set channel kickbans? (chan|x) - [chan]
-# use "x" to set bans via GNUWorld's mod.cservice service (ie. Undernet's X)
-# otherwise, use 'chan' to set server kicks and bans
-set cfg(ban) "chan"
-
-# -- method to use for modes, kicks, and topics? (chan|x) - [chan]
-# -- chan: set via server
-# -- x:    set via GNUWorld (X)
-set cfg(chan:method) "chan"
 
 # -- X ban level (if using X) - [100]
 set cfg(ban:level) "100"

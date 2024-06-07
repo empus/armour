@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------------------
-# armour.tcl v5.0 autobuild completed on: Fri Jun  7 08:25:42 PDT 2024
+# armour.tcl v5.0 autobuild completed on: Fri Jun  7 09:39:58 PDT 2024
 # ------------------------------------------------------------------------------------------------
 #
 #     _                                    
@@ -124,15 +124,15 @@ proc cfg:get {setting {chan ""}} {
     if {!$avoid} { debug 4 "\002cfg:get:\002 retrieving config setting: \002cfg($setting)\002" }
     
     if {[info exists cfg($setting)]} {
-        # -- special handling for 'ban' and 'chan:method'
-        if {$setting in "ban chan:method"} {
-            if {[string tolower $cfg($setting)] eq "x" && $chan eq "*" || $chan eq ""} { return $cfg($setting) }; # -- honour the setting when chan is global
+        # -- special handling for chan:method
+        if {$setting eq "chan:method"} {
+            if {[string tolower $cfg($setting)] in "2 3" && $chan eq "*" || $chan eq ""} { return $cfg($setting) }; # -- honour the setting when chan is global
             # -- only use X if it's on the channel
-            if {[string tolower $cfg($setting)] eq "x" && [cfg:get auth:serv:nick] ne "" && [onchan [cfg:get auth:serv:nick] $chan]} {
-                return "x"
+            if {[string tolower $cfg($setting)] in "2 3" && [cfg:get auth:serv:nick] ne "" && [onchan [cfg:get auth:serv:nick] $chan]} {
+                return $cfg($setting)
             } else {
                 # -- config says X but service is not on channel, so use server
-                return "chan"
+                return "1"
             }
         }
         # -- output the setting
@@ -964,7 +964,7 @@ namespace eval arm {
 # ------------------------------------------------------------------------------------------------
 
 # -- this revision is used to match the DB revision for use in upgrades and migrations
-set cfg(revision) "2024060801"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
+set cfg(revision) "2024060802"; # -- YYYYMMDDNN (allows for 100 revisions in a single day)
 set cfg(version) "v5.0";        # -- script version
 #set cfg(version) "v[lindex [exec grep version ./armour/.version] 1]"; # -- script version
 #set cfg(revision) [lindex [exec grep revision ./armour/.version] 1];  # -- YYYYMMDDNN (allows for 100 revisions in a single day)
@@ -3682,7 +3682,7 @@ proc chanlist:hit {chan nick uhost chanlist} {
                     if {[cfg:get black:kick:reason $chan]} { append string " (reason: $reason)" }
                     set string "$string \[id: $id\]";
                     # -- truncate reason for X bans
-                    if {[string tolower [cfg:get ban $chan]] eq "x" && [string length $string] >= 124} { set string "[string range $string 0 124]..." }
+                    if {[cfg:get chan:method $chan] in "2 3" && [string length $string] >= 124} { set string "[string range $string 0 124]..." }
                     if {$host eq ""} { 
                         # -- safety net in case nick has already left channel (or been kicked)
                         if {[dict exists $nickdata $lnick uhost]} {
@@ -3783,7 +3783,8 @@ proc kickban {nick ident host chan duration reason {id ""}} {
 
     set level 100
     
-    if {[string tolower [cfg:get ban $chan]] eq "chan"} {
+    if {[cfg:get chan:method $chan] eq "1"} {
+        # -- server ban
         if {$id ne ""} {
             if {[dict exists $entries $id onlykick]} {
                 if {[dict get $entries $id onlykick] eq 1} {
@@ -3830,7 +3831,7 @@ proc kickban {nick ident host chan duration reason {id ""}} {
             # -- just use mins
             timer $time "arm::mode:unban $chan $mask"
         }        
-    } elseif {[string tolower [cfg:get ban $chan]] eq "x"} {
+    } elseif {[cfg:get chan:method $chan] in "2 3"} {
         # -- X ban
         # -- TODO: support non-gnuworld services
         if {$addban} {
@@ -3843,7 +3844,7 @@ proc kickban {nick ident host chan duration reason {id ""}} {
             # putquick "PRIVMSG X :KICK $chan $nick $reason" -next 
         }
     } else {
-        debug 0 "\002kickban: error:\002 value of \[cfg:get ban $chan] needs to be \"chan\" or \"x\""
+        debug 0 "\002kickban: error:\002 value of \[cfg:get chan:method $chan] needs to be \"1\", \"2\", or \"3\""
     }
     
     if {$id ne ""} {
@@ -3866,7 +3867,7 @@ proc unset:chanban {chan mask} {
 }
 
 # -- grab values from Armour config if this is not a standalone scan bounce bot
-if {![info exists cfg(ban)]} { set cfg(ban) $iscan(cfg:ban) }
+if {![info exists cfg(chan:method)]} { set cfg(chan:method) $iscan(cfg:chan:method) }
 if {![info exists cfg(ban:time)]} { set cfg(ban:time) $iscan(cfg:ban:time) }
 if {![info exists cfg(notc:white)]} { set cfg(notc:white) $iscan(cfg:notc:white) }
 if {![info exists cfg(opnotc:white)]} { set cfg(opnotc:white) $iscan(cfg:opnotc:white) }
@@ -4393,7 +4394,7 @@ proc arm:cmd:op {0 1 2 3 {4 ""} {5 ""}} {
     set log "$chan [join $arg]"; set log [string trimright $log " "]
     
     if {![onchan $botnick $chan]} { reply $type $target "sorry! unable to op when not in a channel."; return; }
-    if {![botisop $chan] && [cfg:get chan:method $chan] eq "chan"} { 
+    if {![botisop $chan] && [cfg:get chan:method $chan] in "1 2"} { 
         reply $type $target "sorry! unable to op someone when not oppped myself.";
         return;
     }
@@ -4459,7 +4460,7 @@ proc arm:cmd:deop {0 1 2 3 {4 ""} {5 ""}} {
     # -- end default proc template
     
     if {![onchan $botnick $chan]} { reply $type $target "sorry! unable to deop when not in a channel."; return; }
-    if {![botisop $chan] && [cfg:get chan:method $chan] eq "chan"} { 
+    if {![botisop $chan] && [cfg:get chan:method $chan] in "1 2"} { 
         reply $type $target "sorry! unable to deop someone when not oppped myself.";
         return;
     }
@@ -4509,7 +4510,7 @@ proc arm:cmd:voice {0 1 2 3 {4 ""} {5 ""}} {
     set log "$chan [join $arg]"; set log [string trimright $log " "]
 
     if {![onchan $botnick $chan]} { reply $type $target "sorry! unable to voice when not in a channel."; return; }
-    if {![botisop $chan] && [cfg:get chan:method $chan] eq "chan"} {
+    if {![botisop $chan] && [cfg:get chan:method $chan] in "1 2"} {
         reply $type $target "sorry! unable to voice someone when not oppped myself.";
         return;
     }
@@ -4570,7 +4571,7 @@ proc arm:cmd:devoice {0 1 2 3 {4 ""} {5 ""}} {
     set log "$chan [join $arg]"; set log [string trimright $log " "]
     
     if {![onchan $botnick $chan]} { reply $type $target "sorry! unable to devoice when not in a channel."; return; }
-    if {![botisop $chan] && [cfg:get chan:method $chan] eq "chan"} {
+    if {![botisop $chan] && [cfg:get chan:method $chan] in "1 2"} {
         reply $type $target "sorry! unable to devoice someone when not oppped myself.";
         return;
     }
@@ -4686,7 +4687,7 @@ proc arm:cmd:kick {0 1 2 3 {4 ""} {5 ""}} {
     if {$kicklist eq ""} { reply $stype $starget "\002usage:\002 kick ?chan? <nick1,nick2,nick3...> \[reason\]"; return; }
     
     if {![onchan $botnick $chan]} { reply $type $target "sorry! unable to kick when not in a channel."; return; }
-    if {![botisop $chan] && [cfg:get chan:method $chan] eq "chan"} {
+    if {![botisop $chan] && [cfg:get chan:method $chan] eq "1"} {
         reply $type $target "sorry! unable to kick someone when not oppped myself.";
         return;
     }
@@ -4757,14 +4758,14 @@ proc arm:cmd:ban {0 1 2 3 {4 ""} {5 ""}} {
 
     
     if {![onchan $botnick $chan]} { reply $type $target "sorry! unable to ban when not in a channel."; return; }
-    if {![botisop $chan] && [cfg:get chan:method $chan] eq "chan"} {
+    if {![botisop $chan] && [cfg:get chan:method $chan] eq "1"} {
         reply $type $target "sorry! unable to set bans when not oppped myself.";
         return;
     }
     
     debug 1 "arm:cmd:ban: banning $length targets from $chan"
     set kicklist ""; # -- nicks to kick
-    if {[cfg:get chan:method $chan] eq "chan"} {
+    if {[cfg:get chan:method $chan] in "1"} {
         # -- set via server
         set noton ""; set hit 0; set tbanlist ""
         foreach item $banlist {
@@ -4857,12 +4858,12 @@ proc arm:cmd:unban {0 1 2 3 {4 ""} {5 ""}} {
     if {$unbanlist eq ""} { reply $stype $starget "\002usage:\002 unban ?chan? <nick1,nick2,mask1...>"; return; }
         
     if {![onchan $botnick $chan]} { reply $type $target "sorry! unable to unban when not in a channel."; return; }
-    if {![botisop $chan] && [cfg:get chan:method $chan] eq "chan"} {
+    if {![botisop $chan] && [cfg:get chan:method $chan] eq "1"} {
         reply $type $target "sorry! unable to unset bans when not oppped myself.";
         return;
     }
 
-    if {[cfg:get chan:method $chan] eq "chan"} {
+    if {[cfg:get chan:method $chan] in "1"} {
         # -- unban via server
 
         # -- deal with the unbanlist (look for nicknames)        
@@ -4928,7 +4929,7 @@ proc arm:cmd:topic {0 1 2 3 {4 ""} {5 ""}} {
     set log "$chan [join $arg]"; set log [string trimright $log " "]
      
     if {![onchan $botnick $chan]} { reply $type $target "sorry! unable to set topics when not in a channel."; return; }
-    if {![botisop $chan] && [cfg:get chan:method $chan] eq "chan"} {
+    if {![botisop $chan] && [cfg:get chan:method $chan] in "1 2"} {
         reply $type $target "sorry! unable to set topics when not oppped myself.";
         return;
     }
@@ -4937,7 +4938,7 @@ proc arm:cmd:topic {0 1 2 3 {4 ""} {5 ""}} {
  
     if {[cfg:get topic:who $chan]} { set topic "$topic ($user)" }; # -- append user who set the topic, if configured to
     
-    if {[cfg:get chan:method $chan] eq "chan"} {
+    if {[cfg:get chan:method $chan] in "1 2"} {
         debug 0 "arm:cmd:topic: setting topic in $chan via server: $topic"
         putquick "TOPIC $chan :$topic"
     } else {
@@ -5118,7 +5119,7 @@ proc arm:cmd:chanscan {0 1 2 3 {4 ""} {5 ""}} {
     #if {$chan eq ""} { reply $stype $starget "\002usage:\002 chanscan <chan>"; return; }
     
     if {![validchan $chan]} { reply $type $target "uhh... negative."; return; }
-    if {![isop $botnick $chan] && [cfg:get chan:method $chan] eq "chan"} {
+    if {![isop $botnick $chan] && [cfg:get chan:method $chan] eq "1"} {
         reply $type $target "uhh... op me in $chan?";
         return;
     }
@@ -5234,12 +5235,7 @@ proc arm:cmd:mode {0 1 2 3 {4 ""} {5 ""}} {
     
     # -- secure mode?
     if {$mode eq "secure"} {
-        if {![botisop $chan] && [cfg:get chan:method $chan] eq "chan"} { 
-            debug 0 "arm:cmd:mode: cannot change mode to secure, not opped on $chan"
-            reply $type $target "$nick: cannot change mode, I'm not opped${xtra}."
-            return;
-        }
-        if {![botisop $chan] && [string tolower [cfg:get chan:method $chan]] eq "chan"} { 
+        if {![botisop $chan] && [cfg:get chan:method $chan] in "1 2"} { 
             debug 0 "arm:cmd:mode: chan $chan set to \002secure\002 mode but cannot set MODE +Dm... manual chan mode change required."
             reply $type $target "$nick: scanner mode changed, but I am not opped.  Manual mode required: \002/mode $chan +Dm\002"
         } else {
@@ -5262,7 +5258,7 @@ proc arm:cmd:mode {0 1 2 3 {4 ""} {5 ""}} {
         set chanmode [lindex [getchanmode $chan] 0]
         if {[string match *D* $chanmode] eq 1 && [string match *m* $chanmode] eq 1} {
             # -- turn off chanmode +Dm, if already set
-            if {![botisop $chan] && [string tolower [cfg:get chan:method $chan]] eq "x"} { 
+            if {![botisop $chan] && [cfg:get chan:method $chan] in "1 2"} { 
                 debug 0 "arm:cmd:mode: chan $chan disabled \002secure\002 mode but cannot set MODE -Dm... manual chan mode change required."
                 reply $type $target "$nick: scanner mode changed, but I am not opped.  Manual mode required: \002/mode $chan -Dm\002"
             } else {
@@ -9342,7 +9338,7 @@ proc mode:add:D {nick uhost hand chan mode target} {
     variable voicecache; # -- cache of voiced users prior to floodnet lock using +D and secure mode
     
     # -- halt if chan:method is set to "x" (GNUWorld) and mode changed by service nick
-    if {[string match -nocase [cfg:get chan:method $chan] "x"] && [string match -nocase [cfg:get auth:serv:nick] $nick]} { 
+    if {[cfg:get chan:method $chan] eq "3" && [string match -nocase [cfg:get auth:serv:nick] $nick]} { 
         debug 0 "mode:add:D: halting as mode changed by service nick in GNUWorld channel $chan"
         return; 
     }
@@ -9380,7 +9376,7 @@ proc mode:rem:D {nick uhost hand chan mode target} {
     variable voicecache; # -- cache of voiced users prior to floodnet lock using +D and secure mode
     
     # -- halt if chan:method is set to "x" (GNUWorld) and mode changed by service nick
-    if {[string match -nocase [cfg:get chan:method $chan] "x"] && [string match -nocase [cfg:get auth:serv:nick] $nick]} { 
+    if {[cfg:get chan:method $chan] eq "3" && [string match -nocase [cfg:get auth:serv:nick] $nick]} { 
         debug 0 "mode:rem:D: halting as mode changed by service nick in GNUWorld channel $chan"
         return; 
     }
@@ -10127,7 +10123,7 @@ proc scan {nick chan full clicks ident ip host xuser rname} {
                     if {[cfg:get black:kick:reason $chan]} { append string " (reason: $reason)" }
                     set string "$string \[id: $depids\]";
                     # -- truncate reason for X bans
-                    if {[string tolower [cfg:get ban $chan]] eq "x" && [string length $string] >= 124} { set string "[string range $string 0 124]..." }
+                    if {[cfg:get chan:method $chan] in "2 3" && [string length $string] >= 124} { set string "[string range $string 0 124]..." }
                     kickban $nick $ident $host $chan [cfg:get ban:time $chan] $string $id
                     set leave ""; set chanops 1
                     # -- check for IRCBL entry-- after ban so it doesn't slow the ban down
@@ -10211,7 +10207,7 @@ proc scan {nick chan full clicks ident ip host xuser rname} {
                     #set string "Armour: DNSBL blacklisted -- (ip: $ip rbl: $rbl desc: $desc${xtra})"
                     set string "Armour: DNSBL blacklisted -- (ip: $ip rbl: $rbl desc: $desc)"
                     # -- truncate reason for X bans
-                    if {[string tolower [cfg:get ban $chan]] eq "x" && [string length $string] >= 124} { set string "[string range $string 0 124]..." }
+                    if {[cfg:get chan:method $chan] in "2 3" && [string length $string] >= 124} { set string "[string range $string 0 124]..." }
                     kickban $nick $ident $host $chan [cfg:get ban:time $chan] $string
                 }
                 if {$info eq ""} { set xtra "" } else { set xtra "\002info:\002 $info" }
@@ -10260,7 +10256,7 @@ proc scan {nick chan full clicks ident ip host xuser rname} {
                 debug 2 "\002scan: ------------------------------------------------------------------------------------\002"
                 set string [cfg:get portscan:reason $chan]
                 # -- truncate reason for X bans
-                if {[string tolower [cfg:get ban $chan]] eq "x" && [string length $string] >= 124} { set string "[string range $string 0 124]..." }
+                if {[cfg:get chan:method $chan] in "2 3" && [string length $string] >= 124} { set string "[string range $string 0 124]..." }
                 kickban $nick $ident $host $chan [cfg:get ban:time $chan] $string
                 report black $chan "Armour: $nick!$ident@$host insecure host (\002open ports:\002 $openports \002reason:\002 install identd)"
                 scan:cleanup $nick $chan; # -- cleanup vars
@@ -10986,7 +10982,7 @@ proc pubm:scan:process {nick uhost hand chan text} {
         if {[cfg:get black:kick:reason $chan]} { append string " (reason: $reason)" }
         set string "$string \[id: $id\]";
         # -- truncate reason for X bans
-        if {[string tolower [cfg:get ban $chan]] eq "x" && [string length $string] >= 124} { set string "[string range $string 0 124]..." }
+        if {[cfg:get chan:method $chan] in "2 3" && [string length $string] >= 124} { set string "[string range $string 0 124]..." }
         kickban [join $nick] $ident $host $chan [cfg:get ban:time $chan] "$string" $id
         #report black $chan "Armour: blacklisted text (\002id:\002 $id \002type:\002 text \002value:\002 $value \002reason:\002 $reason)"
         report black $chan $string
@@ -11071,7 +11067,7 @@ proc pubm:scan:process {nick uhost hand chan text} {
                     if {[cfg:get black:kick:reason $chan]} { append string " (reason: $reason)" }
                     set string "$string \[id: $depids\]";
                     # -- truncate reason for X bans
-                    if {[string tolower [cfg:get ban $chan]] eq "x" && [string length $string] >= 124} { set string "[string range $string 0 124]..." }
+                    if {[cfg:get chan:method $chan] in "2 3" && [string length $string] >= 124} { set string "[string range $string 0 124]..." }
                     kickban $nick $ident $host $chan [cfg:get ban:time $chan] $string $id
                     return;
                 } elseif {$ltype eq "white"} {
@@ -11845,25 +11841,8 @@ proc flud:lock {chan} {
 
         set chanmethod [cfg:get chan:method $chan]
 
-        if {[string tolower $chanmethod] eq "xold"} {
-            # -- using channel service for bans, but must use server for mode
-            if {![info exists chanlock($chan)]} {
-                if {[botisop $chan]} {
-                    set chanlock($chan) 1
-                    putnow "MODE $chan +$lockmode"
-                    #putquick "MODE $chan +$lockmode" -next
-                    #set modes "+$lockmode"
-                    debug 1 "\x0303\002flud:lock:\002 locked down chan $chan via chanmode +$lockmode\x03"
-                
-                } else {
-                    debug 0 "flud:lock: bot not opped in $chan"
-                    putquick "NOTICE @$chan :not opped... please: \002/mode $chan +$lockmode\002"
-                }
-            }
-            set num 9; # -- X's BAN command can only handle 10 masks at a time
-
-        } elseif {[string tolower $chanmethod] eq "x"} {
-            # -- using channel service for bans, but must use server for mode
+        if {$chanmethod eq "3"} {
+            # -- set mdoes via channel service
             if {![info exists chanlock($chan)]} {
 
                 # -- chan not already locked, lock it
@@ -11959,7 +11938,7 @@ proc flud:queue {} {
 
         # -- kick queue; only process if method is "chan" as channel service will handle kicks as part of ban
         set kicks [get:val data:kicks $chan]
-        if {[cfg:get chan:method $chan] eq "chan"} {
+        if {[cfg:get chan:method $chan] eq "1"} {
             # -- safety net if not on server, on chan, or not opped
             if {![botonchan $chan] || ![botisop $chan] || $server eq ""} {
                 debug 0 "flud:queue: not on chan $chan or not op... skipping"
@@ -16563,8 +16542,8 @@ proc captcha:watchdog {} {
      }
     utimer 10 ::arm::captcha:watchdog
 }
-utimer 10 captcha:web:check; # -- check the CAPTCHA checking (on 2 sec timer)
-utimer 10 captcha:watchdog;  # -- start the watchdog (on 10 sec timer) -- in case the CAPTCHA check timer fails
+utimer 10 ::arm::captcha:web:check; # -- check the CAPTCHA checking (on 2 sec timer)
+utimer 10 ::arm::captcha:watchdog;  # -- start the watchdog (on 10 sec timer) -- in case the CAPTCHA check timer fails
 
 # -- print timers, one per line
 proc timerlist {} {
@@ -16993,7 +16972,7 @@ proc mode:secure {} {
         foreach chan [channels] {
             set lchan [string tolower $chan]
             set mode [lindex [array get chan:mode $lchan] 1]
-            if {![botisop $chan] && [string tolower [cfg:get chan:method]] eq "chan"} { continue; }; # -- do not scan if bot not on chan
+            if {![botisop $chan] && [cfg:get chan:method] eq "1"} { continue; }; # -- do not scan if bot not on chan
             if {$mode eq "secure"} { lappend clist $chan }
         }
         set nlist [join $clist ,]
@@ -17591,7 +17570,12 @@ proc mode:chan {chan mode} {
         debug 0 "mode:chan: no mode provided for MODE in $chan"
         return;
     }
-    set method [cfg:get chan:method $chan]
+    switch -- [cfg:get chan:method $chan] {
+        "1"     { set method "chan" }
+        "2"     { set method "chan" }
+        "3"     { set method "x" }
+        default { set method "chan" }
+    }
     if {$method eq "chan"} {
         # -- server MODE
         debug 0 "mode:chan: sending MODE via server for $chan: $mode"
@@ -17643,7 +17627,12 @@ proc kick:chan {chan kicklist reason} {
     }
     set kicklist $victs
 
-    set method [cfg:get chan:method $chan]
+    switch -- [cfg:get chan:method $chan] {
+        "1"     { set method "chan" }
+        "2"     { set method "x" }
+        "3"     { set method "x" }
+        default { set method "chan" }
+    }
     if {$method eq "chan"} {
         # -- server KICK
         foreach nick $kicklist {
@@ -17674,7 +17663,12 @@ proc mode:ban {chan banlist reason {duration "7d"} {level "100"} {notnext ""}} {
         debug 0 "mode:ban: no nicks provided for BAN in $chan"
         return;
     }
-    set method [cfg:get chan:method $chan]; # -- TODO: put back after GNUWorld update
+    switch -- [cfg:get chan:method $chan] {
+        "1"     { set method "chan" }
+        "2"     { set method "x" }
+        "3"     { set method "x" }
+        default { set method "chan" }
+    }
     set length [llength $banlist]
     if {$notnext eq ""} { set next "-next" } else { set next "" }
     if {$method eq "chan"} {
@@ -17707,7 +17701,12 @@ proc mode:unban {chan unbanlist} {
         debug 0 "mode:unban: no nicks provided for UNBAN in $chan"
         return;
     }
-    set method [cfg:get chan:method $chan]
+    switch -- [cfg:get chan:method $chan] {
+        "1"     { set method "chan" }
+        "2"     { set method "x" }
+        "3"     { set method "x" }
+        default { set method "chan" }
+    }
     set length [llength $unbanlist]
     if {$method eq "chan"} {
         # -- server UNBAN
@@ -17739,8 +17738,12 @@ proc mode:voice {chan voicelist} {
         debug 4 "mode:voice: no nicks provided for VOICE in $chan"
         return;
     }
-    set method [cfg:get chan:method $chan]
-
+    switch -- [cfg:get chan:method $chan] {
+        "1"     { set method "chan" }
+        "2"     { set method "chan" }
+        "3"     { set method "x" }
+        default { set method "chan" }
+    }
     set length [llength $voicelist]
     if {$method eq "chan"} {
         while {$voicelist ne ""} {
@@ -17771,8 +17774,12 @@ proc mode:devoice {chan devoicelist} {
         debug 0 "mode:devoice: no nicks provided for DEVOICE in $chan"
         return;
     }
-    set method [cfg:get chan:method $chan]
-
+    switch -- [cfg:get chan:method $chan] {
+        "1"     { set method "chan" }
+        "2"     { set method "chan" }
+        "3"     { set method "x" }
+        default { set method "chan" }
+    }
     set length [llength $devoicelist]
     if {$method eq "chan"} {
         while {$devoicelist ne ""} {
@@ -17803,8 +17810,12 @@ proc mode:op {chan oplist} {
         debug 0 "mode:op: no nicks provided for OP in $chan"
         return;
     }
-    set method [cfg:get chan:method $chan]
-
+    switch -- [cfg:get chan:method $chan] {
+        "1"     { set method "chan" }
+        "2"     { set method "chan" }
+        "3"     { set method "x" }
+        default { set method "chan" }
+    }
     set length [llength $oplist]
     if {$method eq "chan"} {
         while {$oplist ne ""} {
@@ -17835,8 +17846,12 @@ proc mode:deop {chan deoplist} {
         debug 0 "mode:deop: no nicks provided for DEOP in $chan"
         return;
     }
-    set method [cfg:get chan:method $chan]
-
+    switch -- [cfg:get chan:method $chan] {
+        "1"     { set method "chan" }
+        "2"     { set method "chan" }
+        "3"     { set method "x" }
+        default { set method "chan" }
+    }
     set length [llength $deoplist]
     if {$method eq "chan"} {
         while {$deoplist ne ""} {
@@ -18253,7 +18268,7 @@ proc float:check:chan {cid {restart "1"}} {
     if {$floatlim eq "off" || $floatlim eq ""} { 
         # -- FLOATLIM is off
         debug 0 "\002float:check:chan:\002 FLOATLIM is off in $chan.  Sending chanmode: \002-l\002"
-        putquick "MODE $chan -l"
+        mode:chan $chan "-l"
         return;
     }
 
@@ -18270,20 +18285,21 @@ proc float:check:chan {cid {restart "1"}} {
     # -- only change limits if floodnet not in progress
     if {![info exists chanlock($chan)]} {
 
+        set domode 0
         if {[string match "*l*" [lindex $chanmodes 0]]} {
             # -- channel has +l set
             set currentLimit [lindex $chanmodes 1]
             set diff [expr $currentLimit - $currentUsers]
             if {$diff <= $floatGrace || $diff > $floatMargin} {
                 debug 0 "\002float:check:\002 FLOATLIM is enabled in $chan and current limit is \002$currentLimit\002 with \002$currentUsers\002 users.  Difference is \002$diff\002.  Setting to: \002+l [expr $currentUsers + $floatMargin]\002"
-                putquick "MODE $chan +l [expr $currentUsers + $floatMargin]"
+                mode:chan $chan "+l [expr $currentUsers + $floatMargin]"
             } else {
                 debug 3 "\002float:check:chan:\002 FLOATLIM is enabled in $chan but current limit is \002$currentLimit\002 with \002$currentUsers\002 users.  Difference is \002$diff\002.  Not adjusting."
             }
         } else {
             # -- channel has no +l set
             debug 0 "\002float:check:chan:\002 FLOATLIM is enabled in $chan but chanmode \002+l\002 is not set.  Setting to: \002+l [expr $currentUsers + $floatMargin]\002"
-            putquick "MODE $chan +l [expr $currentUsers + $floatMargin]"
+            mode:chan $chan "+l [expr $currentUsers + $floatMargin]"
         }
     } else {
         debug 0 "\002float:check:chan:\002 FLOATLIM is enabled in $chan but floodnet is in progress.  Not adjusting."
@@ -18297,7 +18313,7 @@ proc float:check:chan {cid {restart "1"}} {
     
 }
 
-timer 3 float:check:start; # -- start the timers for active chans
+timer 3 arm::float:check:start; # -- start the timers for active chans
 
 
 # -- store timerID to check for limit adjustment
@@ -18358,7 +18374,7 @@ proc atopic:set {chan {topic ""}} {
     set lchan [string tolower $chan]
     if {$topic ne $newtopic} {
         debug 0 "\002atopic:set:\002 AUTOTOPIC is on in $chan.  Setting to: \002$newtopic\002"
-        if {[cfg:get chan:method $chan] eq "chan"} {
+        if {[cfg:get chan:method $chan] in "1 2"} {
             putquick "TOPIC $chan :$newtopic"
         } else { 
             putquick "PRIVMSG [cfg:get auth:serv:nick] :TOPIC $chan $newtopic"
