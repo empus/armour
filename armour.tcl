@@ -12534,7 +12534,7 @@ proc userdb:cmd:register {0 1 2 3 {4 ""}  {5 ""}} {
             db:close
             if {$online} {
                 putquick "NOTICE $mgrnick :(\002note\002 from $tuser -- \002id:\002 $rowid): $note"
-                debug 0 "userdb:cmd:adduser: notified $mgruser ($mgrnick![getchanhost $mgrnick]) that $nick!$uhost registered user: $usernames"
+                debug 0 "userdb:cmd:adduser: notified $mgruser ($mgrnick![getchanhost $mgrnick]) that $nick!$uh registered user: $usernames"
             }
         }
     }
@@ -14437,6 +14437,8 @@ proc userdb:nearestindex {text index {char " "}} {
 
 
 proc userdb:timeago {lasttime} {
+    # -- safety net for never seen
+    if {$lasttime eq "" || $lasttime eq 0} { return "0" }
     set utime [unixtime]
     if {$lasttime >= $utime} {
      set totalyear [expr $lasttime - $utime]
