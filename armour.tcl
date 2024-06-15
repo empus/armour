@@ -6276,7 +6276,7 @@ proc arm:cmd:stats {0 1 2 3 {4 ""} {5 ""}} {
 # -- syntax: status [server]
 # -- jump status
 proc arm:cmd:status {0 1 2 3 {4 ""} {5 ""}} {
-    global botnick botnet-nick server-online uptime config
+    global botnick botnet-nick server server-online uptime config
     variable confname
     variable dbname
     variable entries;  # -- dict: blacklist and whitelist entries  
@@ -6295,7 +6295,7 @@ proc arm:cmd:status {0 1 2 3 {4 ""} {5 ""}} {
     set bcount [dict size [dict filter $entries script {id data} { expr {[dict get $data type] eq "black"}}]]
     
     reply $type $target "\002Armour\002 [cfg:get version] (\002revision:\002 [cfg:get revision]) -- \002install:\002 [pwd]/armour -- \002botname:\002 [cfg:get botname] -- \002config:\002 $confname.conf -- \002DB:\002 ./db/$dbname.db \002eggdrop config:\002 ../$config"
-    reply $type $target "\002server connection:\002 [userdb:timeago ${server-online}] -- \002bot uptime:\002 [userdb:timeago $uptime] -- \002machine:\002 [unames] -- \002mem:\002 [expr [lindex [status mem] 1] / 1014 ]K"
+    reply $type $target "\002connected to:\002 $server -- \002server connection:\002 [userdb:timeago ${server-online}] -- \002bot uptime:\002 [userdb:timeago $uptime] -- \002machine:\002 [unames] -- \002mem:\002 [expr [lindex [status mem] 1] / 1014 ]K"
     reply $type $target "\002uptime:\002 [exec uptime]"
     reply $type $target "\002traffic:\002 [expr [lindex [lindex [traffic] 5] 2] / 1024]/KB \[in\] and [expr [lindex [lindex [traffic] 5] 4] / 1024]/KB \[out\]\
         -- \002whitelists:\002 $wcount entries -- \002blacklists:\002 $bcount entries"
